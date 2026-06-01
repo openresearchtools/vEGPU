@@ -408,110 +408,155 @@ Use each app's Help menu to open licenses, notices, and bundled source archives.
 TEXT
 
 cat > "$RESOURCES/LICENSE.txt" <<'TEXT'
-vEGPU License and Source Notice
-===============================
+vEGPU License, Source, and Third-Party Notice
+=============================================
 
-This package installs two related projects/applications:
-
-1. vEGPU.app
-   Launcher, Swift/AppKit GUI, UTM-derived embedded SPICE GUI display side,
-   ANGLE/CocoaSpice integration, AI runtime controls, local routing helpers,
-   and app-side orchestration. vEGPU.app is distributed under the permissive
-   Apache License, Version 2.0.
-
-   Repository:
-   https://github.com/openresearchtools/vEGPU
-
-   Bundled app-side runtime components include SPICE/GLib/GStreamer/ANGLE,
-   CocoaSpice, UTM-derived GUI display work, and related support libraries,
-   with their own license terms including permissive and LGPL-family
-   components. The app bundle carries notices and corresponding
-   source/provenance archives for those components.
-
-   App/runtime provenance includes:
-   - UTM app display work: https://github.com/utmapp/UTM
-   - llama.cpp chat/runtime surface: https://github.com/ggml-org/llama.cpp
-   - llama-swap-style model routing: https://github.com/mostlygeek/llama-swap
-   - GOST-style Mac-to-VM and VM-to-Mac forwarding: https://github.com/ginuerzh/gost
-   - TurboQuant runtime option: https://github.com/TheTom/llama-cpp-turboquant
-
-   Notices and source archives:
-   /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
-
-2. vEGPU Machine.app
-   DriverKit/VFIO/QEMU virtual machine runtime, firmware, guest tools, and
-   Machine source bundles.
-
-   Repository:
-   https://github.com/openresearchtools/vEGPU-machine
-
-   Notices and source bundles:
-   /Applications/vEGPU Machine.app/Contents/Resources
+This installer installs vEGPU and, when selected or included by the package,
+vEGPU Machine. They are related applications, but they are distributed with a
+visible architecture, repository, license, notice, and source boundary.
 
 Project website:
 https://vegpu.com
 
-After installation, licenses and notices are available in both installed
-applications from the Help menu. The package also bundles the corresponding
-source tarballs/source bundles for both applications for licensing obligations.
 
-System Integrity Protection must be disabled before installation. vEGPU Machine
-uses an ad-hoc DriverKit host extension for PCIe/eGPU passthrough. To disable
-SIP on Apple Silicon, shut down, hold the power button until startup options
-appear, open Options > Utilities > Terminal, run `csrutil disable`, restart,
-and then run this installer again.
+1. vEGPU.app
+------------
 
-For combined releases, the vEGPU Machine.app file component is selected by
-default when Machine is missing or older than the payload. The DriverKit
-extension refresh component is selected by default when Machine.app is changing
-or the extension is not currently installed. If Machine is the same/newer and
-the driver is already installed, both choices stay visible but the Machine and
-DriverKit refresh choices are not selected by default. If the DriverKit refresh
-component is selected, the installer asks the existing Machine app to deactivate
-the old driver when possible, force-uninstalls only when an old extension is
-still listed, submits a fresh driver activation request through the installed
-Machine app, logs the attempt and direct `systemextensionsctl list` status to
-/var/log/vegpu-driver-install.log, and then offers the normal macOS restart
-choice so the driver state is clean.
+vEGPU.app is the host-side macOS application. It provides the Swift/AppKit
+launcher, UTM-derived embedded SPICE display client, ANGLE/CocoaSpice display
+integration, local AI/runtime controls, model/runtime routing helpers,
+file/port/terminal UI, sidecar metrics, local networking helpers, and
+app-side orchestration.
 
-Architecture and license boundary, following the UTM split
-==========================================================
+Repository:
+https://github.com/openresearchtools/vEGPU
 
-vEGPU follows the UTM and UTM-QEMU style split with a harder visible boundary:
-vEGPU Machine handles the GPL DriverKit/QEMU/VM mechanics, while vEGPU handles
-the launcher, GUI, app-side display client, and AI runtime layers. GPL-derived
-QEMU code stays GPL-covered on the Machine side, app-side launcher/display work
-stays separate, and the boundary remains visible in the installed apps,
-repositories, notices, and source bundles.
+The vEGPU.app application code is distributed under the Apache License,
+Version 2.0, except where an individual file or bundled component states a
+different license.
 
-vEGPU Machine is built as a patch stack over recorded QEMU-derived source.
-QEMU as a whole is released under the GNU General Public License, version 2.
-Individual source files and bundled components may carry their own notices;
-those file-level and component-level notices remain authoritative. OpenResearchTools
-changes to QEMU-derived code, DriverKit/VFIO integration, guest-driver packaging,
-and Machine build/release integration are distributed as part of that GPL-covered
-QEMU-derived source tree unless an individual file or patch hunk states a more
-specific license.
+vEGPU.app bundles and/or builds against app-side runtime components including
+SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work,
+Swift package dependencies, Go helper dependencies, and related support
+libraries. Those components keep their own license terms, including
+permissive licenses and LGPL-family licenses where applicable. File-level
+and component-level notices remain authoritative.
 
-DriverKit, VFIO, and QEMU integration work in vEGPU Machine builds on Scott J.
-Goldman's `scottjg/qemu-vfio-apple` project. QEMU-side macOS SPICE/virgl
-rendering work also adapts work from `utmapp/qemu` and `utmapp/virglrenderer`.
-The app-side SPICE/GLib/GStreamer/ANGLE display runtime and embedded GUI
-display integration are partially based on the main `utmapp/UTM` app work,
-generated from the pinned UTM dependency recipe and the vEGPU patch stack.
+Installed app-side notices, license texts, source records, and corresponding
+source/provenance archives are available at:
 
-The embedded chat UI and app-facing AI runtime controls are based on llama.cpp
-server conventions, llama.cpp-compatible APIs, and the llama.cpp web UI
-surface. The runtime/model router uses llama-swap-style request routing adapted
-for configured macOS and VM runtimes, multiple model aliases, and sessions
-detached from a single fixed `llama-server` process. The local proxy helper
-uses a GOST-inspired TCP/UDP forwarding model for Mac-to-VM and VM-to-Mac
-routes.
+/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
+
+The vEGPU.app Help menu also opens the installed legal bundle and exposes the
+bundled source/provenance archives.
+
+
+App-side provenance includes:
+
+UTM app and embedded display foundation:
+https://github.com/utmapp/UTM
+
+llama.cpp server/API conventions, chat/runtime surface, and web UI influence:
+https://github.com/ggml-org/llama.cpp
+
+llama-swap-style model routing idea:
+https://github.com/mostlygeek/llama-swap
+
+GOST-style TCP/UDP local forwarding model:
+https://github.com/ginuerzh/gost
+
+TurboQuant llama.cpp-family runtime option:
+https://github.com/TheTom/llama-cpp-turboquant
+
+
+2. vEGPU Machine.app
+--------------------
+
+vEGPU Machine.app is the separate VM, DriverKit, VFIO, QEMU, firmware, and
+guest-tools runtime application used by vEGPU virtual machines. It owns the
+Machine-side passthrough mechanics and carries its own notices, license texts,
+and source bundles.
+
+Repository:
+https://github.com/openresearchtools/vEGPU-machine
+
+vEGPU Machine includes and packages Machine-side components including patched
+QEMU, the Apple VFIO backend, the DriverKit host application, the
+VFIOUserPCIDriver DriverKit system extension, the embedded qemu-vfio-apple
+launcher/CLI, QEMU firmware and runtime payloads, bundled QEMU tools and
+libraries, QEMU-side SPICE/virgl visual-runtime adaptations, guest-driver
+packages, and guest-side apple_dma source/prebuilt/DKMS materials where
+included by the release.
+
+Installed Machine-side notices, license texts, and source bundles are
+available inside:
+
+/Applications/vEGPU Machine.app/Contents/Resources
+
+vEGPU Machine is QEMU-derived and is distributed from a patch stack over
+recorded source layers. The source tree produced by that patch stack is
+GPL-covered QEMU-derived source unless an individual file, component, or patch
+hunk states a more specific license. QEMU as a whole is released under the
+GNU General Public License, version 2. Individual files and bundled components
+may carry GPL, LGPL, BSD-style, MIT-style, UBDL, or other notices; those
+file-level and component-level notices remain authoritative.
+
+The recorded vEGPU Machine source layers are:
+
+1. A recorded vanilla QEMU base.
+2. Scott J. Goldman's scottjg/qemu-vfio-apple wip layer.
+3. QEMU-side visual-runtime work adapted from utmapp/qemu and
+   utmapp/virglrenderer.
+4. OpenResearchTools vEGPU Machine integration, packaging, guest-tools,
+   installer, notice, and release layers.
+
+Scott J. Goldman's scottjg/qemu-vfio-apple is the main Apple VFIO / DriverKit
+/ QEMU passthrough base for vEGPU Machine. vEGPU Machine keeps that provenance
+visible because Scott's project introduced the core Apple Silicon PCIe/eGPU
+passthrough structure: a macOS DriverKit host app and dext, QEMU-side Apple
+VFIO backend, embedded launcher, and guest-side apple_dma DMA companion driver.
+
+Machine-side provenance includes:
+
+Scott J. Goldman's qemu-vfio-apple Apple VFIO base:
+https://github.com/scottjg/qemu-vfio-apple
+
+QEMU-side UTM visual/runtime work:
+https://github.com/utmapp/qemu
+
+UTM virglrenderer work:
+https://github.com/utmapp/virglrenderer
+
+Upstream QEMU:
+https://www.qemu.org
+
+
+License and architecture boundary
+---------------------------------
+
+vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary between
+the host app and the VM runtime:
+
+- vEGPU.app contains the Apache-licensed launcher, GUI, app-side display
+  client, AI/runtime controls, local routing helpers, and orchestration code.
+- vEGPU Machine.app contains the GPL-covered QEMU-derived VM runtime,
+  Apple VFIO backend, DriverKit host extension, firmware/runtime payloads,
+  and guest-driver packaging.
+
+The combined installer may install both applications into /Applications, but
+the repositories, notices, source archives, and runtime responsibilities remain
+separate. GPL-covered QEMU-derived code stays on the Machine side. App-side
+launcher, display, AI, and orchestration work stays in vEGPU.app unless an
+individual bundled component states otherwise.
+
+
+No affiliation
+--------------
 
 vEGPU and vEGPU Machine are not endorsed by, sponsored by, or affiliated with
-Fabrice Bellard or the QEMU project, Scott J. Goldman, scottjg/qemu-vfio-apple,
-UTM, utmapp/qemu, utmapp/virglrenderer, llama.cpp, llama-swap, GOST, TurboQuant,
-or their maintainers.
+Apple, NVIDIA, Fabrice Bellard, the QEMU project, Scott J. Goldman,
+scottjg/qemu-vfio-apple, UTM, utmapp/qemu, utmapp/virglrenderer, llama.cpp,
+llama-swap, GOST, TurboQuant, or their maintainers.
 TEXT
 if [ "$INCLUDE_MACHINE" != "1" ]; then
   cat > "$RESOURCES/WELCOME.html" <<'HTML'
@@ -558,11 +603,6 @@ Project links:
 - https://vegpu.com
 - https://github.com/openresearchtools/vEGPU
 - https://github.com/openresearchtools/vEGPU-machine
-
-System Integrity Protection must be disabled before installation. To disable
-SIP on Apple Silicon, shut down, hold the power button until startup options
-appear, open Options > Utilities > Terminal, run `csrutil disable`, restart,
-and then run this installer again.
 TEXT
 fi
 
