@@ -34,6 +34,30 @@ on:
         options:
           - package
           - display-runtime-only
+      display_mode:
+        description: "How this workflow obtains the app display runtime. app-run reuses a prior vEGPU workflow artifact; build rebuilds ANGLE/SPICE."
+        required: true
+        default: app-run
+        type: choice
+        options:
+          - app-run
+          - build
+      display_artifact_run_id:
+        description: "Existing vEGPU workflow run id containing display runtime artifacts when display_mode=app-run."
+        required: false
+        type: string
+      scaling_mode:
+        description: "How this workflow obtains the Linux scaling helper package. app-run reuses a prior vEGPU workflow artifact."
+        required: true
+        default: app-run
+        type: choice
+        options:
+          - app-run
+          - build
+      scaling_artifact_run_id:
+        description: "Existing vEGPU workflow run id containing vEGPU-scaling-package when scaling_mode=app-run."
+        required: false
+        type: string
       utm_repository:
         description: "UTM fork/repo that supplies the app display dependency recipe."
         required: false
@@ -116,14 +140,49 @@ jobs:
   display-runtime:
     name: Build display runtime from source
     runs-on: macos-15
-    if: ${{ github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+    env:
+      DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'build' }}
+      DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || '' }}
 
     steps:
       - name: Check out vEGPU
         uses: actions/checkout@v4
 
+      - name: Validate display runtime mode
+        run: |
+          case "${DISPLAY_MODE}" in
+            app-run|build) ;;
+            *)
+              echo "display_mode must be app-run or build" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${DISPLAY_MODE}" = "app-run" ] && [ -z "${DISPLAY_ARTIFACT_RUN_ID}" ]; then
+            echo "display_mode=app-run requires display_artifact_run_id" >&2
+            exit 1
+          fi
+
+      - name: Download display runtime artifacts from prior vEGPU workflow run
+        if: ${{ env.DISPLAY_MODE == 'app-run' }}
+        run: |
+          mkdir -p \
+            "$RUNNER_TEMP/vegpu-artifacts/display-frameworks/macos-arm64" \
+            "$RUNNER_TEMP/vegpu-artifacts/display-runtime-source"
+          gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name vEGPU-display-frameworks-macos-arm64 \
+            --dir "$RUNNER_TEMP/vegpu-artifacts/display-frameworks/macos-arm64"
+          gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name vEGPU-display-runtime-source \
+            --dir "$RUNNER_TEMP/vegpu-artifacts/display-runtime-source"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Restore display runtime artifact cache
         id: display-runtime-artifact-cache
+        if: ${{ env.DISPLAY_MODE == 'build' }}
         uses: actions/cache@v4
         with:
           path: |
@@ -132,7 +191,7 @@ jobs:
           key: ${{ runner.os }}-display-runtime-artifacts-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
 
       - name: Install display-runtime build requirements
-        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         run: |
           brew update
           brew install \
@@ -159,7 +218,7 @@ jobs:
           echo "/usr/local/opt/bison/bin:/opt/homebrew/opt/bison/bin" >> "$GITHUB_PATH"
 
       - name: Cache display runtime build directory
-        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
@@ -169,7 +228,7 @@ jobs:
             ${{ runner.os }}-display-runtime-work-v2-
 
       - name: Restore failed display runtime partial artifact
-        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' && inputs.display_partial_run_id != ''
+        if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' && inputs.display_partial_run_id != '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/vegpu-input/display-runtime-partial"
           gh run download "$DISPLAY_PARTIAL_RUN_ID" \
@@ -186,7 +245,7 @@ jobs:
 
       - name: Build app-side display frameworks and source bundle
         id: build-display-runtime
-        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         run: scripts/build-display-runtime-from-source.sh
         env:
           VGPU_UTM_REPO: ${{ inputs.utm_repository || vars.VEGPU_UTM_REPO || 'https://github.com/utmapp/UTM.git' }}
@@ -196,7 +255,7 @@ jobs:
           VGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
 
       - name: Pack failed display runtime partial state
-        if: failure() && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        if: ${{ failure() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         run: |
           work="$RUNNER_TEMP/vegpu-build/display-runtime-source-build"
           out="$RUNNER_TEMP/vegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz"
@@ -211,7 +270,7 @@ jobs:
             display-runtime-source-build
 
       - name: Upload failed display runtime partial state
-        if: failure() && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        if: ${{ failure() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: vEGPU-display-runtime-partial
@@ -251,21 +310,50 @@ jobs:
   scaling-package:
     name: Build Linux scaling helper package
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    env:
+      SCALING_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.scaling_mode || 'app-run') || 'build' }}
+      SCALING_ARTIFACT_RUN_ID: ${{ inputs.scaling_artifact_run_id || '' }}
 
     steps:
       - name: Check out vEGPU
         uses: actions/checkout@v4
 
+      - name: Validate scaling package mode
+        run: |
+          case "${SCALING_MODE}" in
+            app-run|build) ;;
+            *)
+              echo "scaling_mode must be app-run or build" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${SCALING_MODE}" = "app-run" ] && [ -z "${SCALING_ARTIFACT_RUN_ID}" ]; then
+            echo "scaling_mode=app-run requires scaling_artifact_run_id" >&2
+            exit 1
+          fi
+
+      - name: Download scaling package from prior vEGPU workflow run
+        if: ${{ env.SCALING_MODE == 'app-run' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/scaling-package"
+          gh run download "$SCALING_ARTIFACT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name vEGPU-scaling-package \
+            --dir "$RUNNER_TEMP/vegpu-artifacts/scaling-package"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Restore scaling package cache
         id: scaling-package-cache
+        if: ${{ env.SCALING_MODE == 'build' }}
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/vegpu-artifacts/scaling-package
           key: ${{ runner.os }}-scaling-package-v2-${{ hashFiles('scripts/build-scaling-app-package.sh', 'Resources/Guest/scaling-app/**') }}
 
       - name: Build Debian package in disposable Debian
-        if: steps.scaling-package-cache.outputs.cache-hit != 'true'
+        if: ${{ env.SCALING_MODE == 'build' && steps.scaling-package-cache.outputs.cache-hit != 'true' }}
         run: |
           mkdir -p "$RUNNER_TEMP/vegpu-artifacts/scaling-package" "$RUNNER_TEMP/vegpu-build/scaling-app-deb"
           docker run --rm \
@@ -306,7 +394,7 @@ jobs:
     needs:
       - display-runtime
       - scaling-package
-    if: ${{ (inputs.build_scope || 'package') == 'package' && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' }}
+    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' }}
 
     steps:
       - name: Check out vEGPU
@@ -429,7 +517,11 @@ jobs:
     runs-on: macos-15
     needs:
       - machine-build
-    if: ${{ always() && (inputs.build_scope || 'package') == 'package' && ((inputs.machine_mode || 'app-run') == 'app-run' || (inputs.machine_mode || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
+    if: ${{ always() && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger') == 'download-run' || needs.machine-build.result == 'success') }}
+    env:
+      MACHINE_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger' }}
+      MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || '' }}
+      MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
 
     steps:
       - name: Check out vEGPU
@@ -452,13 +544,9 @@ jobs:
             echo "machine_mode=download-run requires machine_run_id" >&2
             exit 1
           fi
-        env:
-          MACHINE_MODE: ${{ inputs.machine_mode || 'app-run' }}
-          MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || '' }}
-          MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
 
       - name: Download Machine artifacts from prior vEGPU workflow run
-        if: ${{ (inputs.machine_mode || 'app-run') == 'app-run' }}
+        if: ${{ env.MACHINE_MODE == 'app-run' }}
         run: |
           mkdir -p "$RUNNER_TEMP/vegpu-input/machine-app-run"
           gh run download "$MACHINE_APP_RUN_ID" \
@@ -470,7 +558,7 @@ jobs:
           MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id }}
 
       - name: Download Machine artifacts from reusable workflow
-        if: ${{ (inputs.machine_mode || 'app-run') == 'trigger' }}
+        if: ${{ env.MACHINE_MODE == 'trigger' }}
         uses: actions/download-artifact@v4
         with:
           pattern: vEGPU-Machine-*-build-output
@@ -489,12 +577,11 @@ jobs:
           GH_TOKEN: ${{ secrets.VEGPU_MACHINE_TOKEN || github.token }}
           VEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/vEGPU-machine' }}
           VEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
-          VEGPU_MACHINE_RUN_ID: ${{ (inputs.machine_mode || 'app-run') == 'download-run' && inputs.machine_run_id || '' }}
+          VEGPU_MACHINE_RUN_ID: ${{ env.MACHINE_MODE == 'download-run' && inputs.machine_run_id || '' }}
           VEGPU_TRIGGER_MACHINE_BUILD: "0"
           VEGPU_REQUIRE_MACHINE_SOURCE: "1"
           VEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
           VEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
-          MACHINE_MODE: ${{ inputs.machine_mode || 'app-run' }}
 
       - name: Validate Machine app payload
         run: |
@@ -521,7 +608,7 @@ jobs:
 
   machine-build:
     name: Build vEGPU Machine
-    if: ${{ (inputs.build_scope || 'package') == 'package' && (inputs.machine_mode || 'app-run') == 'trigger' }}
+    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger') == 'trigger' }}
     uses: openresearchtools/vEGPU-machine/.github/workflows/build-nosip.yml@main
     permissions:
       contents: write
