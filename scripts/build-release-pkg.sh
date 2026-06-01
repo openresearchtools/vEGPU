@@ -268,6 +268,40 @@ SCRIPT
 write_install_scripts "$SCRIPTS_APP" "app"
 write_install_scripts "$SCRIPTS_MACHINE" "machine" "$MACHINE_NEW_BUILD" "$MACHINE_NEW_SHORT_VERSION"
 
+write_nonrelocatable_component_plist() {
+  local stage_root="$1"
+  local plist="$2"
+
+  pkgbuild --analyze --root "$stage_root" "$plist" >/dev/null
+  python3 - "$plist" <<'PY'
+import plistlib
+import sys
+
+plist_path = sys.argv[1]
+with open(plist_path, "rb") as handle:
+    components = plistlib.load(handle)
+
+def normalize(items):
+    for item in items:
+        item["BundleIsRelocatable"] = False
+        item["BundleIsVersionChecked"] = False
+        item["BundleHasStrictIdentifier"] = True
+        item["BundleOverwriteAction"] = "upgrade"
+        normalize(item.get("ChildBundles", []))
+
+normalize(components)
+with open(plist_path, "wb") as handle:
+    plistlib.dump(components, handle, sort_keys=False)
+PY
+}
+
+APP_COMPONENTS_PLIST="$WORK/vEGPU-app-components.plist"
+MACHINE_COMPONENTS_PLIST="$WORK/vEGPU-machine-components.plist"
+write_nonrelocatable_component_plist "$STAGE_APP" "$APP_COMPONENTS_PLIST"
+if [ "$INCLUDE_MACHINE" = "1" ]; then
+  write_nonrelocatable_component_plist "$STAGE_MACHINE" "$MACHINE_COMPONENTS_PLIST"
+fi
+
 cat > "$RESOURCES/WELCOME.txt" <<'TEXT'
 vEGPU installs two related applications:
 
@@ -456,6 +490,7 @@ fi
 
 pkgbuild \
   --root "$STAGE_APP" \
+  --component-plist "$APP_COMPONENTS_PLIST" \
   --scripts "$SCRIPTS_APP" \
   --install-location / \
   --identifier com.vegpu.pkg.app \
@@ -465,6 +500,7 @@ pkgbuild \
 if [ "$INCLUDE_MACHINE" = "1" ]; then
   pkgbuild \
     --root "$STAGE_MACHINE" \
+    --component-plist "$MACHINE_COMPONENTS_PLIST" \
     --scripts "$SCRIPTS_MACHINE" \
     --install-location / \
     --identifier com.vegpu.pkg.machine \

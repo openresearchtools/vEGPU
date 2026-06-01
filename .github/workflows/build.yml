@@ -792,6 +792,10 @@ jobs:
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'machineNeedsInstall()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          if grep -R '<relocate>' "$RUNNER_TEMP/vegpu-check/pkg-expanded"/*.pkg/PackageInfo; then
+            echo "component packages must not relocate vEGPU apps into Trash/Desktop/old paths" >&2
+            exit 1
+          fi
           if pkgutil --expand-full "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" >/dev/null 2>&1; then
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz' -print -quit | grep -q .
