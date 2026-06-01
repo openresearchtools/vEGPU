@@ -823,9 +823,17 @@ jobs:
           grep -F 'driverInstalled()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'driverNeedsRefresh()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'customize="always"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'rootVolumeOnly="true"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'enable_localSystem="true"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'enable_anywhere="false"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'DriverKit extension refresh/activation' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'SIP disabled' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          if grep -F 'Selected by default when Machine is missing, older, or the same version with no installed DriverKit extension' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
+            echo "installer should not show stale combined Machine/DriverKit description" >&2
+            exit 1
+          fi
           if grep -F '<readme ' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
             echo "installer should not show a separate Read Me page" >&2
             exit 1

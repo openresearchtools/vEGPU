@@ -674,7 +674,8 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
   <title>vEGPU</title>
-  <options customize="always" require-scripts="true"/>
+  <options customize="always" require-scripts="true" rootVolumeOnly="true"/>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
   <installation-check script="sipDisabled()"/>
   <script><![CDATA[
 var machinePayloadVersion = "$MACHINE_NEW_SHORT_VERSION";
@@ -687,14 +688,16 @@ function commandText(result) {
   return String(result);
 }
 
-function sipDisabled() {
+function sipDisabledState() {
   var result = system.run("/usr/bin/csrutil", "status");
   var text = commandText(result);
-  if (/disabled/i.test(text)) {
-    return true;
-  }
+  return /disabled/i.test(text);
+}
+
+function sipDisabled() {
+  if (sipDisabledState()) { return true; }
   my.result.title = "System Integrity Protection must be disabled";
-  my.result.message = "vEGPU Machine uses an ad-hoc DriverKit host extension for PCIe/eGPU passthrough. Disable SIP from macOS Recovery with `csrutil disable`, restart, and run this installer again.";
+  my.result.message = "vEGPU Machine uses an ad-hoc DriverKit system extension for PCIe/eGPU passthrough. There is no useful installation path with SIP enabled.\n\nTo disable SIP on Apple Silicon:\n1. Shut down the Mac.\n2. Hold the power button until Startup Options appear.\n3. Open Options > Utilities > Terminal.\n4. Run: csrutil disable\n5. Restart macOS.\n6. Run this installer again.";
   return false;
 }
 
@@ -742,17 +745,27 @@ function driverNeedsRefresh() {
   <license file="LICENSE.txt" mime-type="text/plain"/>
   <conclusion file="CONCLUSION.txt" mime-type="text/plain"/>
   <choices-outline>
+    <line choice="com.vegpu.status.sip"/>
+    <line choice="com.vegpu.status.machine.current"/>
+    <line choice="com.vegpu.status.machine.needs"/>
+    <line choice="com.vegpu.status.driver.installed"/>
+    <line choice="com.vegpu.status.driver.missing"/>
     <line choice="com.vegpu.install.app"/>
     <line choice="com.vegpu.install.machine"/>
     <line choice="com.vegpu.install.driver"/>
   </choices-outline>
-  <choice id="com.vegpu.install.app" title="vEGPU.app" description="Required main application: Apache-2.0 Swift/AppKit launcher, GUI, app-side SPICE display client, AI runtime controls, app notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
+  <choice id="com.vegpu.status.sip" title="SIP disabled" description="System Integrity Protection is disabled, so the DriverKit passthrough installer can continue. If SIP were enabled, this installer would stop before installation and show the Recovery instructions." start_selected="true" start_enabled="false" start_visible="true"/>
+  <choice id="com.vegpu.status.machine.current" title="vEGPU Machine.app already installed/current" description="The installed vEGPU Machine.app is the same version or newer than this package, so the Machine app file payload is not selected by default." start_selected="true" start_enabled="false" start_visible="!machineNeedsInstall()"/>
+  <choice id="com.vegpu.status.machine.needs" title="vEGPU Machine.app missing or older" description="vEGPU Machine.app is missing or older than this package, so the Machine app file payload is selected by default." start_selected="false" start_enabled="false" start_visible="machineNeedsInstall()"/>
+  <choice id="com.vegpu.status.driver.installed" title="DriverKit extension installed" description="systemextensionsctl currently lists com.vegpu.machine.VFIOUserPCIDriver. DriverKit refresh is selected only if Machine.app is changing." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
+  <choice id="com.vegpu.status.driver.missing" title="DriverKit extension not installed" description="systemextensionsctl does not currently list com.vegpu.machine.VFIOUserPCIDriver, so DriverKit refresh/activation is selected by default." start_selected="false" start_enabled="false" start_visible="!driverInstalled()"/>
+  <choice id="com.vegpu.install.app" title="vEGPU.app" description="Required main application installed in /Applications. Includes the launcher, GUI, app-side display client, AI/runtime controls, notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.app"/>
   </choice>
-  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app" description="Separate QEMU/VFIO/DriverKit runtime application. Selected by default when Machine is missing or older than this package. Same/newer installations stay visible but unticked." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
+  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.machine"/>
   </choice>
-  <choice id="com.vegpu.install.driver" title="DriverKit extension refresh/activation" description="Deactivate any old vEGPU DriverKit extension, force-uninstall only if it remains listed, then activate the installed vEGPU Machine DriverKit extension. Selected by default when Machine is changing or the driver is not installed." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
+  <choice id="com.vegpu.install.driver" title="DriverKit extension refresh/activation" description="Deactivate any old vEGPU DriverKit extension, force-uninstall only if it remains listed, then activate the installed vEGPU Machine DriverKit extension." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.driver"/>
   </choice>
   <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>
@@ -765,7 +778,8 @@ else
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
   <title>vEGPU</title>
-  <options customize="always" require-scripts="true"/>
+  <options customize="always" require-scripts="true" rootVolumeOnly="true"/>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
   <installation-check script="sipDisabled()"/>
   <script><![CDATA[
 function commandText(result) {
@@ -782,7 +796,7 @@ function sipDisabled() {
     return true;
   }
   my.result.title = "System Integrity Protection must be disabled";
-  my.result.message = "vEGPU releases require SIP to be disabled because combined releases install an ad-hoc DriverKit host extension. Disable SIP from macOS Recovery with `csrutil disable`, restart, and run this installer again.";
+  my.result.message = "vEGPU releases require SIP to be disabled because combined releases install an ad-hoc DriverKit host extension.\n\nTo disable SIP on Apple Silicon:\n1. Shut down the Mac.\n2. Hold the power button until Startup Options appear.\n3. Open Options > Utilities > Terminal.\n4. Run: csrutil disable\n5. Restart macOS.\n6. Run this installer again.";
   return false;
 }
   ]]></script>
