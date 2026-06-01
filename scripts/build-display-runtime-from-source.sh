@@ -143,7 +143,7 @@ download_display_sources() {
   download "$PHODAV_SRC"
   download "$SPICE_CLIENT_SRC"
   clone "$WEBKIT_REPO" "$WEBKIT_COMMIT" "$WEBKIT_SUBDIRS"
-  clone "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT"
+  clone "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
 }
 
 build_display_frameworks() {
