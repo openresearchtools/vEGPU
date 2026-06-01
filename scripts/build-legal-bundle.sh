@@ -174,14 +174,20 @@ display_source_candidates = [
     root / "legal" / "display-runtime-source",
 ]
 display_source = next((item for item in display_source_candidates if item is not None and item.exists()), None)
+display_source_manifest_path = None
 if display_source is not None:
     if display_source.is_file():
         shutil.copy2(display_source, out / "source" / display_source.name)
+        display_source_manifest_path = f"source/{display_source.name}"
     else:
         (out / "source" / "DISPLAY_RUNTIME_SOURCE_DIRECTORY.txt").write_text(
             f"Display runtime source directory is present in source tree at: {display_source}\n"
             "Release packaging should archive this directory next to vEGPU-app-source.tar.gz.\n"
         )
+        try:
+            display_source_manifest_path = str(display_source.relative_to(root))
+        except ValueError:
+            display_source_manifest_path = str(display_source)
 elif require_full_source:
     raise SystemExit(
         "Missing display runtime corresponding source archive. Set VEGPU_DISPLAY_SOURCE_OUT "
@@ -264,7 +270,7 @@ manifest = {
     ],
     "swiftPins": package_pins,
     "goModules": go_modules,
-    "displayRuntimeSource": str(display_source.relative_to(root)) if display_source else None,
+    "displayRuntimeSource": display_source_manifest_path,
     "machineApp": str(machine_app),
     "machineNotices": str(machine_notices),
 }
