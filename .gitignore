@@ -1,0 +1,24 @@
+# macOS Finder metadata
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
+
+# Local Swift/build scratch
+.build/
+.swiftpm/
+build/
+DerivedData/
+vegpu-build/
+
+# Local release artifacts
+*.app
+*.pkg
+*.dmg
+*.zip
+*.tar
+*.tar.gz
+*.tar.xz
+*.tgz

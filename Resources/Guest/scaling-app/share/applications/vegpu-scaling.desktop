@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=vEGPU Scaling
+Comment=Adjust sharp XFCE desktop scaling
+Exec=vegpu-scaling --gui
+Icon=vegpu-scaling
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;
+StartupNotify=true

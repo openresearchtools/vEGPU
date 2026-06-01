@@ -1,0 +1,26 @@
+vEGPU Local Proxy
+=================
+
+This helper is a small vEGPU-specific TCP/UDP localhost forwarder.
+
+Its forwarding model and provenance are based on GOST (GO Simple Tunnel):
+https://github.com/ginuerzh/gost
+
+GOST is MIT licensed. vEGPU keeps the GOST MIT license in this directory for
+attribution and provenance. This helper intentionally includes only the local
+TCP/UDP forwarding behavior vEGPU needs:
+
+- no telemetry
+- no analytics
+- no updater
+- no proxy chains
+- no public bind
+- no TLS tunnel
+- no Shadowsocks
+- no QUIC/KCP
+- no DNS proxy
+- no TUN/TAP
+- no metrics or pprof endpoint
+
+The helper binds localhost only and forwards only to the configured vEGPU VM
+private address.

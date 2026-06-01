@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+		<head>
+			<meta charset="utf-8" />
+			<meta name="viewport" content="width=device-width, initial-scale=1" />
+			<title>Core - Model Router</title>
+				<style>
+					html,
+					body {
+						background: Canvas;
+						color-scheme: light dark;
+					}
+
+					@media (prefers-color-scheme: dark) {
+					html,
+					body {
+							background: #0e0d0c;
+						}
+					}
+
+					@media (prefers-color-scheme: light) {
+						html,
+						body {
+							background: #fff;
+						}
+					}
+				</style>
+			<link rel="stylesheet" href="/core/core.css" />
+		</head>
+	<body>
+		<div id="app" class="core-shell">
+			<div id="errorBanner" class="error-banner hidden" role="alert"></div>
+
+			<section id="authPanel" class="auth-panel hidden" aria-live="polite">
+				<div>
+					<h2>API Key</h2>
+					<p>Access denied. Enter an API key saved in this browser to manage router settings.</p>
+				</div>
+				<div class="auth-controls">
+					<input id="authApiKeyInput" class="input" type="password" placeholder="Enter your API key..." />
+					<button id="authSaveButton" class="button button-primary" type="button">Save API Key</button>
+				</div>
+			</section>
+
+			<main class="core-main">
+				<section id="serverSection" class="panel panel-server">
+					<div class="section-head">
+						<div>
+							<h2>Server</h2>
+							<p id="runtimeSummary">Runtime status loading...</p>
+						</div>
+						<div class="section-actions">
+							<div class="endpoint-menu">
+								<button
+									id="endpointsButton"
+									class="button button-secondary"
+									type="button"
+									aria-expanded="false"
+									aria-controls="endpointsPopover"
+								>
+									Endpoints
+								</button>
+								<div id="endpointsPopover" class="endpoints-popover hidden"></div>
+							</div>
+							<button id="checkRuntimeButton" class="button button-secondary" type="button">Check</button>
+							<button id="saveServerButton" class="button button-primary" type="button">Save Server</button>
+						</div>
+					</div>
+					<div class="server-grid">
+						<label class="field">
+							<span>Bind host</span>
+							<input id="serverHostInput" class="input" autocomplete="off" />
+						</label>
+						<label class="field">
+							<span>Bind port</span>
+							<input id="serverPortInput" class="input" type="number" />
+						</label>
+						<label class="field field-wide">
+							<span>API keys, comma separated</span>
+							<input id="serverApiKeysInput" class="input" autocomplete="off" />
+						</label>
+						<label class="field">
+							<span>Allow insecure remote</span>
+							<select id="serverAllowInsecureSelect" class="input">
+								<option value="false">false</option>
+								<option value="true">true</option>
+							</select>
+						</label>
+						<label class="field">
+							<span>CUDA residency</span>
+							<select id="serverResidencyModeSelect" class="input">
+								<option value="gpu-aware">gpu-aware</option>
+								<option value="cap-only">cap-only</option>
+							</select>
+						</label>
+						<label class="field">
+							<span>Max CUDA servers</span>
+							<input id="serverMaxActiveInput" class="input" type="number" min="0" />
+						</label>
+					</div>
+				</section>
+
+				<section id="runtimesSection" class="panel">
+					<div class="section-head">
+						<div>
+							<h2>Runtimes</h2>
+							<p id="runtimeInstallSummary">Matched macOS and Linux runtime releases loading...</p>
+						</div>
+					</div>
+					<div class="runtime-selectors">
+						<label class="field">
+							<span>Runtime family</span>
+							<select id="runtimeFamilySelect" class="input">
+								<option value="llama">llama.cpp</option>
+								<option value="turbo">TurboQuant</option>
+							</select>
+						</label>
+						<label class="field">
+							<span>Release</span>
+							<select id="runtimeReleaseSelect" class="input"></select>
+						</label>
+						<label class="field">
+							<span>Linux backend</span>
+							<select id="runtimeLinuxBackendSelect" class="input">
+								<option value="cuda13">CUDA 13</option>
+								<option value="vulkan">Vulkan</option>
+							</select>
+						</label>
+						<div class="inline-actions runtime-selector-actions">
+							<button id="fetchRuntimeButton" class="button button-primary" type="button">Fetch & Install</button>
+						</div>
+						<label class="field field-wide">
+							<span>Installed runtime pair</span>
+							<select id="pairedRuntimeSelect" class="input"></select>
+						</label>
+						<div class="inline-actions runtime-selector-actions">
+							<button id="usePairRuntimeButton" class="button button-primary" type="button">Use</button>
+							<button id="retryPairRuntimeButton" class="button button-secondary" type="button">
+								Retry VM Install
+							</button>
+							<button id="deletePairRuntimeButton" class="button button-danger" type="button">Delete</button>
+						</div>
+					</div>
+					<div id="runtimeCards" class="runtime-grid"></div>
+				</section>
+
+				<section id="devicesSection" class="panel">
+					<div class="section-head">
+						<div>
+							<h2>Devices and RPC</h2>
+							<p id="deviceSummary">No devices reported.</p>
+						</div>
+						<div class="section-actions">
+							<button
+								id="toggleRPCButton"
+								class="button button-secondary"
+								type="button"
+								aria-expanded="false"
+								aria-controls="rpcEditor"
+							>
+								RPC Servers
+							</button>
+							<button id="refreshDevicesButton" class="button button-secondary" type="button">
+								Refresh Devices
+							</button>
+						</div>
+					</div>
+					<div id="rpcEditor" class="rpc-editor hidden">
+						<div id="rpcRows" class="rpc-rows"></div>
+						<div class="inline-actions">
+							<button id="addRPCButton" class="button button-secondary" type="button">Add RPC</button>
+							<button id="saveRPCButton" class="button button-primary" type="button">Save RPC</button>
+						</div>
+					</div>
+					<div id="deviceErrorBox" class="inline-error hidden"></div>
+					<div class="table-wrap">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th>Name</th>
+									<th>Backend</th>
+									<th>Free</th>
+									<th>Total</th>
+									<th>Location</th>
+									<th>Description</th>
+								</tr>
+							</thead>
+							<tbody id="devicesTableBody"></tbody>
+						</table>
+					</div>
+				</section>
+
+				<section id="modelsSection" class="models-workspace">
+					<aside class="models-list-panel">
+						<div class="models-list-head">
+							<div>
+								<h2>Models</h2>
+								<p id="modelsCountText">0 of 0</p>
+							</div>
+							<div class="models-list-actions">
+								<button id="openDownloadButton" class="button button-secondary" type="button">
+									Download Models
+								</button>
+								<button id="refreshModelsButton" class="button button-secondary" type="button">
+									Refresh
+								</button>
+							</div>
+						</div>
+						<div class="filter-row">
+							<select id="modelTypeSelect" class="input" aria-label="Model type">
+								<option value="">All model types</option>
+								<option value="chat">Chat</option>
+								<option value="vision">Vision</option>
+								<option value="embedding">Embedding</option>
+								<option value="rerank">Rerank</option>
+								<option value="text">Text</option>
+							</select>
+							<input id="modelFilterInput" class="input" placeholder="Filter models" />
+						</div>
+						<div id="modelsList" class="models-list" role="list"></div>
+					</aside>
+
+					<section class="model-detail-panel">
+						<div id="modelEmptyState" class="empty-state">Select a model.</div>
+						<div id="modelDetail" class="model-detail hidden">
+							<div class="model-detail-head">
+								<div class="model-heading">
+									<h2 id="modelTitle"></h2>
+									<p id="modelSubline"></p>
+								</div>
+								<div class="model-actions">
+									<button id="loadModelButton" class="button button-secondary" type="button">Load</button>
+									<button id="unloadModelButton" class="button button-secondary" type="button">
+										Unload
+									</button>
+									<button id="saveModelButton" class="button button-primary" type="button">Save</button>
+									<button id="copyModelHeaderButton" class="button button-secondary" type="button">
+										Copy model
+									</button>
+									<button id="deleteModelButton" class="button button-danger" type="button">Delete</button>
+								</div>
+							</div>
+							<div id="modelTransferPanel" class="model-transfer-panel hidden"></div>
+							<div id="modelForm" class="model-form"></div>
+						</div>
+					</section>
+				</section>
+			</main>
+
+			<div id="downloadModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="downloadTitle">
+				<div id="downloadBackdrop" class="modal-backdrop"></div>
+				<div class="modal-card">
+					<div class="modal-head">
+						<div>
+							<h2 id="downloadTitle">Download Models</h2>
+							<p>Hugging Face repository browser</p>
+						</div>
+						<button id="closeDownloadButton" class="icon-button" type="button" aria-label="Close">
+							<span aria-hidden="true">x</span>
+						</button>
+					</div>
+					<div class="download-layout">
+						<section class="download-controls">
+							<h3>Repository</h3>
+							<label class="field">
+								<span>Repo</span>
+								<input id="hfRepoInput" class="input" placeholder="org/model" />
+							</label>
+							<label class="field">
+								<span>Revision</span>
+								<input id="hfRevisionInput" class="input" />
+							</label>
+							<label class="field">
+								<span>Path</span>
+								<input id="hfPathInput" class="input" placeholder="optional/subfolder" />
+							</label>
+							<label class="field">
+								<span>Download to</span>
+								<select id="hfLocationSelect" class="input">
+									<option value="mac">Mac</option>
+									<option value="vm">VM</option>
+								</select>
+							</label>
+							<label class="check-field">
+								<input id="hfRecursiveInput" type="checkbox" />
+								<span>Recursive</span>
+							</label>
+							<div class="inline-actions">
+								<button id="listHFButton" class="button button-primary" type="button">List Files</button>
+								<button id="downloadHFButton" class="button button-secondary" type="button">
+									Download Selected
+								</button>
+							</div>
+							<div class="downloads-box">
+								<h3>Downloads</h3>
+								<div id="downloadsList" class="downloads-list"></div>
+							</div>
+						</section>
+						<section class="download-files">
+							<div class="files-head">
+								<h3>Files</h3>
+								<span id="hfEntriesCount">0 entries</span>
+							</div>
+							<div id="hfEntriesList" class="hf-entries-list"></div>
+						</section>
+					</div>
+				</div>
+			</div>
+
+		</div>
+
+		<script src="/core/core.js" defer></script>
+	</body>
+</html>

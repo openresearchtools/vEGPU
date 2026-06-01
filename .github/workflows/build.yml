@@ -1,0 +1,591 @@
+name: Build vEGPU
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Release version, for example 0.1.0"
+        required: false
+        type: string
+      build_number:
+        description: "Build number. Defaults to GitHub run number."
+        required: false
+        type: string
+      mode:
+        description: "artifact-only keeps workflow artifacts only; pre-release publishes a prerelease; full-release publishes a stable release."
+        required: true
+        default: artifact-only
+        type: choice
+        options:
+          - artifact-only
+          - pre-release
+          - full-release
+      utm_repository:
+        description: "UTM fork/repo that supplies the app display dependency recipe."
+        required: false
+        default: https://github.com/utmapp/UTM.git
+        type: string
+      utm_commit:
+        description: "UTM commit that supplies the app display dependency recipe."
+        required: false
+        default: e4a4c34b671284263fc69f81b607de494d7e9b65
+        type: string
+      machine_mode:
+        description: "How this workflow obtains vEGPU Machine. trigger builds Machine/DKMS through the Machine workflow."
+        required: true
+        default: trigger
+        type: choice
+        options:
+          - download-run
+          - trigger
+      machine_repository:
+        description: "Machine repo used for download-run/trigger."
+        required: false
+        default: openresearchtools/vEGPU-machine2
+        type: string
+      machine_ref:
+        description: "Machine branch/ref used when triggering its workflow."
+        required: false
+        default: main
+        type: string
+      machine_run_id:
+        description: "Existing Machine workflow run id when machine_mode=download-run."
+        required: false
+        type: string
+      publish_release:
+        description: "Manual override: create/update a GitHub release even when mode is artifact-only."
+        required: true
+        default: false
+        type: boolean
+      prerelease:
+        description: "Mark the GitHub release as prerelease."
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  CONFIGURATION: release
+  RELEASE_VERSION: ${{ inputs.release_version || '0.1.0' }}
+  BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
+  DISPLAY_SOURCE_REQUIRED: true
+
+jobs:
+  source-check:
+    name: Verify source tree
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out vEGPU
+        uses: actions/checkout@v4
+
+      - name: Install verifier tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends file ripgrep
+
+      - name: Verify no generated/local payloads
+        run: scripts/verify-clean-repo.sh
+
+  display-runtime:
+    name: Build display runtime from source
+    runs-on: macos-15
+
+    steps:
+      - name: Check out vEGPU
+        uses: actions/checkout@v4
+
+      - name: Restore display runtime artifact cache
+        id: display-runtime-artifact-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
+            ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+          key: ${{ runner.os }}-display-runtime-artifacts-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
+
+      - name: Install display-runtime build requirements
+        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        run: |
+          brew update
+          brew install \
+            bison \
+            pkg-config \
+            gettext \
+            glib-utils \
+            libgpg-error \
+            nasm \
+            make \
+            meson \
+            cmake \
+            llvm \
+            spirv-llvm-translator \
+            libxcb \
+            libxrandr
+          python3 -m pip install --break-system-packages --user \
+            six \
+            pyparsing \
+            pyyaml \
+            setuptools \
+            distlib \
+            mako
+          echo "/usr/local/opt/bison/bin:/opt/homebrew/opt/bison/bin" >> "$GITHUB_PATH"
+
+      - name: Cache display runtime build directory
+        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
+          key: ${{ runner.os }}-display-runtime-work-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
+          restore-keys: |
+            ${{ runner.os }}-display-runtime-work-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-
+            ${{ runner.os }}-display-runtime-work-v2-
+
+      - name: Build app-side display frameworks and source bundle
+        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        run: scripts/build-display-runtime-from-source.sh
+        env:
+          VGPU_UTM_REPO: ${{ inputs.utm_repository || vars.VEGPU_UTM_REPO || 'https://github.com/utmapp/UTM.git' }}
+          VGPU_UTM_COMMIT: ${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}
+          VGPU_DISPLAY_BUILD_DIR: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
+          VGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
+          VGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+
+      - name: Verify display runtime outputs
+        run: |
+          FRAMEWORKS="$RUNNER_TEMP/vegpu-artifacts/display-frameworks/macos-arm64"
+          SOURCE="$RUNNER_TEMP/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz"
+          test -d "$FRAMEWORKS/spice-client-glib-2.0.8.framework"
+          test -d "$FRAMEWORKS/EGL.framework"
+          test -d "$FRAMEWORKS/GLESv2.framework"
+          test -f "$SOURCE"
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/README'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/utm-patches/sources'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/utm-base/utm-base-'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/vegpu-utm-patches/0001-openresearchtools-vegpu-cocoaspice-package.patch'
+
+      - name: Upload display frameworks
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-display-frameworks-macos-arm64
+          path: ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload display runtime source bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-display-runtime-source
+          path: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+  scaling-package:
+    name: Build Linux scaling helper package
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out vEGPU
+        uses: actions/checkout@v4
+
+      - name: Restore scaling package cache
+        id: scaling-package-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vegpu-artifacts/scaling-package
+          key: ${{ runner.os }}-scaling-package-v2-${{ hashFiles('scripts/build-scaling-app-package.sh', 'Resources/Guest/scaling-app/**') }}
+
+      - name: Build Debian package in disposable Debian
+        if: steps.scaling-package-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/scaling-package" "$RUNNER_TEMP/vegpu-build/scaling-app-deb"
+          docker run --rm \
+            -v "$PWD:/workspace:ro" \
+            -v "$RUNNER_TEMP:/runner-temp" \
+            -w /workspace \
+            debian:trixie-slim \
+            bash -lc '
+              set -euo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates coreutils dpkg-dev findutils
+              VEGPU_SCALING_ARCH=arm64 \
+              VEGPU_SCALING_PACKAGE_OUT=/runner-temp/vegpu-artifacts/scaling-package \
+              VEGPU_SCALING_BUILD_DIR=/runner-temp/vegpu-build/scaling-app-deb \
+              scripts/build-scaling-app-package.sh
+            '
+
+      - name: Validate Debian package
+        run: |
+          OUT="$RUNNER_TEMP/vegpu-artifacts/scaling-package"
+          test -f "$OUT/SHA512SUMS"
+          package="$(find "$OUT" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit)"
+          test -n "$package"
+          (cd "$OUT" && sha512sum -c SHA512SUMS)
+          dpkg-deb -c "$package" | grep -F './usr/share/doc/vegpu-scaling/copyright'
+
+      - name: Upload scaling package
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-scaling-package
+          path: ${{ runner.temp }}/vegpu-artifacts/scaling-package
+          if-no-files-found: error
+          retention-days: 90
+
+  build-app:
+    name: Build vEGPU.app
+    runs-on: macos-15
+    needs:
+      - display-runtime
+      - scaling-package
+    if: ${{ needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' }}
+
+    steps:
+      - name: Check out vEGPU
+        uses: actions/checkout@v4
+
+      - name: Restore vEGPU.app artifact cache
+        id: app-artifact-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
+            ${{ runner.temp }}/vegpu-artifacts/legal/generated
+          key: ${{ runner.os }}-vegpu-app-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
+
+      - name: Download source-built display frameworks
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: vEGPU-display-frameworks-macos-arm64
+          path: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
+
+      - name: Download display runtime source bundle
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: vEGPU-display-runtime-source
+          path: ${{ runner.temp }}/vegpu-input/display-runtime-source
+
+      - name: Download Linux scaling helper package
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: vEGPU-scaling-package
+          path: ${{ runner.temp }}/vegpu-input/scaling-package
+
+      - name: Set up Go
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ai/web-ui-app/go.mod
+          cache-dependency-path: |
+            ai/web-ui-app/go.mod
+            ai/web-ui-app/go.sum
+            ai/gost-local-proxy/go.mod
+
+      - name: Cache SwiftPM build directory
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vegpu-build/swiftpm-release
+          key: ${{ runner.os }}-swiftpm-release-v2-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-swiftpm-release-v2-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+            ${{ runner.os }}-swiftpm-release-v2-
+
+      - name: Cache patched UTM package worktree
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vegpu-build/utm-patched
+          key: ${{ runner.os }}-utm-patched-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('third_party/utm/patches/*.patch', 'scripts/apply-utm-patches.sh') }}
+
+      - name: Build vEGPU.app
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        run: |
+          export VEGPU_REQUIRE_FULL_SOURCE=1
+          CONFIGURATION="${CONFIGURATION}" scripts/build-app-bundle.sh
+        env:
+          VERSION: ${{ env.RELEASE_VERSION }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+          SWIFT_BUILD_SCRATCH_PATH: ${{ runner.temp }}/vegpu-build/swiftpm-release
+          VGPU_APP: ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
+          VGPU_APP_BUILD_DIR: ${{ runner.temp }}/vegpu-build/app-build
+          VGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
+          VGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-input/display-runtime-source/display-runtime-source.tar.gz
+          VGPU_LEGAL_BUILD_DIR: ${{ runner.temp }}/vegpu-artifacts/legal/generated
+          VGPU_SCALING_PACKAGE_DIR: ${{ runner.temp }}/vegpu-input/scaling-package
+          VGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/vegpu-build/utm-patched
+
+      - name: Validate app bundle and notices
+        run: |
+          APP="$RUNNER_TEMP/vegpu-artifacts/app/vEGPU.app"
+          codesign --verify --deep --strict "$APP"
+          test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "com.vegpu.app"
+          test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "${RELEASE_VERSION}"
+          test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "${BUILD_NUMBER}"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/manifest.json"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
+          find "$APP/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit | grep -q .
+          if tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
+            echo "generated app source tarball must not include scaling helper build artifacts" >&2
+            exit 1
+          fi
+          if find "$APP/Contents/Resources/vEGPURoot" -maxdepth 2 -name 'THIRD_PARTY_*' -print -quit | grep -q .; then
+            echo "legacy THIRD_PARTY notice files must not be bundled" >&2
+            exit 1
+          fi
+          grep -F 'vEGPU Machine notices' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
+
+      - name: Upload vEGPU.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-app
+          path: ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload generated vEGPU notices and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-legal-generated
+          path: ${{ runner.temp }}/vegpu-artifacts/legal/generated
+          if-no-files-found: error
+          retention-days: 90
+
+  machine-artifacts:
+    name: Build/fetch vEGPU Machine and DKMS guest tools
+    runs-on: macos-15
+
+    steps:
+      - name: Check out vEGPU
+        uses: actions/checkout@v4
+
+      - name: Validate Machine mode
+        run: |
+          case "${MACHINE_MODE}" in
+            download-run|trigger) ;;
+            *)
+              echo "machine_mode must be download-run or trigger" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${MACHINE_MODE}" = "download-run" ] && [ -z "${MACHINE_RUN_ID}" ]; then
+            echo "machine_mode=download-run requires machine_run_id" >&2
+            exit 1
+          fi
+        env:
+          MACHINE_MODE: ${{ inputs.machine_mode || 'trigger' }}
+          MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
+
+      - name: Fetch Machine artifacts
+        run: scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/vegpu-artifacts/machine"
+        env:
+          GH_TOKEN: ${{ secrets.VEGPU_MACHINE_TOKEN || github.token }}
+          VEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/vEGPU-machine2' }}
+          VEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
+          VEGPU_MACHINE_RUN_ID: ${{ (inputs.machine_mode || 'trigger') == 'download-run' && inputs.machine_run_id || '' }}
+          VEGPU_TRIGGER_MACHINE_BUILD: ${{ (inputs.machine_mode || 'trigger') == 'trigger' && '1' || '0' }}
+          VEGPU_REQUIRE_MACHINE_SOURCE: "1"
+          VEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+          VEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+
+      - name: Validate Machine app payload
+        run: |
+          APP="$RUNNER_TEMP/vegpu-artifacts/machine/vEGPU Machine.app"
+          test -d "$APP"
+          test -x "$APP/Contents/MacOS/vEGPU Machine"
+          test -x "$APP/Contents/MacOS/qemu-vfio-apple"
+          test -f "$APP/Contents/Resources/ThirdPartyNotices/NOTICES"
+          test -f "$APP/Contents/Resources/ThirdPartyNotices/LICENSES"
+          test -f "$APP/Contents/Resources/guest-tools/manifest.json"
+          test -d "$APP/Contents/Resources/guest-tools/source"
+          find "$APP/Contents/Resources/guest-tools/packages" -type f -name 'apple-dma-*.deb' -print -quit | grep -q .
+          find "$APP/Contents/Resources/guest-tools/source" -type f -name 'apple-dma-*.tar.gz' -print -quit | grep -q .
+          find "$RUNNER_TEMP/vegpu-artifacts/machine" -maxdepth 1 -type f -name 'vEGPU-Machine-*-source.tar.gz' -print -quit | grep -q .
+          codesign --verify --deep --strict "$APP"
+
+      - name: Upload Machine artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-machine-artifacts
+          path: ${{ runner.temp }}/vegpu-artifacts/machine
+          if-no-files-found: error
+          retention-days: 90
+
+  package:
+    name: Package installer
+    runs-on: macos-15
+    needs:
+      - build-app
+      - machine-artifacts
+    if: ${{ needs.build-app.result == 'success' && needs.machine-artifacts.result == 'success' }}
+
+    steps:
+      - name: Check out vEGPU
+        uses: actions/checkout@v4
+
+      - name: Download vEGPU.app
+        uses: actions/download-artifact@v4
+        with:
+          name: vEGPU-app
+          path: ${{ runner.temp }}/vegpu-input/app
+
+      - name: Download vEGPU legal payload
+        uses: actions/download-artifact@v4
+        with:
+          name: vEGPU-legal-generated
+          path: ${{ runner.temp }}/vegpu-input/legal
+
+      - name: Download Machine artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: vEGPU-machine-artifacts
+          path: ${{ runner.temp }}/vegpu-input/machine
+
+      - name: Build pkg
+        run: |
+          VERSION="${RELEASE_VERSION}"
+          case "${BUILD_MODE}" in
+            pre-release)
+              PACKAGE_CHANNEL="pre-release"
+              PKG_NAME="vEGPU-v${VERSION}-pre-release.pkg"
+              ;;
+            full-release)
+              PACKAGE_CHANNEL="release"
+              PKG_NAME="vEGPU-v${VERSION}.pkg"
+              ;;
+            *)
+              if [ "${PUBLISH_RELEASE}" = "true" ]; then
+                if [ "${PRERELEASE_INPUT}" = "true" ]; then
+                  PACKAGE_CHANNEL="pre-release"
+                  PKG_NAME="vEGPU-v${VERSION}-pre-release.pkg"
+                else
+                  PACKAGE_CHANNEL="release"
+                  PKG_NAME="vEGPU-v${VERSION}.pkg"
+                fi
+              else
+                PACKAGE_CHANNEL="artifact"
+                PKG_NAME="vEGPU-v${VERSION}-artifact.pkg"
+              fi
+              ;;
+          esac
+          OUT="$RUNNER_TEMP/vegpu-artifacts/pkg/$PKG_NAME"
+          mkdir -p "$(dirname "$OUT")" "$RUNNER_TEMP/vegpu-check"
+          export VEGPU_MACHINE_APP="$RUNNER_TEMP/vegpu-input/machine/vEGPU Machine.app"
+          export VEGPU_REQUIRE_MACHINE_APP=1
+          export VEGPU_REQUIRE_MACHINE_SOURCE=1
+          VEGPU_APP="$RUNNER_TEMP/vegpu-input/app/vEGPU.app" \
+          VEGPU_PKG_BUILD_DIR="$RUNNER_TEMP/vegpu-build/pkg" \
+          VEGPU_PACKAGE_CHANNEL="$PACKAGE_CHANNEL" \
+          VERSION="$VERSION" \
+          OUT="$OUT" \
+          scripts/build-release-pkg.sh
+          test -f "$OUT"
+          pkgutil --expand "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          test -f "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'vEGPU.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'machineNeedsInstall()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          if pkgutil --expand-full "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" >/dev/null 2>&1; then
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/SourceBundles/*source*.tar.gz' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/packages/apple-dma-*.deb' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/source/apple-dma-*.tar.gz' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package/vegpu-scaling_*.deb' -print -quit | grep -q .
+            grep -R -- '--driver-deactivate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            grep -R -- 'systemextensionsctl uninstall - "$VEGPU_DRIVER_ID"' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            grep -R -- 'com.vegpu.machine.VFIOUserPCIDriver' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            grep -R -- '--driver-activate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+          fi
+        env:
+          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}
+          PRERELEASE_INPUT: ${{ inputs.prerelease || 'true' }}
+
+      - name: Gather package assets
+        run: |
+          VERSION="${RELEASE_VERSION}"
+          ASSETS="$RUNNER_TEMP/vegpu-artifacts/release-assets"
+          mkdir -p "$ASSETS"
+          pkg="$(find "$RUNNER_TEMP/vegpu-artifacts/pkg" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' -print -quit)"
+          test -n "$pkg"
+          cp "$pkg" "$ASSETS/"
+          test "$(find "$ASSETS" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' | wc -l | tr -d ' ')" = "1"
+          find "$ASSETS" -maxdepth 1 -type f -print | sort
+
+      - name: Upload package assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-package-assets
+          path: ${{ runner.temp }}/vegpu-artifacts/release-assets
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub release
+        if: ${{ inputs.publish_release == true || inputs.mode == 'pre-release' || inputs.mode == 'full-release' || startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
+          PRERELEASE_INPUT: ${{ inputs.prerelease || 'true' }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          VERSION="${RELEASE_VERSION}"
+          case "${BUILD_MODE}" in
+            pre-release)
+              TAG="v${VERSION}-pre-release"
+              TITLE="vEGPU ${VERSION} Pre-release"
+              PRERELEASE="true"
+              ;;
+            full-release)
+              TAG="v${VERSION}"
+              TITLE="vEGPU ${VERSION}"
+              PRERELEASE="false"
+              ;;
+            *)
+              if [ "$IS_TAG" = "true" ]; then
+                TAG="v${VERSION}"
+                TITLE="vEGPU ${VERSION}"
+                PRERELEASE="false"
+              elif [ "$PRERELEASE_INPUT" = "true" ]; then
+                TAG="v${VERSION}-pre-release"
+                TITLE="vEGPU ${VERSION} Pre-release"
+                PRERELEASE="true"
+              else
+                TAG="v${VERSION}"
+                TITLE="vEGPU ${VERSION}"
+                PRERELEASE="false"
+              fi
+              ;;
+          esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .id)"
+            gh api \
+              --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+              -f "name=${TITLE}" \
+              -F "prerelease=${PRERELEASE}" \
+              >/dev/null
+          else
+            args=(--title "$TITLE" --notes "vEGPU ${VERSION}")
+            if [ "$PRERELEASE" = "true" ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "$TAG" --target "$GITHUB_SHA" "${args[@]}"
+          fi
+          pkg="$(find "$RUNNER_TEMP/vegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' -print -quit)"
+          test -n "$pkg"
+          gh release upload "$TAG" "$pkg" --clobber

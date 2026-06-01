@@ -1,0 +1,8 @@
+Source URL: https://github.com/utmapp/WebKit.git
+Pinned commit: ed78ab6e1a37f4f11583a0bd038f22ec91f3ff10
+Subtree: Source/ThirdParty/ANGLE
+Build scheme: ANGLE
+SDK: macosx
+Arch: arm64
+Configuration: Release
+Imported at: 2026-05-29T18:35:42Z

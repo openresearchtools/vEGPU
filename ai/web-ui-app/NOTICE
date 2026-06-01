@@ -1,0 +1,57 @@
+vEGPU AI Web UI and Model Router
+================================
+
+This directory contains vEGPU-specific app code for the embedded AI web UI,
+model discovery, runtime management, and OpenAI/llama.cpp-compatible request
+routing.
+
+It is not an unmodified copy of llama.cpp, llama-swap, or their release
+artifacts.
+
+llama.cpp provenance
+--------------------
+
+The embedded chat UI and API surface are based on llama.cpp server conventions,
+the llama.cpp web UI surface, and llama.cpp-compatible HTTP APIs. vEGPU modifies
+that app-facing surface for:
+
+- local macOS and VM runtime selection
+- external GPU offload controls
+- model discovery across Hugging Face and LM Studio cache locations
+- multiple model entries routed through configured runtime instances
+- packaged app integration instead of a standalone llama.cpp server bundle
+
+vEGPU does not store llama.cpp runtime binaries in this source repository.
+Runtime binaries such as llama-server, rpc-server, and libllama/libggml
+libraries are obtained through configured runtime release channels and carry
+their own license files.
+
+llama.cpp is MIT licensed. The generated vEGPU legal bundle includes the
+llama.cpp MIT license as:
+
+  licenses/llama.cpp-MIT.txt
+
+llama-swap provenance
+---------------------
+
+The model-routing behavior is based on llama-swap's request-routing model.
+vEGPU modifies that model to route llama.cpp-compatible API requests across
+configured macOS and VM runtimes, including:
+
+- VM/CUDA and macOS/Metal runtime pairs
+- multiple model aliases served by the same runtime instance
+- sessions detached from a single fixed llama-server process
+- app-managed downloads, runtime launches, and bridge endpoints
+
+llama-swap is MIT licensed. The generated vEGPU legal bundle includes the
+llama-swap MIT license as:
+
+  licenses/llama-swap-MIT.txt
+
+vEGPU modifications
+-------------------
+
+OpenResearchTools vEGPU modifications in this directory are distributed as part
+of the vEGPU app source tree under the repository license unless an individual
+file or embedded upstream notice states a more specific license.
+

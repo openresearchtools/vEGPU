@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=vEGPU Scaling Reapply
+Exec=vegpu-scaling --quiet reapply
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true

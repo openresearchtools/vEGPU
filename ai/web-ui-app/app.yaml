@@ -1,0 +1,33 @@
+server:
+    host: 127.0.0.1
+    port: 9292
+    apiKeys: []
+    allowInsecureRemote: false
+runtime:
+    llamaServerPath: ./llama-server
+    rpcServerPath: ./rpc-server
+    releaseRepo: openresearchtools/llama-cpp-arm64-builds
+    activeVersion: none
+    updateChannel: custom
+    residency:
+        serverCommand: /usr/local/bin/llama-server
+        rpcCommand: /usr/local/bin/rpc-server
+        rpcArgs:
+            - --cache
+        internalServerPort: 8080
+        rpcPort: 50052
+        maxActiveServers: 0
+        residencyMode: gpu-aware
+discovery:
+    enabled: true
+    sources:
+        - app
+        - huggingface
+        - lmstudio
+        - llamacpp
+    extraFolders: []
+rpcServers:
+    - endpoint: 172.29.253.100:50052
+      enabled: true
+models: {}
+startPort: 10001

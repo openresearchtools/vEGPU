@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="refresh" content="5">
+        <style>
+            html,
+	            body {
+	                margin: 0;
+	                min-height: 100%;
+	                background: Canvas;
+	                color: #111;
+	                color-scheme: light dark;
+	                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	            }
+
+            #loading {
+                padding: 24px;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                html,
+                body {
+                    background: #0e0d0c;
+	                    color: #eee8dd;
+	                }
+	            }
+
+	            @media (prefers-color-scheme: light) {
+	                html,
+	                body {
+	                    background: #fff;
+	                    color: #111;
+	                }
+	            }
+	        </style>
+    </head>
+    <body>
+        <div id="loading">
+            The model is loading. Please wait.<br/>
+            The user interface will appear soon.
+        </div>
+    </body>
+</html>
