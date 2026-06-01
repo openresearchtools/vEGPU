@@ -31,6 +31,30 @@ It does not build UTM.app and it does not build QEMU.
 EOF
 }
 
+archive_git_snapshot() {
+  local repo="$1"
+  local out_dir="$2"
+  local label="$3"
+  shift 3
+  local paths=("$@")
+  local head
+  head="$(git -C "$repo" rev-parse HEAD)"
+  mkdir -p "$out_dir"
+  git -C "$repo" rev-parse HEAD > "$out_dir/HEAD"
+  git -C "$repo" remote get-url origin > "$out_dir/REMOTE" 2>/dev/null || true
+  if [ "${#paths[@]}" -gt 0 ]; then
+    git -C "$repo" archive \
+      --format=tar \
+      --prefix="$label-$head/" \
+      HEAD -- "${paths[@]}" | gzip -c > "$out_dir/$label-source.tar.gz"
+  else
+    git -C "$repo" archive \
+      --format=tar \
+      --prefix="$label-$head/" \
+      HEAD | gzip -c > "$out_dir/$label-source.tar.gz"
+  fi
+}
+
 require git
 require tar
 require xcrun
@@ -156,30 +180,6 @@ download_display_sources() {
   download "$SPICE_CLIENT_SRC"
   clone "$WEBKIT_REPO" "$WEBKIT_COMMIT" "$WEBKIT_SUBDIRS"
   clone "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
-}
-
-archive_git_snapshot() {
-  local repo="$1"
-  local out_dir="$2"
-  local label="$3"
-  shift 3
-  local paths=("$@")
-  local head
-  head="$(git -C "$repo" rev-parse HEAD)"
-  mkdir -p "$out_dir"
-  git -C "$repo" rev-parse HEAD > "$out_dir/HEAD"
-  git -C "$repo" remote get-url origin > "$out_dir/REMOTE" 2>/dev/null || true
-  if [ "${#paths[@]}" -gt 0 ]; then
-    git -C "$repo" archive \
-      --format=tar \
-      --prefix="$label-$head/" \
-      HEAD -- "${paths[@]}" | gzip -c > "$out_dir/$label-source.tar.gz"
-  else
-    git -C "$repo" archive \
-      --format=tar \
-      --prefix="$label-$head/" \
-      HEAD | gzip -c > "$out_dir/$label-source.tar.gz"
-  fi
 }
 
 stage_display_source_preflight() {
