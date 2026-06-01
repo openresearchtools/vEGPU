@@ -359,10 +359,12 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
     img { width: 54px; height: 54px; border-radius: 10px; }
     h1 { font: -apple-system-title1; margin: 0; }
     h2 { font: -apple-system-headline; margin: 14px 0 6px; }
+    h3 { font: -apple-system-subheadline; margin: 12px 0 4px; }
     p, li { line-height: 1.32; }
     ul { margin: 8px 0 8px 20px; padding: 0; }
     .warn { border-left: 4px solid #d1242f; padding-left: 10px; margin: 10px 0; }
     .boundary { border-left: 4px solid #0969da; padding-left: 10px; margin: 10px 0; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .footnote { color: #667085; font-size: 11px; margin-top: 12px; }
     .links { margin-top: 10px; }
   </style>
@@ -375,16 +377,36 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
       <p>NVIDIA* eGPU passthrough and AI runtime orchestration for Apple Silicon Macs.</p>
     </div>
   </div>
-  <p>This installer puts two related applications in <strong>/Applications</strong> and keeps their license/source boundary visible:</p>
-  <ul>
-    <li><strong>vEGPU.app</strong>: Apache-2.0 Swift/AppKit launcher, UTM-derived embedded SPICE GUI display side, ANGLE/CocoaSpice integration, AI runtime controls, local routing helpers, notices, and app-side source archives.</li>
-    <li><strong>vEGPU Machine.app</strong>: separate QEMU/VFIO/DriverKit runtime and macOS driver host with QEMU-derived GPL source bundles, guest tools, and Machine-side notices.</li>
-  </ul>
-  <p class="boundary"><strong>Boundary:</strong> app-side launcher/display/AI work stays in vEGPU.app. GPL QEMU/VFIO/DriverKit mechanics stay in vEGPU Machine.app. The embedded display side is partially based on UTM app work; the Machine side builds on Scott J. Goldman's qemu-vfio-apple and UTM QEMU/virgl work.</p>
-  <p class="warn"><strong>SIP must be disabled.</strong> The installer checks this before installation and will stop on a SIP-enabled Mac.</p>
-  <p>The Installation Type screen shows separate choices for vEGPU Machine.app files and DriverKit extension refresh/activation. Machine.app is selected by default when it is missing or older. The DriverKit refresh choice is selected by default when Machine.app is changing or the extension is not currently installed. If selected, the driver step asks the existing Machine app to deactivate the old driver when possible, force-uninstalls only when an old extension is still listed, then asks the installed Machine app to activate the driver. macOS may still require approval in System Settings before the driver becomes active.</p>
-  <p class="links">More information: <a href="https://vegpu.com">vegpu.com</a>, <a href="https://github.com/openresearchtools/vEGPU">openresearchtools/vEGPU</a>, <a href="https://github.com/openresearchtools/vEGPU-machine">openresearchtools/vEGPU-machine</a>.</p>
   <p class="footnote">* Compatibility and purpose labels only. vEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or any named company, protocol, project, or maintainer.</p>
+
+  <h2>Important: SIP Must Be Disabled</h2>
+  <p class="warn">System Integrity Protection must be disabled before installing vEGPU Machine's DriverKit passthrough component. There is no useful installation path with SIP enabled: this installer checks SIP before installation and will stop on a SIP-enabled Mac.</p>
+  <p>vEGPU Machine uses an ad-hoc DriverKit system extension for PCIe/eGPU passthrough. Disabling SIP is a serious macOS security tradeoff.</p>
+  <p>To disable SIP on Apple Silicon: shut down the Mac, hold the power button until Startup Options appear, open Options &gt; Utilities &gt; Terminal, run <span class="code">csrutil disable</span>, restart macOS, and run this installer again.</p>
+
+  <h2>What This Installer Installs</h2>
+  <p>This installer places two related applications in <strong>/Applications</strong> and keeps their license, source, and runtime boundary visible.</p>
+  <h3>vEGPU.app</h3>
+  <p>Apache-2.0 Swift/AppKit launcher and host-side application. It contains the UTM-derived embedded SPICE GUI display side, ANGLE/CocoaSpice integration, AI runtime controls, local routing helpers, app-side orchestration, notices, and app-side source/provenance archives.</p>
+  <p>Repository: <a href="https://github.com/openresearchtools/vEGPU">https://github.com/openresearchtools/vEGPU</a></p>
+  <h3>vEGPU Machine.app</h3>
+  <p>Separate QEMU/VFIO/DriverKit virtual-machine runtime and macOS driver host. It contains the Machine-side passthrough mechanics, QEMU-derived GPL source bundles, firmware/runtime payloads, guest tools, guest-driver materials, DriverKit activation helpers, and Machine-side notices.</p>
+  <p>Repository: <a href="https://github.com/openresearchtools/vEGPU-machine">https://github.com/openresearchtools/vEGPU-machine</a></p>
+
+  <h2>Architecture and Source Boundary</h2>
+  <p class="boundary">vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary: app-side launcher, display, AI, routing, and orchestration work stays in vEGPU.app. GPL-covered QEMU, VFIO, DriverKit, firmware, VM runtime, and guest-driver mechanics stay in vEGPU Machine.app.</p>
+  <p>The embedded display side is partially based on UTM app work. The Machine side builds on Scott J. Goldman's scottjg/qemu-vfio-apple as the main Apple VFIO/DriverKit/QEMU base, with additional QEMU-side visual-runtime work adapted from UTM QEMU and UTM virglrenderer.</p>
+
+  <h2>Installation Behavior</h2>
+  <p>The Installation Type screen shows separate choices for vEGPU.app, vEGPU Machine.app files, and DriverKit extension refresh/activation.</p>
+  <p>For combined releases, vEGPU Machine.app is selected by default when it is missing or older than the installer payload. DriverKit refresh/activation is selected by default when Machine.app is changing or the DriverKit extension is not currently installed.</p>
+  <p>If the installed vEGPU Machine app is the same or newer version and its DriverKit extension is already installed, the Machine and DriverKit choices remain visible but are not selected by default.</p>
+  <p>When DriverKit refresh/activation is selected, the installer attempts to ask the existing vEGPU Machine app to deactivate the old DriverKit extension when possible. Forced removal is used only when an old extension is still listed and graceful deactivation is unavailable or did not complete.</p>
+  <p>The installer then asks the installed vEGPU Machine.app to submit a fresh DriverKit activation request and writes driver-install diagnostics to <span class="code">/var/log/vegpu-driver-install.log</span>.</p>
+  <p>macOS may still require approval in System Settings and/or a restart before the driver becomes active. This installer does not bypass Apple's system-extension approval flow.</p>
+
+  <h2>More Information</h2>
+  <p class="links">Project website: <a href="https://vegpu.com">https://vegpu.com</a><br>Main app repository: <a href="https://github.com/openresearchtools/vEGPU">https://github.com/openresearchtools/vEGPU</a><br>Machine repository: <a href="https://github.com/openresearchtools/vEGPU-machine">https://github.com/openresearchtools/vEGPU-machine</a></p>
 </body>
 </html>
 HTML
