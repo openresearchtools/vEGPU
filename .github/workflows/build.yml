@@ -142,8 +142,8 @@ jobs:
     runs-on: macos-15
     if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     env:
-      DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'build' }}
-      DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || '' }}
+      DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
+      DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.VEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
 
     steps:
       - name: Check out vEGPU
@@ -158,6 +158,24 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Resolve latest display runtime artifact run
+        if: ${{ env.DISPLAY_MODE == 'app-run' && env.DISPLAY_ARTIFACT_RUN_ID == '' }}
+        run: |
+          pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
+          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" \
+            vEGPU-display-frameworks-macos-arm64 \
+            vEGPU-display-runtime-source)"
+          test -n "$run_id"
+          echo "DISPLAY_ARTIFACT_RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "Resolved display runtime artifacts from vEGPU run $run_id"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Require display runtime artifact run
+        if: ${{ env.DISPLAY_MODE == 'app-run' }}
+        run: |
           if [ "${DISPLAY_MODE}" = "app-run" ] && [ -z "${DISPLAY_ARTIFACT_RUN_ID}" ]; then
             echo "display_mode=app-run requires display_artifact_run_id" >&2
             exit 1
@@ -289,6 +307,9 @@ jobs:
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/README'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/utm-patches/sources'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/utm-base/utm-base-'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit.git.bundle'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/HEAD'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/REMOTE'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/vegpu-utm-patches/0001-openresearchtools-vegpu-cocoaspice-package.patch'
 
       - name: Upload display frameworks
@@ -312,8 +333,8 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
     env:
-      SCALING_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.scaling_mode || 'app-run') || 'build' }}
-      SCALING_ARTIFACT_RUN_ID: ${{ inputs.scaling_artifact_run_id || '' }}
+      SCALING_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.scaling_mode || 'app-run') || 'app-run' }}
+      SCALING_ARTIFACT_RUN_ID: ${{ inputs.scaling_artifact_run_id || vars.VEGPU_SCALING_ARTIFACT_RUN_ID || '' }}
 
     steps:
       - name: Check out vEGPU
@@ -328,6 +349,22 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Resolve latest scaling package artifact run
+        if: ${{ env.SCALING_MODE == 'app-run' && env.SCALING_ARTIFACT_RUN_ID == '' }}
+        run: |
+          pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
+          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" vEGPU-scaling-package)"
+          test -n "$run_id"
+          echo "SCALING_ARTIFACT_RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "Resolved scaling package artifact from vEGPU run $run_id"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Require scaling package artifact run
+        if: ${{ env.SCALING_MODE == 'app-run' }}
+        run: |
           if [ "${SCALING_MODE}" = "app-run" ] && [ -z "${SCALING_ARTIFACT_RUN_ID}" ]; then
             echo "scaling_mode=app-run requires scaling_artifact_run_id" >&2
             exit 1
@@ -483,8 +520,12 @@ jobs:
           test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "${BUILD_NUMBER}"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/manifest.json"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-LICENSE.txt"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-SOURCE.md"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-IMPORT.txt"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
+          tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit.git.bundle'
           find "$APP/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit | grep -q .
           if tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
             echo "generated app source tarball must not include scaling helper build artifacts" >&2
@@ -517,10 +558,10 @@ jobs:
     runs-on: macos-15
     needs:
       - machine-build
-    if: ${{ always() && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger') == 'download-run' || needs.machine-build.result == 'success') }}
+    if: ${{ always() && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
     env:
-      MACHINE_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger' }}
-      MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || '' }}
+      MACHINE_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run' }}
+      MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || vars.VEGPU_MACHINE_APP_RUN_ID || '' }}
       MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
 
     steps:
@@ -536,6 +577,21 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Resolve latest Machine artifact run
+        if: ${{ env.MACHINE_MODE == 'app-run' && env.MACHINE_APP_RUN_ID == '' }}
+        run: |
+          pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
+          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" vEGPU-machine-artifacts)"
+          test -n "$run_id"
+          echo "MACHINE_APP_RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "Resolved Machine artifact from vEGPU run $run_id"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Require Machine artifact source
+        run: |
           if [ "${MACHINE_MODE}" = "app-run" ] && [ -z "${MACHINE_APP_RUN_ID}" ]; then
             echo "machine_mode=app-run requires machine_app_run_id" >&2
             exit 1
@@ -555,7 +611,6 @@ jobs:
             --dir "$RUNNER_TEMP/vegpu-input/machine-app-run"
         env:
           GH_TOKEN: ${{ github.token }}
-          MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id }}
 
       - name: Download Machine artifacts from reusable workflow
         if: ${{ env.MACHINE_MODE == 'trigger' }}
@@ -608,7 +663,7 @@ jobs:
 
   machine-build:
     name: Build vEGPU Machine
-    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'trigger') == 'trigger' }}
+    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'trigger' }}
     uses: openresearchtools/vEGPU-machine/.github/workflows/build-nosip.yml@main
     permissions:
       contents: write

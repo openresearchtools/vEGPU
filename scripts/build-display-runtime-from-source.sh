@@ -78,6 +78,7 @@ CHOST="$CPU-apple-darwin"
 PLATFORM_FAMILY_NAME=macOS
 BUILD_DIR="$WORK/build-macOS-arm64"
 SYSROOT_DIR="$WORK/sysroot-macOS-arm64"
+SOURCE_PREFLIGHT="$WORK/source-preflight"
 PATCHES_DIR="$UTM_DIR/patches"
 REBUILD=
 REDOWNLOAD="${VEGPU_DISPLAY_REDOWNLOAD:-}"
@@ -157,6 +158,36 @@ download_display_sources() {
   clone "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
 }
 
+stage_display_source_preflight() {
+  local webkit_repo="$BUILD_DIR/WebKit.git"
+  if [ ! -d "$webkit_repo/.git" ]; then
+    printf 'Display runtime source preflight failed: missing WebKit.git checkout containing ANGLE source: %s\n' "$webkit_repo" >&2
+    exit 1
+  fi
+
+  rm -rf "$SOURCE_PREFLIGHT"
+  mkdir -p "$SOURCE_PREFLIGHT/git-sources/WebKit.git"
+  git -C "$webkit_repo" bundle create "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit.git.bundle" --all
+  git -C "$webkit_repo" rev-parse HEAD > "$SOURCE_PREFLIGHT/git-sources/WebKit.git/HEAD"
+  git -C "$webkit_repo" remote get-url origin > "$SOURCE_PREFLIGHT/git-sources/WebKit.git/REMOTE" 2>/dev/null || true
+
+  if [ ! -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit.git.bundle" ]; then
+    printf 'Display runtime source preflight failed: could not create WebKit.git bundle containing ANGLE source.\n' >&2
+    exit 1
+  fi
+}
+
+have_display_frameworks() {
+  [ -d "$PREFIX/Frameworks/spice-client-glib-2.0.8.framework" ] &&
+    [ -d "$PREFIX/Frameworks/EGL.framework" ] &&
+    [ -d "$PREFIX/Frameworks/GLESv2.framework" ]
+}
+
+have_source_preflight() {
+  [ -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit.git.bundle" ] &&
+    [ -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/HEAD" ]
+}
+
 build_angle() {
   OLD_PATH="$PATH"
   export PATH="$(realpath "$BUILD_DIR/depot_tools.git"):$OLD_PATH"
@@ -192,8 +223,17 @@ build_angle() {
 
 build_display_frameworks() {
   echo "${GREEN}Starting vEGPU app display runtime build for macOS arm64 [${NCPU} jobs]${NC}"
+  if have_display_frameworks && have_source_preflight && [ "${VEGPU_DISPLAY_FORCE_REBUILD:-0}" != "1" ]; then
+    echo "${GREEN}Reusing existing display runtime frameworks and source preflight from $WORK${NC}"
+    return
+  fi
   check_env
   download_display_sources
+  stage_display_source_preflight
+  if have_display_frameworks && [ "${VEGPU_DISPLAY_FORCE_REBUILD:-0}" != "1" ]; then
+    echo "${GREEN}Reusing existing display runtime frameworks from $PREFIX after refreshing source preflight${NC}"
+    return
+  fi
   rm -rf "$PREFIX/"*
   rm -f "$BUILD_DIR/meson"*.cross "$BUILD_DIR/cross.cmake"
   mkdir -p "$PREFIX/Frameworks"
@@ -269,6 +309,7 @@ git -C "$UTM_DIR" remote get-url origin > "$SOURCE_STAGE/UTM_REMOTE"
 find "$UTM_DIR" -maxdepth 1 -type f -name 'README*.md' -exec cp {} "$SOURCE_STAGE/" \;
 
 BUILD_DIR="$WORK/build-macOS-arm64"
+SOURCE_PREFLIGHT="$WORK/source-preflight"
 mkdir -p "$SOURCE_STAGE/upstream-sources" "$SOURCE_STAGE/git-sources"
 mkdir -p "$SOURCE_STAGE/git-sources/utm-base"
 git -C "$UTM_DIR" archive \
@@ -278,6 +319,11 @@ git -C "$UTM_DIR" archive \
 git -C "$UTM_DIR" rev-parse HEAD > "$SOURCE_STAGE/git-sources/utm-base/HEAD"
 git -C "$UTM_DIR" remote get-url origin > "$SOURCE_STAGE/git-sources/utm-base/REMOTE"
 
+if [ -d "$SOURCE_PREFLIGHT/git-sources/WebKit.git" ]; then
+  mkdir -p "$SOURCE_STAGE/git-sources"
+  rsync -a "$SOURCE_PREFLIGHT/git-sources/WebKit.git" "$SOURCE_STAGE/git-sources/"
+fi
+
 if [ -d "$BUILD_DIR" ]; then
   find "$BUILD_DIR" -maxdepth 1 -type f \( -name '*.tar.*' -o -name '*.tgz' -o -name '*.zip' \) -print0 |
     while IFS= read -r -d '' archive; do
@@ -286,11 +332,23 @@ if [ -d "$BUILD_DIR" ]; then
   find "$BUILD_DIR" -maxdepth 1 -type d -name '*.git' -print0 |
     while IFS= read -r -d '' repo; do
       name="$(basename "$repo")"
+      if [ "$name" = "WebKit.git" ] && [ -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit.git.bundle" ]; then
+        continue
+      fi
       mkdir -p "$SOURCE_STAGE/git-sources/$name"
       git -C "$repo" bundle create "$SOURCE_STAGE/git-sources/$name/$name.bundle" --all
       git -C "$repo" rev-parse HEAD > "$SOURCE_STAGE/git-sources/$name/HEAD"
       git -C "$repo" remote get-url origin > "$SOURCE_STAGE/git-sources/$name/REMOTE" 2>/dev/null || true
     done
+fi
+
+if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit.git.bundle" ]; then
+  printf 'Display runtime source bundle is missing the WebKit.git bundle that contains ANGLE source.\n' >&2
+  exit 1
+fi
+if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/HEAD" ]; then
+  printf 'Display runtime source bundle is missing the WebKit.git revision record.\n' >&2
+  exit 1
 fi
 
 cat > "$SOURCE_STAGE/README" <<EOF
@@ -304,7 +362,12 @@ This archive accompanies the app-side display frameworks copied into:
 It records the pinned UTM dependency recipe, UTM dependency patches/sources
 file, downloaded upstream source archives, and git source bundles used to
 produce the SPICE, GLib, GStreamer, libsoup, USB, ANGLE, and related app-side
-frameworks.
+frameworks. ANGLE is carried through UTM's pinned WebKit fork; its corresponding
+source is included as:
+
+  git-sources/WebKit.git/WebKit.git.bundle
+  git-sources/WebKit.git/HEAD
+  git-sources/WebKit.git/REMOTE
 
 The pinned UTM base source snapshot that the vEGPU patch stack applies to is
 included at:
