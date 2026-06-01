@@ -1,16 +1,19 @@
 # vEGPU Notices
 
-vEGPU is the app-side Swift/AppKit runtime manager, SPICE client UI, and model
-routing interface. vEGPU Machine is a separate app/repository for QEMU, VFIO,
-DriverKit, firmware, guest driver packages, and their GPL/source bundles.
+vEGPU is the app-side Swift/AppKit runtime manager, UTM-derived embedded SPICE
+GUI display client, ANGLE/CocoaSpice integration, model routing interface,
+sidecar networking, and macOS orchestration layer. vEGPU Machine is a separate
+app/repository for QEMU, VFIO, DriverKit, firmware, guest driver packages, and
+their GPL/source bundles.
 
 ## License Boundary
 
 vEGPU.app is distributed under the permissive Apache License, Version 2.0.
 Like UTM, the app bundles and loads components with their own licenses,
-including SPICE/GLib/GStreamer/ANGLE and related support libraries. The
-installed app carries generated notices plus corresponding app/display-runtime
-source archives under `Contents/Resources/vEGPURoot/legal/generated`.
+including SPICE/GLib/GStreamer/ANGLE, CocoaSpice, UTM-derived GUI display
+work, and related support libraries. The installed app carries generated
+notices plus corresponding app/display-runtime source archives under
+`Contents/Resources/vEGPURoot/legal/generated`.
 
 vEGPU Machine.app is distributed as the separate Machine/runtime application.
 It carries the QEMU/VFIO/DriverKit side, including QEMU-derived GPL-covered
@@ -25,6 +28,11 @@ visible.
 ## UTM Patch Stack Display Work
 
 The committed repository does not carry a copied UTM source tree.
+The app-side embedded GUI display integration is partially based on the main
+UTM app work:
+
+  https://github.com/utmapp/UTM
+
 vEGPU carries UTM/CocoaSpice modifications as patches under:
 
   third_party/utm/patches/
@@ -40,10 +48,14 @@ Base recipe:
 ## llama-swap-Derived Routing
 
 The AI web UI routing service includes request-routing behavior based on
-llama-swap. vEGPU modifies that routing model to route llama.cpp-compatible API
-requests across configured macOS and VM runtimes, including multiple model
-entries served from the same runtime instance and sessions detached from a
-single fixed `llama-server` process.
+llama-swap:
+
+  https://github.com/mostlygeek/llama-swap
+
+vEGPU modifies that routing model to route llama.cpp-compatible API requests
+across configured macOS and VM runtimes, including multiple model entries served
+from the same runtime instance and sessions detached from a single fixed
+`llama-server` process.
 
 The llama-swap MIT license is kept in `legal/LICENSES/llama-swap-MIT.txt`.
 Directory-specific provenance is kept in `ai/web-ui-app/NOTICE`.
@@ -55,6 +67,10 @@ conventions, llama.cpp-compatible APIs, and the llama.cpp web UI surface,
 modified for vEGPU to support multiple models, runtime pairs, VM/macOS routing,
 and external GPU offload choices.
 
+Upstream:
+
+  https://github.com/ggml-org/llama.cpp
+
 vEGPU does not store llama.cpp runtime binaries in this source repository.
 Runtime artifacts are obtained through configured runtime release channels and
 carry their own license files. The vEGPU app source bundle includes the
@@ -62,6 +78,15 @@ modified web UI/static sources used by the app.
 
 The llama.cpp MIT license is kept in `legal/LICENSES/llama.cpp-MIT.txt`.
 Directory-specific provenance is kept in `ai/web-ui-app/NOTICE`.
+
+## TurboQuant Runtime Option
+
+vEGPU can route to llama.cpp-family runtime builds based on Tom's TurboQuant
+fork when the user installs/activates those runtime artifacts.
+
+Upstream:
+
+  https://github.com/TheTom/llama-cpp-turboquant
 
 ## vEGPU Linux Scaling Helper
 
@@ -74,5 +99,9 @@ XFCE tools rather than bundling those dependencies.
 ## GOST-Derived Local Proxy
 
 The local proxy helper in `ai/gost-local-proxy` is based on GOST's forwarding
-model and is kept under the MIT license. Its license and notice are kept in
-that directory and collected into generated release notices.
+model for localhost TCP/UDP forwarding between macOS and the VM:
+
+  https://github.com/ginuerzh/gost
+
+It is kept under the MIT license. Its license and notice are kept in that
+directory and collected into generated release notices.

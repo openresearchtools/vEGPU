@@ -421,17 +421,26 @@ vEGPU License and Source Notice
 This package installs two related projects/applications:
 
 1. vEGPU.app
-   Launcher, Swift/AppKit GUI, app-side SPICE display client, and AI runtime
-   controls. vEGPU.app is distributed under the permissive Apache License,
-   Version 2.0.
+   Launcher, Swift/AppKit GUI, UTM-derived embedded SPICE GUI display side,
+   ANGLE/CocoaSpice integration, AI runtime controls, local routing helpers,
+   and app-side orchestration. vEGPU.app is distributed under the permissive
+   Apache License, Version 2.0.
 
    Repository:
    https://github.com/openresearchtools/vEGPU
 
-   Bundled app-side runtime components include SPICE/GLib/GStreamer/ANGLE and
-   related support libraries, with their own license terms including permissive
-   and LGPL-family components. The app bundle carries notices and corresponding
+   Bundled app-side runtime components include SPICE/GLib/GStreamer/ANGLE,
+   CocoaSpice, UTM-derived GUI display work, and related support libraries,
+   with their own license terms including permissive and LGPL-family
+   components. The app bundle carries notices and corresponding
    source/provenance archives for those components.
+
+   App/runtime provenance includes:
+   - UTM app display work: https://github.com/utmapp/UTM
+   - llama.cpp chat/runtime surface: https://github.com/ggml-org/llama.cpp
+   - llama-swap-style model routing: https://github.com/mostlygeek/llama-swap
+   - GOST-style Mac-to-VM and VM-to-Mac forwarding: https://github.com/ginuerzh/gost
+   - TurboQuant runtime option: https://github.com/TheTom/llama-cpp-turboquant
 
    Notices and source archives:
    /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
@@ -486,12 +495,22 @@ specific license.
 DriverKit, VFIO, and QEMU integration work in vEGPU Machine builds on Scott J.
 Goldman's `scottjg/qemu-vfio-apple` project. QEMU-side macOS SPICE/virgl
 rendering work also adapts work from `utmapp/qemu` and `utmapp/virglrenderer`.
-The app-side SPICE/GLib/GStreamer/ANGLE display runtime is generated from the
-pinned `utmapp/UTM` dependency recipe and the vEGPU patch stack.
+The app-side SPICE/GLib/GStreamer/ANGLE display runtime and embedded GUI
+display integration are partially based on the main `utmapp/UTM` app work,
+generated from the pinned UTM dependency recipe and the vEGPU patch stack.
+
+The embedded chat UI and app-facing AI runtime controls are based on llama.cpp
+server conventions, llama.cpp-compatible APIs, and the llama.cpp web UI
+surface. The runtime/model router uses llama-swap-style request routing adapted
+for configured macOS and VM runtimes, multiple model aliases, and sessions
+detached from a single fixed `llama-server` process. The local proxy helper
+uses a GOST-inspired TCP/UDP forwarding model for Mac-to-VM and VM-to-Mac
+routes.
 
 vEGPU and vEGPU Machine are not endorsed by, sponsored by, or affiliated with
 Fabrice Bellard or the QEMU project, Scott J. Goldman, scottjg/qemu-vfio-apple,
-UTM, utmapp/qemu, utmapp/virglrenderer, or their maintainers.
+UTM, utmapp/qemu, utmapp/virglrenderer, llama.cpp, llama-swap, GOST, TurboQuant,
+or their maintainers.
 TEXT
 if [ "$INCLUDE_MACHINE" != "1" ]; then
   cat > "$RESOURCES/WELCOME.html" <<'HTML'
