@@ -451,7 +451,7 @@ jobs:
           path: |
             ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
             ${{ runner.temp }}/vegpu-artifacts/legal/generated
-          key: ${{ runner.os }}-vegpu-app-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
+          key: ${{ runner.os }}-vegpu-app-v2-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
 
       - name: Resolve display runtime artifact run for app build
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' && env.DISPLAY_ARTIFACT_RUN_ID == '' }}
