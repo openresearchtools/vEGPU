@@ -469,6 +469,14 @@ source/provenance archives are available at:
 
 /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
 
+Key installed vEGPU.app legal/source files:
+
+- NOTICES.md
+- manifest.json
+- licenses/
+- source/vEGPU-app-source.tar.gz
+- source/display-runtime-source.tar.gz
+
 The vEGPU.app Help menu also opens the installed legal bundle and exposes the
 bundled source/provenance archives.
 
@@ -514,6 +522,13 @@ Installed Machine-side notices, license texts, and source bundles are
 available inside:
 
 /Applications/vEGPU Machine.app/Contents/Resources
+
+Key installed vEGPU Machine legal/source files:
+
+- ThirdPartyNotices/NOTICES
+- ThirdPartyNotices/LICENSES
+- SourceBundles/vEGPU-Machine-<version>-source.tar.gz
+- guest-tools/source/apple-dma-<version>.tar.gz
 
 vEGPU Machine is QEMU-derived and is distributed from a patch stack over
 recorded source layers. The source tree produced by that patch stack is
