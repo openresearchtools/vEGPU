@@ -93,14 +93,18 @@ separate pieces, with notices and source/provenance kept in the app bundles:
 
 The release package installs vEGPU.app and, when needed, vEGPU Machine.app.
 The Installation Type screen shows the Machine/DriverKit component separately.
-If the installed Machine app is the same version or newer, that component is
-visible but not selected by default.
+The Machine component is selected by default when Machine is missing, older
+than the payload, or the same version with no installed DriverKit extension. If
+the installed Machine app is the same/newer and the driver is already installed,
+that component stays visible but is not selected by default.
 
-When the Machine component is selected and the package carries a newer Machine
-build, the installer tries to deactivate the old macOS DriverKit extension,
-falls back to `systemextensionsctl uninstall` if needed, replaces vEGPU
-Machine.app, submits a fresh activation request, and asks macOS to offer the
-normal Restart Now / Later choice.
+When the Machine component is selected, the installer first asks the existing
+Machine app to deactivate the old macOS DriverKit extension when that app is
+present. If graceful deactivation fails or the old app is missing while the
+extension is still listed, it falls back to `systemextensionsctl uninstall`.
+After the new app is installed and permissions/quarantine are cleaned, it calls
+the newly installed Machine app to submit a fresh activation request and asks
+macOS to offer the normal Restart Now / Later choice.
 
 System Integrity Protection must be disabled before installation. vEGPU uses an
 ad-hoc DriverKit host extension for PCIe/eGPU passthrough, which is a serious

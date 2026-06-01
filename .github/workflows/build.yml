@@ -820,6 +820,8 @@ jobs:
           grep -F 'vEGPU.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'machineNeedsInstall()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'driverInstalled()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'return !driverInstalled();' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'customize="always"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'vEGPU Machine.app and DriverKit host extension' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
@@ -859,9 +861,12 @@ jobs:
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/source/apple-dma-*.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package/vegpu-scaling_*.deb' -print -quit | grep -q .
             grep -R -- '--driver-deactivate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            grep -R -- 'run_as_console_user_with_timeout 20 "$VEGPU_MACHINE_EXECUTABLE" --driver-deactivate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            grep -R -- 'Driver extension is still listed; attempting forced system extension uninstall.' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
             grep -R -- 'systemextensionsctl uninstall - "$VEGPU_DRIVER_ID"' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
             grep -R -- 'com.vegpu.machine.VFIOUserPCIDriver' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
             grep -R -- '--driver-activate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            grep -R -- 'run_as_console_user_with_timeout 45 "$VEGPU_MACHINE_EXECUTABLE" --driver-activate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
           fi
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
