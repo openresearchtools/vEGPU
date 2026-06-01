@@ -505,13 +505,13 @@ jobs:
           VERSION: ${{ env.RELEASE_VERSION }}
           BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
           SWIFT_BUILD_SCRATCH_PATH: ${{ runner.temp }}/vegpu-build/swiftpm-release
-          VGPU_APP: ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
-          VGPU_APP_BUILD_DIR: ${{ runner.temp }}/vegpu-build/app-build
-          VGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
-          VGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-input/display-runtime-source/display-runtime-source.tar.gz
-          VGPU_LEGAL_BUILD_DIR: ${{ runner.temp }}/vegpu-artifacts/legal/generated
-          VGPU_SCALING_PACKAGE_DIR: ${{ runner.temp }}/vegpu-input/scaling-package
-          VGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/vegpu-build/utm-patched
+          VEGPU_APP: ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
+          VEGPU_APP_BUILD_DIR: ${{ runner.temp }}/vegpu-build/app-build
+          VEGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
+          VEGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-input/display-runtime-source/display-runtime-source.tar.gz
+          VEGPU_LEGAL_BUILD_DIR: ${{ runner.temp }}/vegpu-artifacts/legal/generated
+          VEGPU_SCALING_PACKAGE_DIR: ${{ runner.temp }}/vegpu-input/scaling-package
+          VEGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/vegpu-build/utm-patched
 
       - name: Validate app bundle and notices
         run: |
