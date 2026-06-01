@@ -278,7 +278,7 @@ More information:
 
 - https://vegpu.com
 - https://github.com/openresearchtools/vEGPU
-- https://github.com/openresearchtools/vEGPU-machine2
+- https://github.com/openresearchtools/vEGPU-machine
 
 This installer requires SIP to be disabled before installation can continue.
 TEXT
@@ -341,7 +341,7 @@ This package installs two related projects/applications:
    Machine source bundles.
 
    Repository:
-   https://github.com/openresearchtools/vEGPU-machine2
+   https://github.com/openresearchtools/vEGPU-machine
 
    Notices and source bundles:
    /Applications/vEGPU Machine.app/Contents/Resources
@@ -404,7 +404,7 @@ More information:
 
 - https://vegpu.com
 - https://github.com/openresearchtools/vEGPU
-- https://github.com/openresearchtools/vEGPU-machine2
+- https://github.com/openresearchtools/vEGPU-machine
 
 This installer requires SIP to be disabled before installation can continue.
 TEXT
@@ -445,7 +445,7 @@ Project links:
 
 - https://vegpu.com
 - https://github.com/openresearchtools/vEGPU
-- https://github.com/openresearchtools/vEGPU-machine2
+- https://github.com/openresearchtools/vEGPU-machine
 
 System Integrity Protection must be disabled before installation. To disable
 SIP on Apple Silicon, shut down, hold the power button until startup options

@@ -7,7 +7,7 @@ in the separate `vEGPU Machine.app` build.
 ## Repositories
 
 - `openresearchtools/vEGPU`: builds `vEGPU.app`.
-- `openresearchtools/vEGPU-machine2`: builds `vEGPU Machine.app`, QEMU/VFIO,
+- `openresearchtools/vEGPU-machine`: builds `vEGPU Machine.app`, QEMU/VFIO,
   firmware, guest tools, Machine notices, and Machine source bundles.
 
 The public download can still be one `.pkg`. The package should install both
@@ -192,7 +192,7 @@ The package welcome/readme/license resources also state:
 
 - `https://vegpu.com`
 - `https://github.com/openresearchtools/vEGPU`
-- `https://github.com/openresearchtools/vEGPU-machine2`
+- `https://github.com/openresearchtools/vEGPU-machine`
 - SIP must be disabled before installation; the package preinstall scripts
   refuse installation when `csrutil status` is not disabled and print the
   Apple Silicon recovery Terminal steps.

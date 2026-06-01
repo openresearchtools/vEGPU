@@ -4,7 +4,7 @@ set -euo pipefail
 DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
 BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 OUT="${1:-$BUILD_ROOT/machine-artifacts}"
-REPO="${VEGPU_MACHINE_REPOSITORY:-openresearchtools/vEGPU-machine2}"
+REPO="${VEGPU_MACHINE_REPOSITORY:-openresearchtools/vEGPU-machine}"
 WORKFLOW="${VEGPU_MACHINE_WORKFLOW:-build-nosip.yml}"
 REF="${VEGPU_MACHINE_REF:-main}"
 RUN_ID="${VEGPU_MACHINE_RUN_ID:-}"
@@ -13,6 +13,7 @@ VERSION="${VEGPU_RELEASE_VERSION:-}"
 BUILD_NUMBER="${VEGPU_BUILD_NUMBER:-}"
 LOCAL_ZIP="${VEGPU_MACHINE_ZIP:-}"
 LOCAL_SOURCE="${VEGPU_MACHINE_SOURCE_TGZ:-}"
+LOCAL_ARTIFACT_DIR="${VEGPU_MACHINE_ARTIFACT_DIR:-}"
 REQUIRE_SOURCE="${VEGPU_REQUIRE_MACHINE_SOURCE:-1}"
 
 rm -rf "$OUT"
@@ -28,6 +29,12 @@ copy_local() {
     printf 'VEGPU_MACHINE_SOURCE_TGZ is required with local Machine zip when VEGPU_REQUIRE_MACHINE_SOURCE=1\n' >&2
     exit 1
   fi
+}
+
+copy_artifact_dir() {
+  test -d "$LOCAL_ARTIFACT_DIR"
+  mkdir -p "$OUT/downloaded"
+  cp -R "$LOCAL_ARTIFACT_DIR"/. "$OUT/downloaded/"
 }
 
 download_run() {
@@ -93,7 +100,9 @@ trigger_and_wait() {
   download_run "$found_run"
 }
 
-if [ -n "$LOCAL_ZIP" ]; then
+if [ -n "$LOCAL_ARTIFACT_DIR" ]; then
+  copy_artifact_dir
+elif [ -n "$LOCAL_ZIP" ]; then
   copy_local
 elif [ -n "$RUN_ID" ]; then
   download_run "$RUN_ID"

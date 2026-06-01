@@ -6,8 +6,8 @@ cd "$ROOT"
 
 bad_paths="$(
   find . \
+    -path './.git' -prune -o \
     \( \
-      -path './.git' -o \
       -path './.build' -o \
       -path './.swiftpm' -o \
       -path './build' -o \
@@ -26,7 +26,7 @@ if [ -n "$bad_paths" ]; then
 fi
 
 bad_artifacts="$(
-  find . -type f \( \
+  find . -path './.git' -prune -o -type f \( \
     -name '.DS_Store' -o \
     -name '*.app' -o \
     -name '*.pkg' -o \
@@ -54,7 +54,7 @@ if [ -n "$bad_artifacts" ]; then
 fi
 
 binary_payloads="$(
-  find . -type f -print0 |
+  find . -path './.git' -prune -o -type f -print0 |
     xargs -0 file |
     grep -E 'Mach-O|Debian binary package|current ar archive|Zip archive|xar archive|gzip compressed|XZ compressed|PNG image|JPEG image|Apple icon' || true
 )"
@@ -65,6 +65,7 @@ fi
 
 test_payloads="$(
   find . \
+    -path './.git' -prune -o \
     \( \
       -path './Sources/vEGPUCoreSelfTests' -o \
       -path './Resources/Guest/scaling-app/tests' -o \
@@ -151,7 +152,7 @@ if rg -n 'vEGPUCoreSelfTests|go test|unittest discover' Package.swift .github sc
 fi
 rm -f /tmp/vegpu-clean-rg.$$
 
-empty_dirs="$(find . -type d -empty -print)"
+empty_dirs="$(find . -path './.git' -prune -o -type d -empty -print)"
 if [ -n "$empty_dirs" ]; then
   printf 'Clean repo must not contain empty placeholder directories:\n%s\n' "$empty_dirs" >&2
   exit 1

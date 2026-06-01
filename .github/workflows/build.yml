@@ -47,7 +47,7 @@ on:
       machine_repository:
         description: "Machine repo used for download-run/trigger."
         required: false
-        default: openresearchtools/vEGPU-machine2
+        default: openresearchtools/vEGPU-machine
         type: string
       machine_ref:
         description: "Machine branch/ref used when triggering its workflow."
@@ -367,6 +367,9 @@ jobs:
   machine-artifacts:
     name: Build/fetch vEGPU Machine and DKMS guest tools
     runs-on: macos-15
+    needs:
+      - machine-build
+    if: ${{ always() && ((inputs.machine_mode || 'trigger') == 'download-run' || needs.machine-build.result == 'success') }}
 
     steps:
       - name: Check out vEGPU
@@ -389,17 +392,30 @@ jobs:
           MACHINE_MODE: ${{ inputs.machine_mode || 'trigger' }}
           MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
 
-      - name: Fetch Machine artifacts
-        run: scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/vegpu-artifacts/machine"
+      - name: Download Machine artifacts from reusable workflow
+        if: ${{ (inputs.machine_mode || 'trigger') == 'trigger' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vEGPU-Machine-*-build-output
+          path: ${{ runner.temp }}/vegpu-input/machine-reusable
+          merge-multiple: true
+
+      - name: Normalize Machine artifacts
+        run: |
+          if [ "${MACHINE_MODE}" = "trigger" ]; then
+            export VEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/vegpu-input/machine-reusable"
+          fi
+          scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/vegpu-artifacts/machine"
         env:
           GH_TOKEN: ${{ secrets.VEGPU_MACHINE_TOKEN || github.token }}
-          VEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/vEGPU-machine2' }}
+          VEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/vEGPU-machine' }}
           VEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
           VEGPU_MACHINE_RUN_ID: ${{ (inputs.machine_mode || 'trigger') == 'download-run' && inputs.machine_run_id || '' }}
-          VEGPU_TRIGGER_MACHINE_BUILD: ${{ (inputs.machine_mode || 'trigger') == 'trigger' && '1' || '0' }}
+          VEGPU_TRIGGER_MACHINE_BUILD: "0"
           VEGPU_REQUIRE_MACHINE_SOURCE: "1"
           VEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
           VEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+          MACHINE_MODE: ${{ inputs.machine_mode || 'trigger' }}
 
       - name: Validate Machine app payload
         run: |
@@ -423,6 +439,19 @@ jobs:
           path: ${{ runner.temp }}/vegpu-artifacts/machine
           if-no-files-found: error
           retention-days: 90
+
+  machine-build:
+    name: Build vEGPU Machine
+    if: ${{ (inputs.machine_mode || 'trigger') == 'trigger' }}
+    uses: openresearchtools/vEGPU-machine/.github/workflows/build-nosip.yml@main
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      release_version: ${{ inputs.release_version || '0.1.0' }}
+      build_number: ${{ inputs.build_number || github.run_number }}
+      publish_release: false
+      prerelease: true
 
   package:
     name: Package installer
