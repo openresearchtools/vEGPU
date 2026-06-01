@@ -821,10 +821,25 @@ jobs:
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'machineNeedsInstall()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          if grep -R '<relocate>' "$RUNNER_TEMP/vegpu-check/pkg-expanded"/*.pkg/PackageInfo; then
-            echo "component packages must not relocate vEGPU apps into Trash/Desktop/old paths" >&2
-            exit 1
-          fi
+          python3 - "$RUNNER_TEMP/vegpu-check/pkg-expanded" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          package_infos = sorted(root.glob("*.pkg/PackageInfo"))
+          if not package_infos:
+              raise SystemExit("no component PackageInfo files found")
+          for package_info in package_infos:
+              text = package_info.read_text()
+              if 'install-location="/"' not in text:
+                  raise SystemExit(f"{package_info} does not install at /")
+              if 'relocatable="false"' not in text:
+                  raise SystemExit(f"{package_info} is not marked relocatable=false")
+              active_relocate = re.search(r"<relocate(?=[\\s>])(?:(?!/>).)*>", text, re.S)
+              if active_relocate:
+                  raise SystemExit(f"{package_info} contains an active relocate rule")
+          PY
           if pkgutil --expand-full "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" >/dev/null 2>&1; then
             codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-app.pkg/Payload/Applications/vEGPU.app"
             codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-machine.pkg/Payload/Applications/vEGPU Machine.app"
