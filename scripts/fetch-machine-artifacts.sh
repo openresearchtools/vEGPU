@@ -116,11 +116,6 @@ fi
 
 machine_zip="$(find "$OUT" -type f -name 'vEGPU-Machine-*.zip' | sort | head -n 1)"
 machine_source="$(find "$OUT" -type f -name 'vEGPU-Machine-*-source.tar.gz' | sort | head -n 1 || true)"
-if [ -z "$machine_zip" ]; then
-  printf 'Downloaded Machine artifacts did not contain vEGPU-Machine-*.zip\n' >&2
-  find "$OUT" -type f >&2
-  exit 1
-fi
 if [ -z "$machine_source" ] && [ "$REQUIRE_SOURCE" = "1" ]; then
   printf 'Machine artifacts did not contain vEGPU-Machine-*-source.tar.gz\n' >&2
   find "$OUT" -type f >&2
@@ -135,15 +130,20 @@ if [ -n "$machine_source" ]; then
   fi
 fi
 
-rm -rf "$OUT/extracted"
-mkdir -p "$OUT/extracted"
-ditto -x -k "$machine_zip" "$OUT/extracted"
-machine_app="$OUT/extracted/vEGPU Machine.app"
-if [ ! -d "$machine_app" ]; then
-  machine_app="$(find "$OUT/extracted" -maxdepth 3 -type d -name 'vEGPU Machine.app' | head -n 1)"
+machine_app=""
+if [ -n "$machine_zip" ]; then
+  rm -rf "$OUT/extracted"
+  mkdir -p "$OUT/extracted"
+  ditto -x -k "$machine_zip" "$OUT/extracted"
+  machine_app="$OUT/extracted/vEGPU Machine.app"
+  if [ ! -d "$machine_app" ]; then
+    machine_app="$(find "$OUT/extracted" -maxdepth 3 -type d -name 'vEGPU Machine.app' | head -n 1)"
+  fi
+else
+  machine_app="$(find "$OUT" -maxdepth 4 -type d -name 'vEGPU Machine.app' | head -n 1)"
 fi
 if [ -z "$machine_app" ] || [ ! -d "$machine_app" ]; then
-  printf 'Machine zip did not contain vEGPU Machine.app\n' >&2
+  printf 'Machine artifacts did not contain vEGPU Machine.app or vEGPU-Machine-*.zip\n' >&2
   exit 1
 fi
 
@@ -152,7 +152,9 @@ ditto "$machine_app" "$OUT/vEGPU Machine.app"
 
 {
   echo "machine_app=$OUT/vEGPU Machine.app"
-  echo "machine_zip=$machine_zip"
+  if [ -n "$machine_zip" ]; then
+    echo "machine_zip=$machine_zip"
+  fi
   if [ -n "$machine_source" ]; then
     echo "machine_source=$machine_source"
   fi

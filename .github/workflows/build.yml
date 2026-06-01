@@ -26,6 +26,14 @@ on:
           - artifact-only
           - pre-release
           - full-release
+      build_scope:
+        description: "What to build. display-runtime-only is for ANGLE/display debugging and does not touch Machine/QEMU."
+        required: true
+        default: package
+        type: choice
+        options:
+          - package
+          - display-runtime-only
       utm_repository:
         description: "UTM fork/repo that supplies the app display dependency recipe."
         required: false
@@ -37,13 +45,18 @@ on:
         default: e4a4c34b671284263fc69f81b607de494d7e9b65
         type: string
       machine_mode:
-        description: "How this workflow obtains vEGPU Machine. trigger builds Machine/DKMS through the Machine workflow."
+        description: "How this workflow obtains vEGPU Machine. trigger rebuilds Machine/DKMS; app-run reuses a prior vEGPU workflow artifact."
         required: true
-        default: trigger
+        default: app-run
         type: choice
         options:
+          - app-run
           - download-run
           - trigger
+      machine_app_run_id:
+        description: "Existing vEGPU workflow run id containing vEGPU-machine-artifacts when machine_mode=app-run."
+        required: false
+        type: string
       machine_repository:
         description: "Machine repo used for download-run/trigger."
         required: false
@@ -56,6 +69,10 @@ on:
         type: string
       machine_run_id:
         description: "Existing Machine workflow run id when machine_mode=download-run."
+        required: false
+        type: string
+      display_partial_run_id:
+        description: "Optional vEGPU run id containing vEGPU-display-runtime-partial to resume a failed display build."
         required: false
         type: string
       publish_release:
@@ -99,6 +116,7 @@ jobs:
   display-runtime:
     name: Build display runtime from source
     runs-on: macos-15
+    if: ${{ github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') }}
 
     steps:
       - name: Check out vEGPU
@@ -150,7 +168,24 @@ jobs:
             ${{ runner.os }}-display-runtime-work-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-
             ${{ runner.os }}-display-runtime-work-v2-
 
+      - name: Restore failed display runtime partial artifact
+        if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' && inputs.display_partial_run_id != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/vegpu-input/display-runtime-partial"
+          gh run download "$DISPLAY_PARTIAL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name vEGPU-display-runtime-partial \
+            --dir "$RUNNER_TEMP/vegpu-input/display-runtime-partial"
+          partial="$RUNNER_TEMP/vegpu-input/display-runtime-partial/display-runtime-partial.tar.gz"
+          test -f "$partial"
+          mkdir -p "$RUNNER_TEMP/vegpu-build"
+          tar -xzf "$partial" -C "$RUNNER_TEMP/vegpu-build"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPLAY_PARTIAL_RUN_ID: ${{ inputs.display_partial_run_id }}
+
       - name: Build app-side display frameworks and source bundle
+        id: build-display-runtime
         if: steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
         run: scripts/build-display-runtime-from-source.sh
         env:
@@ -159,6 +194,30 @@ jobs:
           VGPU_DISPLAY_BUILD_DIR: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
           VGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
           VGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+
+      - name: Pack failed display runtime partial state
+        if: failure() && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        run: |
+          work="$RUNNER_TEMP/vegpu-build/display-runtime-source-build"
+          out="$RUNNER_TEMP/vegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz"
+          test -d "$work"
+          mkdir -p "$(dirname "$out")"
+          tar \
+            --exclude='*/.git/objects/pack/*.pack' \
+            --exclude='*/DerivedData/*/Index.noindex' \
+            --exclude='*/Index.noindex' \
+            -czf "$out" \
+            -C "$RUNNER_TEMP/vegpu-build" \
+            display-runtime-source-build
+
+      - name: Upload failed display runtime partial state
+        if: failure() && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vEGPU-display-runtime-partial
+          path: ${{ runner.temp }}/vegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Verify display runtime outputs
         run: |
@@ -192,6 +251,7 @@ jobs:
   scaling-package:
     name: Build Linux scaling helper package
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') }}
 
     steps:
       - name: Check out vEGPU
@@ -246,7 +306,7 @@ jobs:
     needs:
       - display-runtime
       - scaling-package
-    if: ${{ needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' }}
+    if: ${{ (inputs.build_scope || 'package') == 'package' && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' }}
 
     steps:
       - name: Check out vEGPU
@@ -369,7 +429,7 @@ jobs:
     runs-on: macos-15
     needs:
       - machine-build
-    if: ${{ always() && ((inputs.machine_mode || 'trigger') == 'download-run' || needs.machine-build.result == 'success') }}
+    if: ${{ always() && (inputs.build_scope || 'package') == 'package' && ((inputs.machine_mode || 'app-run') == 'app-run' || (inputs.machine_mode || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
 
     steps:
       - name: Check out vEGPU
@@ -378,22 +438,39 @@ jobs:
       - name: Validate Machine mode
         run: |
           case "${MACHINE_MODE}" in
-            download-run|trigger) ;;
+            app-run|download-run|trigger) ;;
             *)
-              echo "machine_mode must be download-run or trigger" >&2
+              echo "machine_mode must be app-run, download-run, or trigger" >&2
               exit 1
               ;;
           esac
+          if [ "${MACHINE_MODE}" = "app-run" ] && [ -z "${MACHINE_APP_RUN_ID}" ]; then
+            echo "machine_mode=app-run requires machine_app_run_id" >&2
+            exit 1
+          fi
           if [ "${MACHINE_MODE}" = "download-run" ] && [ -z "${MACHINE_RUN_ID}" ]; then
             echo "machine_mode=download-run requires machine_run_id" >&2
             exit 1
           fi
         env:
-          MACHINE_MODE: ${{ inputs.machine_mode || 'trigger' }}
+          MACHINE_MODE: ${{ inputs.machine_mode || 'app-run' }}
+          MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || '' }}
           MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
 
+      - name: Download Machine artifacts from prior vEGPU workflow run
+        if: ${{ (inputs.machine_mode || 'app-run') == 'app-run' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/vegpu-input/machine-app-run"
+          gh run download "$MACHINE_APP_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name vEGPU-machine-artifacts \
+            --dir "$RUNNER_TEMP/vegpu-input/machine-app-run"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id }}
+
       - name: Download Machine artifacts from reusable workflow
-        if: ${{ (inputs.machine_mode || 'trigger') == 'trigger' }}
+        if: ${{ (inputs.machine_mode || 'app-run') == 'trigger' }}
         uses: actions/download-artifact@v4
         with:
           pattern: vEGPU-Machine-*-build-output
@@ -402,7 +479,9 @@ jobs:
 
       - name: Normalize Machine artifacts
         run: |
-          if [ "${MACHINE_MODE}" = "trigger" ]; then
+          if [ "${MACHINE_MODE}" = "app-run" ]; then
+            export VEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/vegpu-input/machine-app-run"
+          elif [ "${MACHINE_MODE}" = "trigger" ]; then
             export VEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/vegpu-input/machine-reusable"
           fi
           scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/vegpu-artifacts/machine"
@@ -410,12 +489,12 @@ jobs:
           GH_TOKEN: ${{ secrets.VEGPU_MACHINE_TOKEN || github.token }}
           VEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/vEGPU-machine' }}
           VEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
-          VEGPU_MACHINE_RUN_ID: ${{ (inputs.machine_mode || 'trigger') == 'download-run' && inputs.machine_run_id || '' }}
+          VEGPU_MACHINE_RUN_ID: ${{ (inputs.machine_mode || 'app-run') == 'download-run' && inputs.machine_run_id || '' }}
           VEGPU_TRIGGER_MACHINE_BUILD: "0"
           VEGPU_REQUIRE_MACHINE_SOURCE: "1"
           VEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
           VEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
-          MACHINE_MODE: ${{ inputs.machine_mode || 'trigger' }}
+          MACHINE_MODE: ${{ inputs.machine_mode || 'app-run' }}
 
       - name: Validate Machine app payload
         run: |
@@ -442,7 +521,7 @@ jobs:
 
   machine-build:
     name: Build vEGPU Machine
-    if: ${{ (inputs.machine_mode || 'trigger') == 'trigger' }}
+    if: ${{ (inputs.build_scope || 'package') == 'package' && (inputs.machine_mode || 'app-run') == 'trigger' }}
     uses: openresearchtools/vEGPU-machine/.github/workflows/build-nosip.yml@main
     permissions:
       contents: write
