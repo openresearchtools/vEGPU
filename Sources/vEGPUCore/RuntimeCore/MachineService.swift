@@ -529,11 +529,11 @@ public final class MachineService: @unchecked Sendable {
     }
 
     private func requestQemuQuit() async throws {
-        _ = try await QMPClient(socketURL: files.qmp).execute("quit")
+        try await QMPClient(socketURL: files.qmp).executeVoid("quit")
     }
 
     private func requestQemuPowerdown() async throws {
-        _ = try await QMPClient(socketURL: files.qmp).execute("system_powerdown")
+        try await QMPClient(socketURL: files.qmp).executeVoid("system_powerdown")
     }
 
     private func waitForPidExit(_ pid: Int32?, timeout: TimeInterval) async -> Bool {

@@ -1,8 +1,8 @@
 import Foundation
 import Darwin
 
-private struct MetricsPayload: @unchecked Sendable {
-    let value: [String: Any]
+public struct MetricsPayload: @unchecked Sendable {
+    public let value: [String: Any]
 }
 
 public struct CpuSnapshot: Sendable {
@@ -43,8 +43,8 @@ public final class MetricsService: @unchecked Sendable {
         self.machinePid = machinePid
     }
 
-    public func metrics() async -> [String: Any] {
-        let payload = await Task.detached(priority: .utility) {
+    public func metrics() async -> MetricsPayload {
+        await Task.detached(priority: .utility) {
             let host = self.readHostMetrics()
             let resolvedGuest = await self.readGuestMetrics()
             let resolvedNvidia = await self.readNvidiaSmiStatus()
@@ -61,7 +61,6 @@ public final class MetricsService: @unchecked Sendable {
                 "sampledAt": ISO8601DateFormatter().string(from: Date())
             ])
         }.value
-        return payload.value
     }
 
     public func readNvidiaSmiStatus() async -> NvidiaSmiStatus {

@@ -616,9 +616,9 @@ final class NativeAppModel: ObservableObject {
         guard !metricsRefreshInFlight else { return }
         metricsRefreshInFlight = true
         Task {
-            let raw = await metricsService.metrics()
+            let payload = await metricsService.metrics()
             await MainActor.run {
-                applyMetrics(raw)
+                applyMetrics(payload.value)
                 metricsRefreshInFlight = false
             }
         }

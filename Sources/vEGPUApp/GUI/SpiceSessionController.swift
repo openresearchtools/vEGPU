@@ -400,7 +400,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
                     }
                     return
                 }
-                _ = try await qmp.execute(
+                try await qmp.executeVoid(
                     "human-monitor-command",
                     arguments: ["command-line": "mouse_set \(index)"]
                 )
@@ -425,7 +425,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
             return
         }
         do {
-            _ = try await qmp.execute(
+            try await qmp.executeVoid(
                 "device_add",
                 arguments: [
                     "driver": "usb-mouse",
@@ -440,16 +440,12 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     }
 
     private nonisolated static func mouseIndex(_ qmp: QMPClient, relative: Bool) async throws -> Int? {
-        guard let mice = try await qmp.execute("query-mice") as? [[String: Any]] else {
-            return nil
-        }
+        let mice = try await qmp.queryMice()
         for mouse in mice {
-            guard let absolute = mouse["absolute"] as? Bool,
-                  absolute != relative,
-                  let index = mouse["index"] as? Int else {
+            guard mouse.absolute != relative else {
                 continue
             }
-            return index
+            return mouse.index
         }
         return nil
     }

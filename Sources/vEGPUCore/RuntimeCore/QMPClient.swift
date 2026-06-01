@@ -9,6 +9,27 @@ public final class QMPClient: @unchecked Sendable {
     }
 
     public func execute(_ name: String, arguments: [String: Any]? = nil) async throws -> Any? {
+        try await executePayload(name, arguments: arguments).value
+    }
+
+    public func executeVoid(_ name: String, arguments: [String: Any]? = nil) async throws {
+        _ = try await executePayload(name, arguments: arguments)
+    }
+
+    public func queryMice() async throws -> [QMPMouseInfo] {
+        guard let rows = try await executePayload("query-mice").value as? [[String: Any]] else {
+            return []
+        }
+        return rows.compactMap { row in
+            guard let absolute = row["absolute"] as? Bool,
+                  let index = row["index"] as? Int else {
+                return nil
+            }
+            return QMPMouseInfo(index: index, absolute: absolute)
+        }
+    }
+
+    private func executePayload(_ name: String, arguments: [String: Any]? = nil) async throws -> QMPPayload {
         let socket = try await connectUnixSocket(path: socketURL.path)
         defer { close(socket) }
         _ = try readQMPMessage(socket)
@@ -23,7 +44,7 @@ public final class QMPClient: @unchecked Sendable {
         if let error = response["error"] {
             throw RuntimeError.message("QMP \(name) failed: \(error)")
         }
-        return response["return"]
+        return QMPPayload(value: response["return"])
     }
 
     public static func frame(_ payload: [String: Any]) throws -> Data {
@@ -87,4 +108,13 @@ public final class QMPClient: @unchecked Sendable {
         }
         return dict
     }
+}
+
+private struct QMPPayload: @unchecked Sendable {
+    let value: Any?
+}
+
+public struct QMPMouseInfo: Sendable {
+    public let index: Int
+    public let absolute: Bool
 }
