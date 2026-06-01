@@ -4,6 +4,24 @@ vEGPU is the app-side Swift/AppKit runtime manager, SPICE client UI, and model
 routing interface. vEGPU Machine is a separate app/repository for QEMU, VFIO,
 DriverKit, firmware, guest driver packages, and their GPL/source bundles.
 
+## License Boundary
+
+vEGPU.app is distributed under the permissive Apache License, Version 2.0.
+Like UTM, the app bundles and loads components with their own licenses,
+including SPICE/GLib/GStreamer/ANGLE and related support libraries. The
+installed app carries generated notices plus corresponding app/display-runtime
+source archives under `Contents/Resources/vEGPURoot/legal/generated`.
+
+vEGPU Machine.app is distributed as the separate Machine/runtime application.
+It carries the QEMU/VFIO/DriverKit side, including QEMU-derived GPL-covered
+source, guest-driver packages, firmware/runtime support, and Machine-side
+notices/source bundles. GPL-derived QEMU code stays on the Machine side; the
+Apache-side vEGPU launcher/display/AI code stays separate.
+
+The combined installer may place both applications in `/Applications`, but the
+installed apps, repositories, notices, and source archives keep this boundary
+visible.
+
 ## UTM Patch Stack Display Work
 
 The committed repository does not carry a copied UTM source tree.
@@ -48,7 +66,7 @@ Directory-specific provenance is kept in `ai/web-ui-app/NOTICE`.
 ## vEGPU Linux Scaling Helper
 
 The Linux scaling helper under `Resources/Guest/scaling-app` is original
-vEGPU code distributed under the MIT license. CI packages it as
+OpenResearchTools/vEGPU code distributed under the MIT license. CI packages it as
 `vegpu-scaling_*.deb` in a disposable Debian container. The package installs a
 Debian copyright file and depends on system Python, GTK/PyGObject, X11, and
 XFCE tools rather than bundling those dependencies.

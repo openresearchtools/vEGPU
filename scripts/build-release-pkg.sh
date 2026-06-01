@@ -65,6 +65,7 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
     printf 'Missing vEGPU Machine source tarball next to Machine app: %s\n' "$(dirname "$MACHINE_APP")" >&2
     exit 1
   fi
+  /usr/bin/codesign --force --sign - "$STAGE_MACHINE/Applications/vEGPU Machine.app" >/dev/null
 fi
 
 test -f "$STAGE_APP/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
@@ -302,27 +303,53 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
   write_nonrelocatable_component_plist "$STAGE_MACHINE" "$MACHINE_COMPONENTS_PLIST"
 fi
 
-cat > "$RESOURCES/WELCOME.txt" <<'TEXT'
-vEGPU installs two related applications:
+if [ -f "$ROOT/Resources/Assets/vEGPU-logo-transparent.png" ]; then
+  cp "$ROOT/Resources/Assets/vEGPU-logo-transparent.png" "$RESOURCES/vEGPU-logo-transparent.png"
+fi
 
-- vEGPU.app: the launcher, AppKit GUI, app-side SPICE display client, and AI runtime controls.
-- vEGPU Machine.app: the DriverKit/VFIO/QEMU virtual machine runtime used by vEGPU.
-
-More information:
-
-- https://vegpu.com
-- https://github.com/openresearchtools/vEGPU
-- https://github.com/openresearchtools/vEGPU-machine
-
-This installer requires SIP to be disabled before installation can continue.
-TEXT
+cat > "$RESOURCES/WELCOME.html" <<'HTML'
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font: -apple-system-body; color: #1f2328; margin: 0; padding: 18px; }
+    .top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    img { width: 58px; height: 58px; border-radius: 10px; }
+    h1 { font: -apple-system-title1; margin: 0; }
+    p, li { line-height: 1.35; }
+    .warn { border-left: 4px solid #d1242f; padding-left: 10px; margin: 14px 0; }
+    .links { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <img src="vEGPU-logo-transparent.png" alt="">
+    <div>
+      <h1>vEGPU</h1>
+      <p>NVIDIA eGPU passthrough and AI runtime orchestration for Apple Silicon Macs.</p>
+    </div>
+  </div>
+  <p>This package installs two related applications:</p>
+  <ul>
+    <li><strong>vEGPU.app</strong>: the Apache-2.0 Swift/AppKit launcher, GUI, app-side SPICE display client, and AI runtime controls.</li>
+    <li><strong>vEGPU Machine.app</strong>: the separate QEMU/VFIO/DriverKit virtual machine runtime and macOS driver host.</li>
+  </ul>
+  <p class="warn"><strong>SIP must be disabled.</strong> The installer checks this before installation and will stop on a SIP-enabled Mac.</p>
+  <p class="links">More information: <a href="https://vegpu.com">vegpu.com</a>, <a href="https://github.com/openresearchtools/vEGPU">openresearchtools/vEGPU</a>, <a href="https://github.com/openresearchtools/vEGPU-machine">openresearchtools/vEGPU-machine</a>.</p>
+</body>
+</html>
+HTML
 
 cat > "$RESOURCES/README.txt" <<'TEXT'
-System Integrity Protection requirement
-=======================================
+Installation, driver, and source information
+============================================
 
 vEGPU Machine uses an ad-hoc DriverKit host extension for PCIe/eGPU passthrough.
-The installer will stop if System Integrity Protection is still enabled.
+The installer runs a SIP check before installation:
+
+- PASS: SIP is disabled, so installation can continue.
+- FAIL: SIP is enabled, so installation stops before anything is installed.
 
 To disable SIP on Apple Silicon:
 
@@ -335,18 +362,42 @@ To disable SIP on Apple Silicon:
 This has real security implications. Do not install vEGPU on a machine that
 holds sensitive data unless you accept that tradeoff.
 
+Selectable components
+=====================
+
+The Installation Type screen shows the installed components.
+
+- vEGPU.app is selected because it is the main application.
+- vEGPU Machine.app and the DriverKit host extension are selected by default
+  only when the Machine app is missing or older than the payload in this
+  package. If the installed Machine app is the same or newer, that component is
+  visible but unselected by default.
+
+When vEGPU Machine.app is selected and the payload is newer, the installer:
+
+1. asks the existing vEGPU Machine app to deactivate the macOS DriverKit driver,
+2. falls back to systemextensionsctl uninstall if graceful deactivation fails,
+3. replaces vEGPU Machine.app,
+4. submits a fresh driver activation request, and
+5. asks macOS to show the Restart Now / Later choice at the end.
+
 Licenses, notices, and source bundles
 =====================================
 
 After installation, licenses and notices are available from each installed
-application's Help menu. The package also installs the corresponding source
-tarballs/source bundles inside the application bundles for licensing
-obligations.
+application's Help menu.
 
-For combined releases, the installer removes the old macOS DriverKit extension
-before replacing vEGPU Machine.app when the package carries a newer Machine
-build, submits a fresh driver activation request afterward, and recommends a
-restart as the final installation step.
+vEGPU.app includes:
+
+- /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
+- vEGPU app source tarball
+- app-side display runtime source/provenance tarball
+
+vEGPU Machine.app includes:
+
+- /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices
+- /Applications/vEGPU Machine.app/Contents/Resources/SourceBundles
+- /Applications/vEGPU Machine.app/Contents/Resources/guest-tools/source
 
 vEGPU follows the UTM and UTM-QEMU style split with a visible boundary:
 vEGPU Machine owns the GPL DriverKit/QEMU/VM mechanics, while vEGPU owns the
@@ -354,18 +405,33 @@ launcher, GUI, app-side display client, and AI runtime layers. GPL-derived
 QEMU code stays on the Machine side; the app-side runtime stays separate.
 TEXT
 
+cat > "$RESOURCES/CONCLUSION.txt" <<'TEXT'
+Installation finished.
+
+If vEGPU Machine.app or its macOS DriverKit host extension was installed or
+refreshed, restart macOS before launching vEGPU with eGPUs attached.
+
+Use each app's Help menu to open licenses, notices, and bundled source archives.
+TEXT
+
 cat > "$RESOURCES/LICENSE.txt" <<'TEXT'
-vEGPU Installer Notice
-======================
+vEGPU License and Source Notice
+===============================
 
 This package installs two related projects/applications:
 
 1. vEGPU.app
    Launcher, Swift/AppKit GUI, app-side SPICE display client, and AI runtime
-   controls.
+   controls. vEGPU.app is distributed under the permissive Apache License,
+   Version 2.0.
 
    Repository:
    https://github.com/openresearchtools/vEGPU
+
+   Bundled app-side runtime components include SPICE/GLib/GStreamer/ANGLE and
+   related support libraries, with their own license terms including permissive
+   and LGPL-family components. The app bundle carries notices and corresponding
+   source/provenance archives for those components.
 
    Notices and source archives:
    /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
@@ -398,8 +464,8 @@ before replacing vEGPU Machine.app when the package carries a newer Machine
 build, submits a fresh driver activation request after installation, and then
 offers the normal macOS restart choice so the driver state is clean.
 
-Architecture and license boundary
-=================================
+Architecture and license boundary, following the UTM split
+==========================================================
 
 vEGPU follows the UTM and UTM-QEMU style split with a harder visible boundary:
 vEGPU Machine handles the GPL DriverKit/QEMU/VM mechanics, while vEGPU handles
@@ -418,34 +484,46 @@ QEMU-derived source tree unless an individual file or patch hunk states a more
 specific license.
 
 DriverKit, VFIO, and QEMU integration work in vEGPU Machine builds on Scott J.
-Goldman's `scottjg/qemu-vfio-apple` project. The QEMU-side macOS SPICE/virgl
-rendering runtime also adapts work from `utmapp/qemu` and `utmapp/virglrenderer`.
+Goldman's `scottjg/qemu-vfio-apple` project. QEMU-side macOS SPICE/virgl
+rendering work also adapts work from `utmapp/qemu` and `utmapp/virglrenderer`.
 The app-side SPICE/GLib/GStreamer/ANGLE display runtime is generated from the
-pinned UTM dependency recipe and vEGPU patch stack.
+pinned `utmapp/UTM` dependency recipe and the vEGPU patch stack.
 
 vEGPU and vEGPU Machine are not endorsed by, sponsored by, or affiliated with
 Fabrice Bellard or the QEMU project, Scott J. Goldman, scottjg/qemu-vfio-apple,
 UTM, utmapp/qemu, utmapp/virglrenderer, or their maintainers.
 TEXT
 if [ "$INCLUDE_MACHINE" != "1" ]; then
-  cat > "$RESOURCES/WELCOME.txt" <<'TEXT'
-vEGPU installs vEGPU.app.
-
-Combined public releases also install vEGPU Machine.app, the DriverKit/VFIO/QEMU
-virtual machine runtime used by vEGPU.
-
-More information:
-
-- https://vegpu.com
-- https://github.com/openresearchtools/vEGPU
-- https://github.com/openresearchtools/vEGPU-machine
-
-This installer requires SIP to be disabled before installation can continue.
-TEXT
+  cat > "$RESOURCES/WELCOME.html" <<'HTML'
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font: -apple-system-body; color: #1f2328; margin: 0; padding: 18px; }
+    .top { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    img { width: 58px; height: 58px; border-radius: 10px; }
+    h1 { font: -apple-system-title1; margin: 0; }
+    p, li { line-height: 1.35; }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <img src="vEGPU-logo-transparent.png" alt="">
+    <div>
+      <h1>vEGPU</h1>
+      <p>This artifact installs vEGPU.app.</p>
+    </div>
+  </div>
+  <p>Combined public releases also install vEGPU Machine.app, the QEMU/VFIO/DriverKit virtual machine runtime used by vEGPU.</p>
+  <p>More information: <a href="https://vegpu.com">vegpu.com</a>, <a href="https://github.com/openresearchtools/vEGPU">openresearchtools/vEGPU</a>, <a href="https://github.com/openresearchtools/vEGPU-machine">openresearchtools/vEGPU-machine</a>.</p>
+</body>
+</html>
+HTML
 
   cat > "$RESOURCES/README.txt" <<'TEXT'
-System Integrity Protection requirement
-=======================================
+Installation and source information
+===================================
 
 vEGPU releases require System Integrity Protection to be disabled before
 installation. Combined releases install vEGPU Machine.app, which uses an
@@ -513,10 +591,29 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
   <title>vEGPU</title>
-  <options customize="never" require-scripts="true"/>
+  <options customize="allow" require-scripts="true"/>
+  <installation-check script="sipDisabled()"/>
   <script><![CDATA[
 var machinePayloadVersion = "$MACHINE_NEW_SHORT_VERSION";
 var machinePayloadBuild = "$MACHINE_NEW_BUILD";
+
+function commandText(result) {
+  if (!result) { return ""; }
+  if (result.stdout) { return String(result.stdout); }
+  if (result.stderr) { return String(result.stderr); }
+  return String(result);
+}
+
+function sipDisabled() {
+  var result = system.run("/usr/bin/csrutil", "status");
+  var text = commandText(result);
+  if (/disabled/i.test(text)) {
+    return true;
+  }
+  my.result.title = "System Integrity Protection must be disabled";
+  my.result.message = "vEGPU Machine uses an ad-hoc DriverKit host extension for PCIe/eGPU passthrough. Disable SIP from macOS Recovery with `csrutil disable`, restart, and run this installer again.";
+  return false;
+}
 
 function compareVersion(left, right) {
   var a = String(left || "").split(/[^0-9]+/);
@@ -548,17 +645,18 @@ function machineNeedsInstall() {
   return compareVersion(machinePayloadBuild, installedBuild) > 0;
 }
   ]]></script>
-  <welcome file="WELCOME.txt" mime-type="text/plain"/>
+  <welcome file="WELCOME.html" mime-type="text/html"/>
   <readme file="README.txt" mime-type="text/plain"/>
   <license file="LICENSE.txt" mime-type="text/plain"/>
+  <conclusion file="CONCLUSION.txt" mime-type="text/plain"/>
   <choices-outline>
     <line choice="com.vegpu.install.app"/>
     <line choice="com.vegpu.install.machine"/>
   </choices-outline>
-  <choice id="com.vegpu.install.app" title="vEGPU" start_selected="true" start_visible="false">
+  <choice id="com.vegpu.install.app" title="vEGPU.app" description="Required main application: Apache-2.0 Swift/AppKit launcher, GUI, app-side SPICE display client, AI runtime controls, app notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.app"/>
   </choice>
-  <choice id="com.vegpu.install.machine" title="vEGPU Machine" start_selected="machineNeedsInstall()" start_visible="false">
+  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app and DriverKit host extension" description="Separate QEMU/VFIO/DriverKit runtime. Selected by default only when Machine is missing or older. When selected and newer, the installer refreshes the macOS driver and recommends a restart." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.machine"/>
   </choice>
   <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>
@@ -570,14 +668,35 @@ else
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
   <title>vEGPU</title>
-  <options customize="never" require-scripts="true"/>
-  <welcome file="WELCOME.txt" mime-type="text/plain"/>
+  <options customize="allow" require-scripts="true"/>
+  <installation-check script="sipDisabled()"/>
+  <script><![CDATA[
+function commandText(result) {
+  if (!result) { return ""; }
+  if (result.stdout) { return String(result.stdout); }
+  if (result.stderr) { return String(result.stderr); }
+  return String(result);
+}
+
+function sipDisabled() {
+  var result = system.run("/usr/bin/csrutil", "status");
+  var text = commandText(result);
+  if (/disabled/i.test(text)) {
+    return true;
+  }
+  my.result.title = "System Integrity Protection must be disabled";
+  my.result.message = "vEGPU releases require SIP to be disabled because combined releases install an ad-hoc DriverKit host extension. Disable SIP from macOS Recovery with `csrutil disable`, restart, and run this installer again.";
+  return false;
+}
+  ]]></script>
+  <welcome file="WELCOME.html" mime-type="text/html"/>
   <readme file="README.txt" mime-type="text/plain"/>
   <license file="LICENSE.txt" mime-type="text/plain"/>
+  <conclusion file="CONCLUSION.txt" mime-type="text/plain"/>
   <choices-outline>
     <line choice="com.vegpu.install"/>
   </choices-outline>
-  <choice id="com.vegpu.install" title="vEGPU">
+  <choice id="com.vegpu.install" title="vEGPU.app" description="Main application: Apache-2.0 Swift/AppKit launcher, GUI, app-side display client, AI runtime controls, notices, and app-side source archives." start_selected="true">
     <pkg-ref id="com.vegpu.pkg.app"/>
   </choice>
   <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>

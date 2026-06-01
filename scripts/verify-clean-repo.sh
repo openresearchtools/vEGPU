@@ -27,6 +27,10 @@ fi
 
 bad_artifacts="$(
   find . -path './.git' -prune -o -type f \( \
+    -path './Resources/Assets/vEGPU.icns' -o \
+    -path './Resources/Assets/vEGPU-logo-transparent.png' -o \
+    -path './Resources/Assets/vEGPU-tray.png' \
+  \) -prune -o -type f \( \
     -name '.DS_Store' -o \
     -name '*.app' -o \
     -name '*.pkg' -o \
@@ -54,7 +58,11 @@ if [ -n "$bad_artifacts" ]; then
 fi
 
 binary_payloads="$(
-  find . -path './.git' -prune -o -type f -print0 |
+  find . -path './.git' -prune -o \( \
+      -path './Resources/Assets/vEGPU.icns' -o \
+      -path './Resources/Assets/vEGPU-logo-transparent.png' -o \
+      -path './Resources/Assets/vEGPU-tray.png' \
+    \) -prune -o -type f -print0 |
     xargs -0 file |
     grep -E 'Mach-O|Debian binary package|current ar archive|Zip archive|xar archive|gzip compressed|XZ compressed|PNG image|JPEG image|Apple icon' || true
 )"

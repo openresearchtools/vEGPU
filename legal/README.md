@@ -24,3 +24,7 @@ vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
 
 The vEGPU app Help menu opens that generated bundle. vEGPU Machine carries its
 own QEMU/VFIO/DriverKit notices and source bundles inside `vEGPU Machine.app`.
+
+The generated vEGPU Help window also exposes export buttons so users can copy
+the bundled source archives to a normal folder without having to inspect the
+installer package by hand.

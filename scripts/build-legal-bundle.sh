@@ -197,6 +197,7 @@ elif require_full_source:
 
 machine_app = Path(os.environ.get("VEGPU_MACHINE_APP", "/Applications/vEGPU Machine.app"))
 machine_notices = machine_app / "Contents" / "Resources" / "ThirdPartyNotices"
+machine_source_bundles = machine_app / "Contents" / "Resources" / "SourceBundles"
 machine_guest_source = machine_app / "Contents" / "Resources" / "guest-tools" / "source"
 
 notice = []
@@ -211,6 +212,7 @@ notice.append("- vEGPU.app is the Swift/AppKit application and app-side display 
 notice.append("- vEGPU Machine.app is the separate QEMU/VFIO/DriverKit runtime app.")
 notice.append("- vEGPU Machine carries its own notices and GPL/source bundles inside that app.")
 notice.append("- Legacy THIRD_PARTY_* notice files are not used by this generated bundle.")
+notice.append("- The vEGPU Help menu can export the bundled source archives to a user-selected folder.")
 notice.append("")
 notice.append("## App-Side Bundled Display Runtime")
 notice.append("")
@@ -255,6 +257,7 @@ notice.append("## vEGPU Machine Notices")
 notice.append("")
 notice.append(f"- vEGPU Machine app: {machine_app} ({exists_status(machine_app)})")
 notice.append(f"- vEGPU Machine notices: {machine_notices} ({exists_status(machine_notices)})")
+notice.append(f"- vEGPU Machine source bundles: {machine_source_bundles} ({exists_status(machine_source_bundles)})")
 notice.append(f"- vEGPU Machine guest source: {machine_guest_source} ({exists_status(machine_guest_source)})")
 notice.append("")
 notice.append("Use Help > Open vEGPU Machine or Help > Reveal vEGPU Machine Notices in vEGPU.app.")
@@ -273,12 +276,13 @@ manifest = {
     "displayRuntimeSource": display_source_manifest_path,
     "machineApp": str(machine_app),
     "machineNotices": str(machine_notices),
+    "machineSourceBundles": str(machine_source_bundles),
 }
 (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 PY
 
 source_items=()
-for item in Package.swift Package.resolved Sources Resources Helpers ai scripts legal third_party docs; do
+for item in README.md LICENSE Package.swift Package.resolved Sources Resources Helpers ai scripts legal third_party docs; do
   if [ -e "$ROOT/$item" ]; then
     source_items+=("$item")
   fi

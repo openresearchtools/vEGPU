@@ -702,6 +702,10 @@ jobs:
           find "$APP/Contents/Resources/guest-tools/packages" -type f -name 'apple-dma-*.deb' -print -quit | grep -q .
           find "$APP/Contents/Resources/guest-tools/source" -type f -name 'apple-dma-*.tar.gz' -print -quit | grep -q .
           find "$RUNNER_TEMP/vegpu-artifacts/machine" -maxdepth 1 -type f -name 'vEGPU-Machine-*-source.tar.gz' -print -quit | grep -q .
+          if find "$RUNNER_TEMP/vegpu-artifacts/machine" -path '*/downloaded/*' -print -quit | grep -q .; then
+            echo "Machine artifact must not recursively upload downloaded artifact scratch directories" >&2
+            exit 1
+          fi
           codesign --verify --deep --strict "$APP"
 
       - name: Upload Machine artifacts
@@ -822,8 +826,8 @@ jobs:
             exit 1
           fi
           if pkgutil --expand-full "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" >/dev/null 2>&1; then
-            codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-app.pkg/Payload/Applications/vEGPU.app"
-            codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-machine.pkg/Payload/Applications/vEGPU Machine.app"
+            codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-app.pkg/Payload/Applications/vEGPU.app"
+            codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-machine.pkg/Payload/Applications/vEGPU Machine.app"
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/SourceBundles/*source*.tar.gz' -print -quit | grep -q .

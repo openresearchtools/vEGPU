@@ -149,12 +149,10 @@ fi
 
 rm -rf "$OUT/vEGPU Machine.app"
 ditto "$machine_app" "$OUT/vEGPU Machine.app"
+rm -rf "$OUT/downloaded" "$OUT/extracted"
 
 {
   echo "machine_app=$OUT/vEGPU Machine.app"
-  if [ -n "$machine_zip" ]; then
-    echo "machine_zip=$machine_zip"
-  fi
   if [ -n "$machine_source" ]; then
     echo "machine_source=$machine_source"
   fi
