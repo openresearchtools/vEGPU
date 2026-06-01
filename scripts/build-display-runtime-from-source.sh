@@ -66,10 +66,8 @@ fi
 
 mkdir -p "$WORK" "$(dirname "$SOURCE_OUT")"
 
-if [ ! -d "$UTM_DIR/.git" ]; then
-  rm -rf "$UTM_DIR"
-  git clone --filter=blob:none "$UTM_REPO" "$UTM_DIR"
-fi
+rm -rf "$UTM_DIR"
+git clone --filter=blob:none "$UTM_REPO" "$UTM_DIR"
 git -C "$UTM_DIR" fetch --tags --force origin "$UTM_COMMIT"
 git -C "$UTM_DIR" checkout --force "$UTM_COMMIT"
 git -C "$UTM_DIR" reset --hard "$UTM_COMMIT" >/dev/null
@@ -178,8 +176,29 @@ download_display_sources() {
   download "$SOUP_SRC"
   download "$PHODAV_SRC"
   download "$SPICE_CLIENT_SRC"
-  clone "$WEBKIT_REPO" "$WEBKIT_COMMIT" "$WEBKIT_SUBDIRS"
-  clone "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
+  ensure_git_checkout "$WEBKIT_REPO" "$WEBKIT_COMMIT" "$WEBKIT_SUBDIRS"
+  ensure_git_checkout "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
+}
+
+ensure_git_checkout() {
+  local repo="$1"
+  local commit="$2"
+  local subdirs="${3:-}"
+  local name
+  local dir
+  name="$(basename "$repo")"
+  dir="$BUILD_DIR/$name"
+  if [ -d "$dir/.git" ] && git -C "$dir" cat-file -e "$commit^{commit}" >/dev/null 2>&1; then
+    git -C "$dir" checkout --force "$commit"
+    return
+  fi
+  rm -rf "$dir"
+  clone "$repo" "$commit" "$subdirs"
+}
+
+ensure_display_git_sources() {
+  mkdir -p "$BUILD_DIR"
+  ensure_git_checkout "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
 }
 
 stage_display_source_preflight() {
@@ -255,6 +274,7 @@ build_angle() {
 build_display_frameworks() {
   echo "${GREEN}Starting vEGPU app display runtime build for macOS arm64 [${NCPU} jobs]${NC}"
   if have_display_frameworks && have_source_preflight && [ "${VEGPU_DISPLAY_FORCE_REBUILD:-0}" != "1" ]; then
+    ensure_display_git_sources
     echo "${GREEN}Reusing existing display runtime frameworks and source preflight from $WORK${NC}"
     return
   fi
@@ -367,6 +387,10 @@ if [ -d "$BUILD_DIR" ]; then
       if [ "$name" = "WebKit.git" ] && [ -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit-source.tar.gz" ]; then
         continue
       fi
+      if ! git -C "$repo" rev-parse --verify HEAD^{commit} >/dev/null 2>&1; then
+        printf 'Skipping incomplete Git checkout in partial display state: %s\n' "$repo" >&2
+        continue
+      fi
       archive_git_snapshot "$repo" "$SOURCE_STAGE/git-sources/$name" "$label"
     done
 fi
@@ -377,6 +401,10 @@ if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit-source.tar.gz" ]; then
 fi
 if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/HEAD" ]; then
   printf 'Display runtime source bundle is missing the WebKit.git revision record.\n' >&2
+  exit 1
+fi
+if [ ! -f "$SOURCE_STAGE/git-sources/libucontext.git/libucontext-source.tar.gz" ]; then
+  printf 'Display runtime source bundle is missing the libucontext source snapshot.\n' >&2
   exit 1
 fi
 
