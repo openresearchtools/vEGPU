@@ -683,7 +683,7 @@ jobs:
     needs:
       - build-app
       - machine-artifacts
-    if: ${{ needs.build-app.result == 'success' && needs.machine-artifacts.result == 'success' }}
+    if: ${{ always() && needs.build-app.result == 'success' && needs.machine-artifacts.result == 'success' }}
 
     steps:
       - name: Check out vEGPU
