@@ -307,7 +307,7 @@ jobs:
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/README'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/utm-patches/sources'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/utm-base/utm-base-'
-          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit.git.bundle'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/HEAD'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/REMOTE'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/vegpu-utm-patches/0001-openresearchtools-vegpu-cocoaspice-package.patch'
@@ -525,7 +525,7 @@ jobs:
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-IMPORT.txt"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
-          tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit.git.bundle'
+          tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
           find "$APP/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit | grep -q .
           if tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
             echo "generated app source tarball must not include scaling helper build artifacts" >&2

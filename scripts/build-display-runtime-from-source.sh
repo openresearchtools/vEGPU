@@ -158,6 +158,30 @@ download_display_sources() {
   clone "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
 }
 
+archive_git_snapshot() {
+  local repo="$1"
+  local out_dir="$2"
+  local label="$3"
+  shift 3
+  local paths=("$@")
+  local head
+  head="$(git -C "$repo" rev-parse HEAD)"
+  mkdir -p "$out_dir"
+  git -C "$repo" rev-parse HEAD > "$out_dir/HEAD"
+  git -C "$repo" remote get-url origin > "$out_dir/REMOTE" 2>/dev/null || true
+  if [ "${#paths[@]}" -gt 0 ]; then
+    git -C "$repo" archive \
+      --format=tar \
+      --prefix="$label-$head/" \
+      HEAD -- "${paths[@]}" | gzip -c > "$out_dir/$label-source.tar.gz"
+  else
+    git -C "$repo" archive \
+      --format=tar \
+      --prefix="$label-$head/" \
+      HEAD | gzip -c > "$out_dir/$label-source.tar.gz"
+  fi
+}
+
 stage_display_source_preflight() {
   local webkit_repo="$BUILD_DIR/WebKit.git"
   if [ ! -d "$webkit_repo/.git" ]; then
@@ -166,13 +190,20 @@ stage_display_source_preflight() {
   fi
 
   rm -rf "$SOURCE_PREFLIGHT"
-  mkdir -p "$SOURCE_PREFLIGHT/git-sources/WebKit.git"
-  git -C "$webkit_repo" bundle create "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit.git.bundle" --all
-  git -C "$webkit_repo" rev-parse HEAD > "$SOURCE_PREFLIGHT/git-sources/WebKit.git/HEAD"
-  git -C "$webkit_repo" remote get-url origin > "$SOURCE_PREFLIGHT/git-sources/WebKit.git/REMOTE" 2>/dev/null || true
+  local webkit_source_paths=()
+  if [ -n "${WEBKIT_SUBDIRS:-}" ]; then
+    # UTM's recipe checks out only the display runtime WebKit subtree we need.
+    # Archive that snapshot, not the full WebKit git history.
+    read -r -a webkit_source_paths <<< "$WEBKIT_SUBDIRS"
+  fi
+  archive_git_snapshot \
+    "$webkit_repo" \
+    "$SOURCE_PREFLIGHT/git-sources/WebKit.git" \
+    "WebKit" \
+    "${webkit_source_paths[@]}"
 
-  if [ ! -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit.git.bundle" ]; then
-    printf 'Display runtime source preflight failed: could not create WebKit.git bundle containing ANGLE source.\n' >&2
+  if [ ! -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit-source.tar.gz" ]; then
+    printf 'Display runtime source preflight failed: could not create WebKit/ANGLE source snapshot.\n' >&2
     exit 1
   fi
 }
@@ -184,7 +215,7 @@ have_display_frameworks() {
 }
 
 have_source_preflight() {
-  [ -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit.git.bundle" ] &&
+  [ -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit-source.tar.gz" ] &&
     [ -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/HEAD" ]
 }
 
@@ -332,18 +363,16 @@ if [ -d "$BUILD_DIR" ]; then
   find "$BUILD_DIR" -maxdepth 1 -type d -name '*.git' -print0 |
     while IFS= read -r -d '' repo; do
       name="$(basename "$repo")"
-      if [ "$name" = "WebKit.git" ] && [ -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit.git.bundle" ]; then
+      label="${name%.git}"
+      if [ "$name" = "WebKit.git" ] && [ -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit-source.tar.gz" ]; then
         continue
       fi
-      mkdir -p "$SOURCE_STAGE/git-sources/$name"
-      git -C "$repo" bundle create "$SOURCE_STAGE/git-sources/$name/$name.bundle" --all
-      git -C "$repo" rev-parse HEAD > "$SOURCE_STAGE/git-sources/$name/HEAD"
-      git -C "$repo" remote get-url origin > "$SOURCE_STAGE/git-sources/$name/REMOTE" 2>/dev/null || true
+      archive_git_snapshot "$repo" "$SOURCE_STAGE/git-sources/$name" "$label"
     done
 fi
 
-if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit.git.bundle" ]; then
-  printf 'Display runtime source bundle is missing the WebKit.git bundle that contains ANGLE source.\n' >&2
+if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/WebKit-source.tar.gz" ]; then
+  printf 'Display runtime source bundle is missing the WebKit/ANGLE source snapshot.\n' >&2
   exit 1
 fi
 if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/HEAD" ]; then
@@ -363,9 +392,9 @@ It records the pinned UTM dependency recipe, UTM dependency patches/sources
 file, downloaded upstream source archives, and git source bundles used to
 produce the SPICE, GLib, GStreamer, libsoup, USB, ANGLE, and related app-side
 frameworks. ANGLE is carried through UTM's pinned WebKit fork; its corresponding
-source is included as:
+source snapshot is included as:
 
-  git-sources/WebKit.git/WebKit.git.bundle
+  git-sources/WebKit.git/WebKit-source.tar.gz
   git-sources/WebKit.git/HEAD
   git-sources/WebKit.git/REMOTE
 
@@ -388,7 +417,10 @@ Scope:
 EOF
 
 (cd "$SOURCE_STAGE" && find . -type f -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS)
+echo "Display runtime source bundle contents:"
+du -sh "$SOURCE_STAGE/upstream-sources" "$SOURCE_STAGE/git-sources" "$SOURCE_STAGE/utm-patches" "$SOURCE_STAGE/vegpu-utm-patches" 2>/dev/null || true
 tar -C "$WORK" -czf "$SOURCE_OUT" "$(basename "$SOURCE_STAGE")"
+du -sh "$SOURCE_OUT"
 
 echo "$FRAMEWORKS_OUT"
 echo "$SOURCE_OUT"
