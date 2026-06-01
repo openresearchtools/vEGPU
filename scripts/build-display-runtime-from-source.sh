@@ -350,9 +350,9 @@ SOURCE_STAGE="$WORK/display-runtime-source"
 rm -rf "$SOURCE_STAGE"
 mkdir -p "$SOURCE_STAGE"
 
-rsync -a "$UTM_DIR/scripts" "$SOURCE_STAGE/utm-scripts/"
-rsync -a "$UTM_DIR/patches" "$SOURCE_STAGE/utm-patches/"
-rsync -a "$ROOT/third_party/utm/patches" "$SOURCE_STAGE/vegpu-utm-patches/"
+rsync -a "$UTM_DIR/scripts/" "$SOURCE_STAGE/utm-scripts/"
+rsync -a "$UTM_DIR/patches/" "$SOURCE_STAGE/utm-patches/"
+rsync -a "$ROOT/third_party/utm/patches/" "$SOURCE_STAGE/vegpu-utm-patches/"
 cp "$UTM_DIR/LICENSE" "$SOURCE_STAGE/UTM-LICENSE.txt"
 git -C "$UTM_DIR" rev-parse HEAD > "$SOURCE_STAGE/UTM_COMMIT"
 git -C "$UTM_DIR" remote get-url origin > "$SOURCE_STAGE/UTM_REMOTE"
@@ -405,6 +405,14 @@ if [ ! -f "$SOURCE_STAGE/git-sources/WebKit.git/HEAD" ]; then
 fi
 if [ ! -f "$SOURCE_STAGE/git-sources/libucontext.git/libucontext-source.tar.gz" ]; then
   printf 'Display runtime source bundle is missing the libucontext source snapshot.\n' >&2
+  exit 1
+fi
+if [ ! -f "$SOURCE_STAGE/utm-patches/sources" ]; then
+  printf 'Display runtime source bundle is missing UTM dependency source records.\n' >&2
+  exit 1
+fi
+if [ ! -f "$SOURCE_STAGE/vegpu-utm-patches/0001-openresearchtools-vegpu-cocoaspice-package.patch" ]; then
+  printf 'Display runtime source bundle is missing the vEGPU UTM patch stack.\n' >&2
   exit 1
 fi
 
