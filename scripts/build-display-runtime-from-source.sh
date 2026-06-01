@@ -4,13 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
 BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
-UTM_REPO="${VEGPU_UTM_REPO:-https://github.com/utmapp/UTM.git}"
-UTM_COMMIT="${VEGPU_UTM_COMMIT:-e4a4c34b671284263fc69f81b607de494d7e9b65}"
-WORK="${VEGPU_DISPLAY_BUILD_DIR:-$BUILD_ROOT/display-runtime-source-build}"
+UTM_REPO="${VGPU_UTM_REPO:-${VEGPU_UTM_REPO:-https://github.com/utmapp/UTM.git}}"
+UTM_COMMIT="${VGPU_UTM_COMMIT:-${VEGPU_UTM_COMMIT:-e4a4c34b671284263fc69f81b607de494d7e9b65}}"
+WORK="${VGPU_DISPLAY_BUILD_DIR:-${VEGPU_DISPLAY_BUILD_DIR:-$BUILD_ROOT/display-runtime-source-build}}"
 UTM_DIR="$WORK/utm-base"
 DRIVER="$WORK/vegpu-display-driver.sh"
-SOURCE_OUT="${VEGPU_DISPLAY_SOURCE_OUT:-$BUILD_ROOT/legal/display-runtime-source.tar.gz}"
-FRAMEWORKS_OUT="${VEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}"
+SOURCE_OUT="${VGPU_DISPLAY_SOURCE_OUT:-${VEGPU_DISPLAY_SOURCE_OUT:-$BUILD_ROOT/legal/display-runtime-source.tar.gz}}"
+FRAMEWORKS_OUT="${VGPU_DISPLAY_FRAMEWORKS_OUT:-${VEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}}"
 
 require() {
   command -v "$1" >/dev/null 2>&1 || {
