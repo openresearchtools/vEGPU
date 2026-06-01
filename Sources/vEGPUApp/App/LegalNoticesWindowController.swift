@@ -3,9 +3,16 @@ import vEGPUCore
 
 @MainActor
 final class LegalNoticesWindowController: NSWindowController {
+    private struct NoticeDocument {
+        var title: String
+        var url: URL
+    }
+
     private let appRoot: URL
     private let generatedLegalURL: URL
+    private let appLicensesURL: URL
     private let appNoticesURL: URL
+    private let appManifestURL: URL
     private let appSourceURL: URL
     private let displaySourceURL: URL
     private let machineAppURL: URL
@@ -17,7 +24,9 @@ final class LegalNoticesWindowController: NSWindowController {
         let root = AppPaths.discoverRoot()
         self.appRoot = root
         self.generatedLegalURL = root.appendingPathComponent("legal/generated", isDirectory: true)
+        self.appLicensesURL = generatedLegalURL.appendingPathComponent("licenses", isDirectory: true)
         self.appNoticesURL = generatedLegalURL.appendingPathComponent("NOTICES.md")
+        self.appManifestURL = generatedLegalURL.appendingPathComponent("manifest.json")
         self.appSourceURL = generatedLegalURL.appendingPathComponent("source/vEGPU-app-source.tar.gz")
         self.displaySourceURL = generatedLegalURL.appendingPathComponent("source/display-runtime-source.tar.gz")
         self.machineAppURL = URL(fileURLWithPath: VfioApp.appPath())
@@ -48,6 +57,8 @@ final class LegalNoticesWindowController: NSWindowController {
         window?.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
+
+    private var documents: [NoticeDocument] = []
 
     func revealVEGPUNotices() {
         reveal(generatedLegalURL, fallbackMessage: "The generated vEGPU notices have not been built yet.")
@@ -94,7 +105,15 @@ final class LegalNoticesWindowController: NSWindowController {
         )
     }
 
-    private lazy var summaryTextView: NSTextView = {
+    private lazy var documentPopUp: NSPopUpButton = {
+        let popup = NSPopUpButton()
+        popup.target = self
+        popup.action = #selector(documentSelectionChanged)
+        popup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return popup
+    }()
+
+    private lazy var documentTextView: NSTextView = {
         let textView = NSTextView()
         textView.isEditable = false
         textView.isSelectable = true
@@ -102,6 +121,14 @@ final class LegalNoticesWindowController: NSWindowController {
         textView.textColor = .labelColor
         textView.backgroundColor = .textBackgroundColor
         return textView
+    }()
+
+    private lazy var statusLabel: NSTextField = {
+        let label = NSTextField(wrappingLabelWithString: "")
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .secondaryLabelColor
+        label.maximumNumberOfLines = 3
+        return label
     }()
 
     private func makeContentView() -> NSView {
@@ -117,7 +144,7 @@ final class LegalNoticesWindowController: NSWindowController {
         title.font = .boldSystemFont(ofSize: 20)
         stack.addArrangedSubview(title)
 
-        let subtitle = NSTextField(wrappingLabelWithString: "vEGPU.app keeps its app-side notices here. vEGPU Machine.app carries its own QEMU/VFIO notices and source bundles inside the Machine app. Use Export to copy bundled source archives to a normal folder.")
+        let subtitle = NSTextField(wrappingLabelWithString: "vEGPU.app carries generated app-side notices, licenses, and source archives. vEGPU Machine.app carries separate QEMU/VFIO/DriverKit notices and source bundles. Select a notice below to read it here, or export source archives to a normal folder.")
         subtitle.font = .systemFont(ofSize: 13)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 3
@@ -142,10 +169,21 @@ final class LegalNoticesWindowController: NSWindowController {
         machineButtonRow.addArrangedSubview(makeButton("Export Machine Sources...", action: #selector(exportVEGPUMachineSourcesAction)))
         stack.addArrangedSubview(machineButtonRow)
 
+        let documentRow = NSStackView()
+        documentRow.orientation = .horizontal
+        documentRow.spacing = 8
+        documentRow.alignment = .centerY
+        documentRow.addArrangedSubview(documentPopUp)
+        documentRow.addArrangedSubview(makeButton("Open Selected", action: #selector(openSelectedNoticeAction)))
+        documentRow.addArrangedSubview(makeButton("Reveal Selected", action: #selector(revealSelectedNoticeAction)))
+        stack.addArrangedSubview(documentRow)
+
+        stack.addArrangedSubview(statusLabel)
+
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
-        scrollView.documentView = summaryTextView
+        scrollView.documentView = documentTextView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         stack.addArrangedSubview(scrollView)
 
@@ -155,10 +193,13 @@ final class LegalNoticesWindowController: NSWindowController {
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
             stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
             subtitle.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            documentRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            documentPopUp.widthAnchor.constraint(greaterThanOrEqualToConstant: 320),
+            statusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 260)
         ])
-        refreshSummary()
+        refreshDocumentList()
         return content
     }
 
@@ -169,24 +210,130 @@ final class LegalNoticesWindowController: NSWindowController {
     }
 
     private func refreshSummary() {
-        summaryTextView.string = [
-            "vEGPU app root: \(appRoot.path)",
-            "Generated notices: \(status(appNoticesURL))",
-            "vEGPU source archive: \(status(appSourceURL))",
-            "Display runtime source archive: \(status(displaySourceURL))",
-            "",
-            "vEGPU Machine app: \(status(machineAppURL))",
-            "vEGPU Machine notices: \(status(machineNoticesURL))",
-            "vEGPU Machine source bundles: \(status(machineSourceBundlesURL))",
-            "vEGPU Machine guest/source bundles: \(status(machineGuestSourceURL))",
-            "",
-            "The generated vEGPU notice bundle is produced by scripts/build-legal-bundle.sh.",
-            "Release builds should set VEGPU_REQUIRE_FULL_SOURCE=1 so generated display-runtime source cannot be skipped."
-        ].joined(separator: "\n")
+        refreshDocumentList()
     }
 
     private func status(_ url: URL) -> String {
         FileManager.default.fileExists(atPath: url.path) ? "present - \(url.path)" : "missing - \(url.path)"
+    }
+
+    private func refreshDocumentList() {
+        var next: [NoticeDocument] = []
+        appendIfExists(title: "vEGPU Generated Notices", url: appNoticesURL, into: &next)
+        appendIfExists(title: "vEGPU Legal Manifest", url: appManifestURL, into: &next)
+        appendTextDocuments(in: appLicensesURL, prefix: "vEGPU", into: &next)
+        appendTextDocuments(in: machineNoticesURL, prefix: "Machine", into: &next)
+
+        documents = dedupe(next).sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        documentPopUp.removeAllItems()
+        if documents.isEmpty {
+            documentPopUp.addItem(withTitle: "No notices found")
+            documentPopUp.isEnabled = false
+        } else {
+            documents.forEach { documentPopUp.addItem(withTitle: $0.title) }
+            documentPopUp.isEnabled = true
+        }
+        statusLabel.stringValue = [
+            "vEGPU notices: \(status(generatedLegalURL))",
+            "Machine notices: \(status(machineNoticesURL))",
+            "Source archives: \(status(appSourceURL)); \(status(displaySourceURL)); \(status(machineSourceBundlesURL))"
+        ].joined(separator: "\n")
+        loadSelectedDocument()
+    }
+
+    private func appendIfExists(title: String, url: URL, into documents: inout [NoticeDocument]) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        documents.append(NoticeDocument(title: title, url: url))
+    }
+
+    private func appendTextDocuments(in directory: URL, prefix: String, into documents: inout [NoticeDocument]) {
+        for url in textDocuments(in: directory) {
+            let relative = relativePath(url, under: directory)
+            documents.append(NoticeDocument(title: "\(prefix): \(relative)", url: url))
+        }
+    }
+
+    private func textDocuments(in directory: URL) -> [URL] {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        var urls: [URL] = []
+        while let url = enumerator?.nextObject() as? URL {
+            guard isTextNotice(url) else { continue }
+            urls.append(url)
+        }
+        return urls.sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
+    }
+
+    private func isTextNotice(_ url: URL) -> Bool {
+        let lowerName = url.lastPathComponent.lowercased()
+        if lowerName.hasSuffix(".tar.gz") || lowerName.hasSuffix(".tar.xz") || lowerName.hasSuffix(".tgz") {
+            return false
+        }
+        if lowerName.hasSuffix(".txt") || lowerName.hasSuffix(".md") || lowerName.hasSuffix(".json") || lowerName.hasSuffix(".html") {
+            return true
+        }
+        return lowerName.contains("license")
+            || lowerName.contains("licence")
+            || lowerName.contains("notice")
+            || lowerName.contains("copying")
+            || lowerName.contains("copyright")
+    }
+
+    private func relativePath(_ url: URL, under directory: URL) -> String {
+        let base = directory.path.hasSuffix("/") ? directory.path : directory.path + "/"
+        if url.path.hasPrefix(base) {
+            return String(url.path.dropFirst(base.count))
+        }
+        return url.lastPathComponent
+    }
+
+    private func dedupe(_ entries: [NoticeDocument]) -> [NoticeDocument] {
+        var seen = Set<String>()
+        var result: [NoticeDocument] = []
+        for entry in entries {
+            guard seen.insert(entry.url.path).inserted else { continue }
+            result.append(entry)
+        }
+        return result
+    }
+
+    private func selectedDocument() -> NoticeDocument? {
+        let index = documentPopUp.indexOfSelectedItem
+        guard documents.indices.contains(index) else { return nil }
+        return documents[index]
+    }
+
+    private func loadSelectedDocument() {
+        guard let document = selectedDocument() else {
+            documentTextView.string = [
+                "No license or notice documents were found.",
+                "",
+                "vEGPU app root: \(appRoot.path)",
+                "Generated notices: \(status(appNoticesURL))",
+                "vEGPU source archive: \(status(appSourceURL))",
+                "Display runtime source archive: \(status(displaySourceURL))",
+                "vEGPU Machine notices: \(status(machineNoticesURL))",
+                "vEGPU Machine source bundles: \(status(machineSourceBundlesURL))",
+                "vEGPU Machine guest/source bundles: \(status(machineGuestSourceURL))"
+            ].joined(separator: "\n")
+            return
+        }
+        do {
+            let data = try Data(contentsOf: document.url)
+            if data.count > 4 * 1024 * 1024 {
+                documentTextView.string = "\(document.title)\n\nThis notice file is larger than 4 MiB. Use Open Selected or Reveal Selected to inspect it in Finder.\n\n\(document.url.path)"
+                return
+            }
+            documentTextView.string = String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .isoLatin1)
+                ?? "\(document.title)\n\nCould not decode this file as text.\n\n\(document.url.path)"
+        } catch {
+            documentTextView.string = "\(document.title)\n\nCould not read notice file: \(error.localizedDescription)\n\n\(document.url.path)"
+        }
     }
 
     private func reveal(_ url: URL, fallbackMessage: String) {
@@ -286,5 +433,25 @@ final class LegalNoticesWindowController: NSWindowController {
 
     @objc private func exportVEGPUMachineSourcesAction() {
         exportVEGPUMachineSources()
+    }
+
+    @objc private func documentSelectionChanged() {
+        loadSelectedDocument()
+    }
+
+    @objc private func openSelectedNoticeAction() {
+        guard let document = selectedDocument() else {
+            showMissingAlert(message: "No notice file is selected.")
+            return
+        }
+        NSWorkspace.shared.open(document.url)
+    }
+
+    @objc private func revealSelectedNoticeAction() {
+        guard let document = selectedDocument() else {
+            showMissingAlert(message: "No notice file is selected.")
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([document.url])
     }
 }

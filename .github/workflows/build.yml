@@ -820,7 +820,16 @@ jobs:
           grep -F 'vEGPU.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'machineNeedsInstall()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'customize="always"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'vEGPU Machine.app and DriverKit host extension' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          if grep -F '<readme ' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
+            echo "installer should not show a separate Read Me page" >&2
+            exit 1
+          fi
+          grep -R -F 'NVIDIA* eGPU passthrough' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources"
+          grep -R -F '/var/log/vegpu-driver-install.log' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources"
+          grep -R -F 'Compatibility and purpose labels only' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources"
           python3 - "$RUNNER_TEMP/vegpu-check/pkg-expanded" <<'PY'
           import re
           import sys

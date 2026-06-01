@@ -164,12 +164,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         legalController().revealVEGPUSource()
     }
 
+    @objc private func exportVEGPUSources() {
+        legalController().exportVEGPUSources()
+    }
+
     @objc private func openVEGPUMachine() {
         legalController().openVEGPUMachine()
     }
 
     @objc private func revealVEGPUMachineNotices() {
         legalController().revealVEGPUMachineNotices()
+    }
+
+    @objc private func revealVEGPUMachineSources() {
+        legalController().revealVEGPUMachineSources()
+    }
+
+    @objc private func exportVEGPUMachineSources() {
+        legalController().exportVEGPUMachineSources()
     }
 
     private func startLaunchServicesIfNeeded() {
@@ -232,9 +244,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         addHelpMenuItem("vEGPU Licenses and Notices...", action: #selector(showLegalNotices), to: helpMenu)
         addHelpMenuItem("Reveal vEGPU Notice Files", action: #selector(revealVEGPUNotices), to: helpMenu)
         addHelpMenuItem("Reveal vEGPU Source Archive", action: #selector(revealVEGPUSource), to: helpMenu)
+        addHelpMenuItem("Export vEGPU Sources...", action: #selector(exportVEGPUSources), to: helpMenu)
         helpMenu.addItem(.separator())
         addHelpMenuItem("Open vEGPU Machine", action: #selector(openVEGPUMachine), to: helpMenu)
         addHelpMenuItem("Reveal vEGPU Machine Notices", action: #selector(revealVEGPUMachineNotices), to: helpMenu)
+        addHelpMenuItem("Reveal vEGPU Machine Sources", action: #selector(revealVEGPUMachineSources), to: helpMenu)
+        addHelpMenuItem("Export vEGPU Machine Sources...", action: #selector(exportVEGPUMachineSources), to: helpMenu)
     }
 
     private func addHelpMenuItem(_ title: String, action: Selector, to menu: NSMenu) {
