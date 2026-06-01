@@ -95,6 +95,8 @@ if [ -z "$NCPU" ] || [ "$NCPU" -eq 0 ]; then
   NCPU="$(sysctl -n hw.ncpu)"
 fi
 
+mkdir -p "$SYSROOT_DIR" "$SYSROOT_DIR/Frameworks"
+
 CC="$(xcrun --sdk "$SDK" --find gcc) $CFLAGS_TARGET"
 CPP="$(xcrun --sdk "$SDK" --find gcc) -E"
 CXX="$(xcrun --sdk "$SDK" --find g++)"
