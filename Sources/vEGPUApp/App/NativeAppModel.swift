@@ -629,20 +629,17 @@ final class NativeAppModel: ObservableObject {
         statusRefreshInFlight = true
         let paths = paths
         let machineService = machineService
-        Task.detached(priority: .utility) { [weak self, paths, machineService, loadManifest] in
+        Task(priority: .utility) { [paths, machineService, loadManifest] in
             let status = await machineService.statusMachine()
             let manifest = loadManifest ? (try? ManifestStore(paths: paths).load()) : nil
             let password = machineService.linuxPassword() ?? ""
-            await MainActor.run {
-                guard let self else { return }
-                self.applyRuntimeStatus(status)
-                if loadManifest {
-                    self.manifestSummary = Self.manifestText(manifest)
-                }
-                self.linuxPassword = password
-                self.webHelperStatus = self.goHelperSupervisor.status
-                self.statusRefreshInFlight = false
+            applyRuntimeStatus(status)
+            if loadManifest {
+                manifestSummary = Self.manifestText(manifest)
             }
+            linuxPassword = password
+            webHelperStatus = goHelperSupervisor.status
+            statusRefreshInFlight = false
         }
     }
 
