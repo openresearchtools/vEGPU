@@ -733,7 +733,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: vEGPU-app
-          path: ${{ runner.temp }}/vegpu-input/app
+          path: ${{ runner.temp }}/vegpu-input/app/vEGPU.app
 
       - name: Download vEGPU legal payload
         uses: actions/download-artifact@v4
