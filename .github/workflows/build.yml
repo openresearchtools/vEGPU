@@ -580,11 +580,19 @@ jobs:
           fi
           grep -F 'vEGPU Machine notices' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
 
-      - name: Upload vEGPU.app
+      - name: Pack vEGPU.app artifact
+        run: |
+          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/app-archive"
+          tar -czf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" \
+            -C "$RUNNER_TEMP/vegpu-artifacts/app" \
+            vEGPU.app
+          tar -tzf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" | grep -F 'vEGPU.app/Contents/MacOS/vEGPUApp'
+
+      - name: Upload vEGPU.app archive
         uses: actions/upload-artifact@v4
         with:
           name: vEGPU-app
-          path: ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
+          path: ${{ runner.temp }}/vegpu-artifacts/app-archive/vEGPU-app.tar.gz
           if-no-files-found: error
           retention-days: 90
 
@@ -733,7 +741,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: vEGPU-app
-          path: ${{ runner.temp }}/vegpu-input/app/vEGPU.app
+          path: ${{ runner.temp }}/vegpu-input/app-archive
+
+      - name: Unpack vEGPU.app
+        run: |
+          mkdir -p "$RUNNER_TEMP/vegpu-input/app"
+          tar -xzf "$RUNNER_TEMP/vegpu-input/app-archive/vEGPU-app.tar.gz" \
+            -C "$RUNNER_TEMP/vegpu-input/app"
+          codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-input/app/vEGPU.app"
 
       - name: Download vEGPU legal payload
         uses: actions/download-artifact@v4
@@ -746,6 +761,16 @@ jobs:
         with:
           name: vEGPU-machine-artifacts
           path: ${{ runner.temp }}/vegpu-input/machine
+
+      - name: Rehydrate Machine app from archive
+        run: |
+          rm -rf "$RUNNER_TEMP/vegpu-input/machine-rehydrated"
+          VEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/vegpu-input/machine" \
+          VEGPU_REQUIRE_MACHINE_SOURCE=1 \
+          scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/vegpu-input/machine-rehydrated"
+          rm -rf "$RUNNER_TEMP/vegpu-input/machine"
+          mv "$RUNNER_TEMP/vegpu-input/machine-rehydrated" "$RUNNER_TEMP/vegpu-input/machine"
+          codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-input/machine/vEGPU Machine.app"
 
       - name: Build pkg
         run: |
@@ -797,6 +822,8 @@ jobs:
             exit 1
           fi
           if pkgutil --expand-full "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" >/dev/null 2>&1; then
+            codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-app.pkg/Payload/Applications/vEGPU.app"
+            codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-machine.pkg/Payload/Applications/vEGPU Machine.app"
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/SourceBundles/*source*.tar.gz' -print -quit | grep -q .
