@@ -170,6 +170,7 @@ fi
 
 if [ -d "$DISPLAY_FRAMEWORKS" ]; then
   rsync -a --delete --include='*.framework/***' --include='*.framework' --exclude='*' "$DISPLAY_FRAMEWORKS/" "$FRAMEWORKS/"
+  "$ROOT/scripts/normalize-display-frameworks.sh" "$FRAMEWORKS"
 fi
 
 cat > "$CONTENTS/Info.plist" <<PLIST
