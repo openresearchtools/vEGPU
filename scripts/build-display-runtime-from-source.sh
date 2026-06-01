@@ -84,7 +84,17 @@ REDOWNLOAD="${VEGPU_DISPLAY_REDOWNLOAD:-}"
 QEMU_DIR=
 DEBUG=
 DEBUG_FLAGS=
-BUILD_CONFIGURATION="${CONFIGURATION:-Release}"
+case "${CONFIGURATION:-Release}" in
+  [Rr]elease)
+    BUILD_CONFIGURATION="Release"
+    ;;
+  [Dd]ebug)
+    BUILD_CONFIGURATION="Debug"
+    ;;
+  *)
+    BUILD_CONFIGURATION="${CONFIGURATION:-Release}"
+    ;;
+esac
 
 source "$PATCHES_DIR/sources"
 
@@ -145,6 +155,39 @@ download_display_sources() {
   download "$SPICE_CLIENT_SRC"
   clone "$WEBKIT_REPO" "$WEBKIT_COMMIT" "$WEBKIT_SUBDIRS"
   clone "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
+}
+
+build_angle() {
+  OLD_PATH="$PATH"
+  export PATH="$(realpath "$BUILD_DIR/depot_tools.git"):$OLD_PATH"
+  pwd="$(pwd)"
+  cd "$BUILD_DIR/WebKit.git/Source/ThirdParty/ANGLE"
+  env -i \
+    PATH="$PATH" \
+    HOME="${HOME:-/tmp}" \
+    TMPDIR="${TMPDIR:-/tmp}" \
+    DEVELOPER_DIR="$(xcode-select -p)" \
+    LANG="${LANG:-en_US.UTF-8}" \
+    NSUnbufferedIO=YES \
+    xcodebuild archive \
+      -archivePath "ANGLE" \
+      -scheme "ANGLE" \
+      -sdk "$SDK" \
+      -arch "$ARCH" \
+      -configuration "$BUILD_CONFIGURATION" \
+      -derivedDataPath "$BUILD_DIR/angle-derived-data" \
+      -jobs "${VEGPU_XCODE_JOBS:-4}" \
+      WEBCORE_LIBRARY_DIR="/usr/local/lib" \
+      NORMAL_UMBRELLA_FRAMEWORKS_DIR="" \
+      CODE_SIGNING_ALLOWED=NO \
+      COMPILER_INDEX_STORE_ENABLE=NO \
+      IPHONEOS_DEPLOYMENT_TARGET="14.0" \
+      MACOSX_DEPLOYMENT_TARGET="11.0" \
+      XROS_DEPLOYMENT_TARGET="1.0"
+  rsync -a "ANGLE.xcarchive/Products/usr/local/lib/" "$PREFIX/lib"
+  rsync -a "include/" "$PREFIX/include"
+  cd "$pwd"
+  export PATH="$OLD_PATH"
 }
 
 build_display_frameworks() {
