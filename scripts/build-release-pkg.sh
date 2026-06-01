@@ -22,6 +22,7 @@ COMPONENTS="$WORK/components"
 RESOURCES="$WORK/resources"
 SCRIPTS_APP="$WORK/scripts-app"
 SCRIPTS_MACHINE="$WORK/scripts-machine"
+SCRIPTS_DRIVER="$WORK/scripts-driver"
 STAGE_APP="$WORK/stage-app"
 STAGE_MACHINE="$WORK/stage-machine"
 INCLUDE_MACHINE=0
@@ -46,7 +47,7 @@ else
 fi
 
 rm -rf "$WORK"
-mkdir -p "$COMPONENTS" "$RESOURCES" "$SCRIPTS_APP" "$SCRIPTS_MACHINE" "$STAGE_APP/Applications" "$STAGE_MACHINE/Applications"
+mkdir -p "$COMPONENTS" "$RESOURCES" "$SCRIPTS_APP" "$SCRIPTS_MACHINE" "$SCRIPTS_DRIVER" "$STAGE_APP/Applications" "$STAGE_MACHINE/Applications"
 
 /usr/bin/ditto "$APP" "$STAGE_APP/Applications/vEGPU.app"
 if [ "$INCLUDE_MACHINE" = "1" ]; then
@@ -101,7 +102,7 @@ TEXT
 fi
 SCRIPT
 
-  if [ "$scope" = "machine" ]; then
+  if [ "$scope" = "driver" ]; then
     cat >> "$dir/preinstall" <<'SCRIPT'
 
 VEGPU_INSTALLED_MACHINE="/Applications/vEGPU Machine.app"
@@ -164,7 +165,7 @@ force_uninstall_driver() {
 }
 
 touch "$VEGPU_DRIVER_REFRESH_MARKER"
-echo "vEGPU Machine component selected. Preparing macOS DriverKit extension before replacing or refreshing the host app."
+echo "vEGPU DriverKit component selected. Preparing macOS DriverKit extension before activation."
 if [ -x "$VEGPU_MACHINE_EXECUTABLE" ]; then
   echo "Existing vEGPU Machine app found. Asking it to deactivate the current driver."
   if run_as_console_user_with_timeout 20 "$VEGPU_MACHINE_EXECUTABLE" --driver-deactivate; then
@@ -220,12 +221,13 @@ clear_app_attrs "/Applications/vEGPU.app"
 clear_app_attrs "/Applications/vEGPU Machine.app"
 SCRIPT
 
-  if [ "$scope" = "machine" ]; then
+  if [ "$scope" = "driver" ]; then
     cat >> "$dir/postinstall" <<'SCRIPT'
 
 VEGPU_MACHINE_EXECUTABLE="/Applications/vEGPU Machine.app/Contents/MacOS/vEGPU Machine"
 VEGPU_DRIVER_REFRESH_MARKER="/tmp/com.vegpu.machine.pkg.driver-refresh-needed"
 VEGPU_DRIVER_LOG="/var/log/vegpu-driver-install.log"
+VEGPU_DRIVER_ID="com.vegpu.machine.VFIOUserPCIDriver"
 mkdir -p "$(dirname "$VEGPU_DRIVER_LOG")"
 touch "$VEGPU_DRIVER_LOG"
 chmod 0644 "$VEGPU_DRIVER_LOG" 2>/dev/null || true
@@ -270,18 +272,28 @@ run_as_console_user_with_timeout() {
   run_with_timeout "$seconds" /bin/launchctl asuser "$console_uid" /usr/bin/sudo -u "$console_user" "$@"
 }
 
+log_driver_status() {
+  echo "Current macOS system extension state for $VEGPU_DRIVER_ID:"
+  if /usr/bin/systemextensionsctl list 2>/dev/null | /usr/bin/grep -F "$VEGPU_DRIVER_ID"; then
+    return 0
+  fi
+  echo "Driver extension is not listed yet."
+}
+
 if [ ! -f "$VEGPU_DRIVER_REFRESH_MARKER" ]; then
   echo "vEGPU Machine driver refresh was not requested; leaving existing driver state unchanged."
 elif [ -x "$VEGPU_MACHINE_EXECUTABLE" ]; then
   echo "New vEGPU Machine app is installed. Asking it to activate the DriverKit extension."
   if run_as_console_user_with_timeout 45 "$VEGPU_MACHINE_EXECUTABLE" --driver-activate; then
     echo "vEGPU Machine macOS driver activation request submitted."
-    run_as_console_user_with_timeout 15 "$VEGPU_MACHINE_EXECUTABLE" --driver-status --json || true
+    log_driver_status || true
   else
     echo "vEGPU Machine macOS driver activation request failed. Open vEGPU Machine or vEGPU.app Runtime > Install Driver and retry after approving the extension in System Settings."
+    log_driver_status || true
   fi
 else
   echo "vEGPU Machine executable is missing after installation: $VEGPU_MACHINE_EXECUTABLE" >&2
+  log_driver_status || true
 fi
 rm -f "$VEGPU_DRIVER_REFRESH_MARKER"
 SCRIPT
@@ -296,6 +308,7 @@ SCRIPT
 
 write_install_scripts "$SCRIPTS_APP" "app"
 write_install_scripts "$SCRIPTS_MACHINE" "machine" "$MACHINE_NEW_BUILD" "$MACHINE_NEW_SHORT_VERSION"
+write_install_scripts "$SCRIPTS_DRIVER" "driver" "$MACHINE_NEW_BUILD" "$MACHINE_NEW_SHORT_VERSION"
 
 write_nonrelocatable_component_plist() {
   local stage_root="$1"
@@ -369,7 +382,7 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
   </ul>
   <p class="boundary"><strong>Boundary:</strong> app-side launcher/display/AI work stays in vEGPU.app. GPL QEMU/VFIO/DriverKit mechanics stay in vEGPU Machine.app. The embedded display side is partially based on UTM app work; the Machine side builds on Scott J. Goldman's qemu-vfio-apple and UTM QEMU/virgl work.</p>
   <p class="warn"><strong>SIP must be disabled.</strong> The installer checks this before installation and will stop on a SIP-enabled Mac.</p>
-  <p>The Installation Type screen shows what will be installed. vEGPU Machine is selected by default when it is missing, older, or the same version with no installed DriverKit extension. If selected, the installer asks the existing Machine app to deactivate the old driver when possible, force-uninstalls only when an old extension is still listed, installs or refreshes vEGPU Machine.app, then asks the newly installed app to activate the driver. macOS may still require approval in System Settings before the driver becomes active.</p>
+  <p>The Installation Type screen shows separate choices for vEGPU Machine.app files and DriverKit extension refresh/activation. Machine.app is selected by default when it is missing or older. The DriverKit refresh choice is selected by default when Machine.app is changing or the extension is not currently installed. If selected, the driver step asks the existing Machine app to deactivate the old driver when possible, force-uninstalls only when an old extension is still listed, then asks the installed Machine app to activate the driver. macOS may still require approval in System Settings before the driver becomes active.</p>
   <p class="links">More information: <a href="https://vegpu.com">vegpu.com</a>, <a href="https://github.com/openresearchtools/vEGPU">openresearchtools/vEGPU</a>, <a href="https://github.com/openresearchtools/vEGPU-machine">openresearchtools/vEGPU-machine</a>.</p>
   <p class="footnote">* Compatibility and purpose labels only. vEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or any named company, protocol, project, or maintainer.</p>
 </body>
@@ -379,9 +392,10 @@ HTML
 cat > "$RESOURCES/CONCLUSION.txt" <<'TEXT'
 Installation finished.
 
-If vEGPU Machine.app was selected, the installer attempted to deactivate the old
-macOS DriverKit extension, install/refresh vEGPU Machine.app, and submit the new
-driver activation request. macOS may still require approval in System Settings.
+If DriverKit extension refresh/activation was selected, the installer attempted
+to deactivate the old macOS DriverKit extension and submit the new driver
+activation request through the installed vEGPU Machine.app. macOS may still
+require approval in System Settings.
 
 Driver install log:
 /var/log/vegpu-driver-install.log
@@ -447,14 +461,16 @@ SIP on Apple Silicon, shut down, hold the power button until startup options
 appear, open Options > Utilities > Terminal, run `csrutil disable`, restart,
 and then run this installer again.
 
-For combined releases, the vEGPU Machine component is selected by default when
-Machine is missing, older, or the same version with no installed DriverKit
-extension. If Machine is the same/newer and the driver is already installed,
-that component stays visible but unticked by default. If that component is
-selected, the installer asks the existing Machine app to deactivate the old
-driver when possible, force-uninstalls only when an old extension is still
-listed, installs or refreshes vEGPU Machine.app, submits a fresh driver
-activation request through the newly installed Machine app, logs the attempt to
+For combined releases, the vEGPU Machine.app file component is selected by
+default when Machine is missing or older than the payload. The DriverKit
+extension refresh component is selected by default when Machine.app is changing
+or the extension is not currently installed. If Machine is the same/newer and
+the driver is already installed, both choices stay visible but the Machine and
+DriverKit refresh choices are not selected by default. If the DriverKit refresh
+component is selected, the installer asks the existing Machine app to deactivate
+the old driver when possible, force-uninstalls only when an old extension is
+still listed, submits a fresh driver activation request through the installed
+Machine app, logs the attempt and direct `systemextensionsctl list` status to
 /var/log/vegpu-driver-install.log, and then offers the normal macOS restart
 choice so the driver state is clean.
 
@@ -568,6 +584,12 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
     --identifier com.vegpu.pkg.machine \
     --version "$VERSION" \
     "$COMPONENTS/vEGPU-machine.pkg" >/dev/null
+  pkgbuild \
+    --nopayload \
+    --scripts "$SCRIPTS_DRIVER" \
+    --identifier com.vegpu.pkg.driver \
+    --version "$VERSION" \
+    "$COMPONENTS/vEGPU-driver.pkg" >/dev/null
 fi
 
 if [ "$INCLUDE_MACHINE" = "1" ]; then
@@ -632,8 +654,11 @@ function machineNeedsInstall() {
   var versionCompare = compareVersion(machinePayloadVersion, installedVersion);
   if (versionCompare > 0) { return true; }
   if (versionCompare < 0) { return false; }
-  if (compareVersion(machinePayloadBuild, installedBuild) > 0) { return true; }
-  return !driverInstalled();
+  return compareVersion(machinePayloadBuild, installedBuild) > 0;
+}
+
+function driverNeedsRefresh() {
+  return machineNeedsInstall() || !driverInstalled();
 }
   ]]></script>
   <welcome file="WELCOME.html" mime-type="text/html"/>
@@ -642,15 +667,20 @@ function machineNeedsInstall() {
   <choices-outline>
     <line choice="com.vegpu.install.app"/>
     <line choice="com.vegpu.install.machine"/>
+    <line choice="com.vegpu.install.driver"/>
   </choices-outline>
   <choice id="com.vegpu.install.app" title="vEGPU.app" description="Required main application: Apache-2.0 Swift/AppKit launcher, GUI, app-side SPICE display client, AI runtime controls, app notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.app"/>
   </choice>
-  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app and DriverKit host extension" description="Separate QEMU/VFIO/DriverKit runtime. Selected by default when Machine is missing, older, or the same version with no installed DriverKit extension. If selected, the installer refreshes Machine and the macOS DriverKit extension, then recommends a restart." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
+  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app" description="Separate QEMU/VFIO/DriverKit runtime application. Selected by default when Machine is missing or older than this package. Same/newer installations stay visible but unticked." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.machine"/>
   </choice>
+  <choice id="com.vegpu.install.driver" title="DriverKit extension refresh/activation" description="Deactivate any old vEGPU DriverKit extension, force-uninstall only if it remains listed, then activate the installed vEGPU Machine DriverKit extension. Selected by default when Machine is changing or the driver is not installed." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
+    <pkg-ref id="com.vegpu.pkg.driver"/>
+  </choice>
   <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>
-  <pkg-ref id="com.vegpu.pkg.machine" version="$VERSION" onConclusion="RecommendRestart">vEGPU-machine.pkg</pkg-ref>
+  <pkg-ref id="com.vegpu.pkg.machine" version="$VERSION" onConclusion="none">vEGPU-machine.pkg</pkg-ref>
+  <pkg-ref id="com.vegpu.pkg.driver" version="$VERSION" onConclusion="RecommendRestart">vEGPU-driver.pkg</pkg-ref>
 </installer-gui-script>
 XML
 else

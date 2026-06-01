@@ -821,9 +821,10 @@ jobs:
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'machineNeedsInstall()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'driverInstalled()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -F 'return !driverInstalled();' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'driverNeedsRefresh()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'customize="always"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -F 'vEGPU Machine.app and DriverKit host extension' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'DriverKit extension refresh/activation' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           if grep -F '<readme ' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
             echo "installer should not show a separate Read Me page" >&2
@@ -867,6 +868,12 @@ jobs:
             grep -R -- 'com.vegpu.machine.VFIOUserPCIDriver' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
             grep -R -- '--driver-activate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
             grep -R -- 'run_as_console_user_with_timeout 45 "$VEGPU_MACHINE_EXECUTABLE" --driver-activate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            grep -R -- 'Current macOS system extension state for $VEGPU_DRIVER_ID' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"
+            if grep -R -- '--driver-status' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"; then
+              echo "installer scripts should not call Machine helper for driver status" >&2
+              exit 1
+            fi
+            test -d "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-driver.pkg"
           fi
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
