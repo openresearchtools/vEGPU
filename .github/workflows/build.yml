@@ -852,6 +852,10 @@ jobs:
               raise SystemExit("no component PackageInfo files found")
           for package_info in package_infos:
               text = package_info.read_text()
+              if package_info.parent.name == "vEGPU-driver.pkg":
+                  if '<payload' in text:
+                      raise SystemExit(f"{package_info} should be script-only without a payload")
+                  continue
               if 'install-location="/"' not in text:
                   raise SystemExit(f"{package_info} does not install at /")
               if 'relocatable="false"' not in text:
