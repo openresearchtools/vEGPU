@@ -41,7 +41,8 @@ bundles inside:
 
 vEGPU Machine builds on Scott J. Goldman's
 [scottjg/qemu-vfio-apple](https://github.com/scottjg/qemu-vfio-apple), and also
-uses/adapts UTM/QEMU-side work from
+uses/adapts upstream QEMU and UTM/QEMU-side work from
+[qemu-project/qemu](https://gitlab.com/qemu-project/qemu),
 [utmapp/qemu](https://github.com/utmapp/qemu) and
 [utmapp/virglrenderer](https://github.com/utmapp/virglrenderer). The app-side
 embedded GUI display integration is partially based on the main
@@ -65,6 +66,7 @@ separate pieces, with notices and source/provenance kept in the app bundles:
   UTM.app as an app.
 - **QEMU/VFIO Machine runtime**:
   [scottjg/qemu-vfio-apple](https://github.com/scottjg/qemu-vfio-apple),
+  [qemu-project/qemu](https://gitlab.com/qemu-project/qemu),
   [utmapp/qemu](https://github.com/utmapp/qemu), and
   [utmapp/virglrenderer](https://github.com/utmapp/virglrenderer) are part of
   the separate vEGPU Machine side, along with QEMU-derived GPL-covered source
@@ -131,10 +133,15 @@ archives, then bundles the complete installable payload into the release `.pkg`.
 - vEGPU app repository: [openresearchtools/vEGPU](https://github.com/openresearchtools/vEGPU)
 - vEGPU Machine repository: [openresearchtools/vEGPU-machine](https://github.com/openresearchtools/vEGPU-machine)
 - Upstream breakthrough: [scottjg/qemu-vfio-apple](https://github.com/scottjg/qemu-vfio-apple)
+- Upstream QEMU source: [qemu-project/qemu](https://gitlab.com/qemu-project/qemu)
+- UTM QEMU source: [utmapp/qemu](https://github.com/utmapp/qemu)
+- UTM virglrenderer source: [utmapp/virglrenderer](https://github.com/utmapp/virglrenderer)
 - UTM app foundation: [utmapp/UTM](https://github.com/utmapp/UTM)
 - AI runtime: [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
 - Routing provenance: [mostlygeek/llama-swap](https://github.com/mostlygeek/llama-swap)
 - Local proxy provenance: [ginuerzh/gost](https://github.com/ginuerzh/gost)
+- TurboQuant runtime option: [TheTom/llama-cpp-turboquant](https://github.com/TheTom/llama-cpp-turboquant)
 
 vEGPU is not endorsed by, sponsored by, or affiliated with Apple, NVIDIA, QEMU,
-UTM, llama.cpp, llama-swap, GOST, Scott J. Goldman, or their maintainers.
+UTM, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or their
+maintainers.

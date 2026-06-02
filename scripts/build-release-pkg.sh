@@ -565,8 +565,8 @@ https://github.com/utmapp/qemu
 UTM virglrenderer work:
 https://github.com/utmapp/virglrenderer
 
-Upstream QEMU:
-https://www.qemu.org
+Upstream QEMU source:
+https://gitlab.com/qemu-project/qemu
 
 
 License and architecture boundary
