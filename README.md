@@ -76,6 +76,10 @@ separate pieces, with notices and source/provenance kept in the app bundles:
   server conventions, OpenAI/llama.cpp-compatible APIs, web UI surface, and
   runtime shape that vEGPU adapts for app-managed model discovery, downloads,
   runtime launches, macOS/VM runtime pairs, and external GPU offload choices.
+  vEGPU release packages bundle the latest llama.cpp ARM64 build available at
+  vEGPU release time from
+  [openresearchtools/llama-cpp-arm64-builds](https://github.com/openresearchtools/llama-cpp-arm64-builds);
+  additional llama.cpp versions remain user-managed through `/core`.
 - **llama-swap-style model routing**:
   [mostlygeek/llama-swap](https://github.com/mostlygeek/llama-swap) is the
   basis for the routing idea. vEGPU modifies that model so multiple aliases and
@@ -124,8 +128,9 @@ scaling helper, and Machine artifacts when their inputs have not changed.
 The source repository stays clean: it does not store generated frameworks,
 Machine app binaries, runtime download caches, model files, or VM disk images.
 GitHub Actions builds or reuses the required display runtime, scaling helper,
-Machine app, DriverKit host extension, guest tools, notices, and source
-archives, then bundles the complete installable payload into the release `.pkg`.
+Machine app, DriverKit host extension, guest tools, bundled default llama.cpp
+runtime archives, notices, and source archives, then bundles the complete
+installable payload into the release `.pkg`.
 
 ## Links
 
@@ -138,6 +143,7 @@ archives, then bundles the complete installable payload into the release `.pkg`.
 - UTM virglrenderer source: [utmapp/virglrenderer](https://github.com/utmapp/virglrenderer)
 - UTM app foundation: [utmapp/UTM](https://github.com/utmapp/UTM)
 - AI runtime: [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
+- vEGPU llama.cpp ARM64 builds: [openresearchtools/llama-cpp-arm64-builds](https://github.com/openresearchtools/llama-cpp-arm64-builds)
 - Routing provenance: [mostlygeek/llama-swap](https://github.com/mostlygeek/llama-swap)
 - Local proxy provenance: [ginuerzh/gost](https://github.com/ginuerzh/gost)
 - TurboQuant runtime option: [TheTom/llama-cpp-turboquant](https://github.com/TheTom/llama-cpp-turboquant)

@@ -646,7 +646,7 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         if [ -e \(shellQuote("\(guestRuntimeRoot)/current")) ] && command -v llama-server >/dev/null 2>&1 && command -v rpc-server >/dev/null 2>&1; then
           true
         else
-          echo 'Linux llama runtime is not installed. Fetch and install a matched release pair in Core Runtimes.' >&2
+          echo 'Linux llama runtime is not installed. Restart the VM to ingest the bundled runtime seed, or use Core Runtimes to install a matched release pair.' >&2
           exit 127
         fi
         """

@@ -207,6 +207,7 @@ public final class CloudInitService: @unchecked Sendable {
         for package in packages {
             try copySeedPackage(bundle: bundle, package: package)
         }
+        try copySeedLlamaRuntimes(bundle: bundle)
     }
 
     private func copySeedPackage(bundle: URL, package: ManifestPackage) throws {
@@ -223,5 +224,17 @@ public final class CloudInitService: @unchecked Sendable {
             try FileManager.default.removeItem(at: destination)
         }
         try FileManager.default.copyItem(atPath: source, toPath: destination.path)
+    }
+
+    private func copySeedLlamaRuntimes(bundle: URL) throws {
+        let source = paths.root.appendingPathComponent("ai/bootstrap-runtimes/llama", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: source.appendingPathComponent("llama-runtime-manifest.json").path) else {
+            return
+        }
+        let destination = bundle.appendingPathComponent("llama-runtimes", isDirectory: true)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.copyItem(at: source, to: destination)
     }
 }

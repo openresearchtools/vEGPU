@@ -92,6 +92,8 @@ test -f legal/LICENSES/llama-swap-MIT.txt
 test -f legal/LICENSES/llama.cpp-MIT.txt
 test -f legal/LICENSES/UTM-Apache-2.0.txt
 test -f legal/LICENSES/vegpu-scaling-MIT.txt
+test -f releases/releases-manifest.json
+test -f releases/pre-releases-manifest.json
 test -f third_party/angle/LICENSE
 test -f third_party/utm/README.md
 test -f third_party/utm/patches/0001-openresearchtools-vegpu-cocoaspice-package.patch
@@ -117,6 +119,12 @@ unexpected_scripts="$(
 )"
 if [ -n "$unexpected_scripts" ]; then
   printf 'Unexpected local-only scripts found:\n%s\n' "$unexpected_scripts" >&2
+  exit 1
+fi
+
+bad_release_files="$(find releases -type f ! -name '*.json' -print 2>/dev/null || true)"
+if [ -n "$bad_release_files" ]; then
+  printf 'Release manifest directory must contain JSON manifests only:\n%s\n' "$bad_release_files" >&2
   exit 1
 fi
 

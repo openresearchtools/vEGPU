@@ -87,6 +87,21 @@ final class AppTrayController: NSObject {
         startAtLogin.state = model?.configStore.load().startRuntimeAtLogin == true ? .on : .off
         menu.addItem(startAtLogin)
 
+        menu.addItem(.separator())
+        menu.addItem(disabled(model?.updates.statusText ?? "Updates not checked"))
+        let prerelease = item("Use Pre-release Updates", #selector(togglePrereleaseUpdates(_:)))
+        prerelease.state = model?.updates.channel == .prerelease ? .on : .off
+        prerelease.isEnabled = model?.updates.isChecking != true && model?.updates.isDownloading != true
+        menu.addItem(prerelease)
+        let checkUpdates = item("Check for Updates", #selector(checkForUpdates))
+        checkUpdates.isEnabled = model?.updates.isChecking != true && model?.updates.isDownloading != true
+        menu.addItem(checkUpdates)
+        if let update = model?.updates.availableUpdate {
+            let installUpdate = item("Update to v\(update.version)...", #selector(installAvailableUpdate))
+            installUpdate.isEnabled = model?.updates.isDownloading != true
+            menu.addItem(installUpdate)
+        }
+
         menu.addItem(item("Quit and Stop Runtime...", #selector(quitAndStopRuntime)))
         return menu
     }
@@ -151,5 +166,19 @@ final class AppTrayController: NSObject {
 
     @objc private func quitAndStopRuntime() {
         appDelegate?.quitAndStopRuntime()
+    }
+
+    @objc private func checkForUpdates() {
+        model?.checkForUpdates(silent: false)
+        refreshStatus()
+    }
+
+    @objc private func togglePrereleaseUpdates(_ sender: NSMenuItem) {
+        model?.togglePrereleaseUpdates()
+        refreshStatus()
+    }
+
+    @objc private func installAvailableUpdate() {
+        appDelegate?.installAvailableUpdate()
     }
 }

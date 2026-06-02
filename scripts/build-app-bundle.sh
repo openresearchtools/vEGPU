@@ -19,6 +19,7 @@ DISPLAY_FRAMEWORKS="${VEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-framewor
 ANGLE_NOTICE_DIR="${VEGPU_ANGLE_NOTICE_DIR:-$ROOT/third_party/angle}"
 LEGAL_BUILD_DIR="${VEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}"
 SCALING_PACKAGE_DIR="${VEGPU_SCALING_PACKAGE_DIR:-}"
+BOOTSTRAP_LLAMA_RUNTIME_DIR="${VEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR:-}"
 WEB_UI_BIN="$APP_BUILD_DIR/web-ui-app"
 GOST_BIN="$APP_BUILD_DIR/gost-local-proxy"
 AUDIO_HOST_BIN="$APP_BUILD_DIR/tools/bin/vegpu-audio-host"
@@ -99,6 +100,14 @@ if [ -n "$SCALING_PACKAGE_DIR" ]; then
   mkdir -p "$BUNDLED_ROOT/Resources/Guest/scaling-app/package"
   rsync -a --delete "$SCALING_PACKAGE_DIR/" "$BUNDLED_ROOT/Resources/Guest/scaling-app/package/"
 fi
+if [ -n "$BOOTSTRAP_LLAMA_RUNTIME_DIR" ]; then
+  if [ ! -f "$BOOTSTRAP_LLAMA_RUNTIME_DIR/llama-runtime-manifest.json" ]; then
+    printf 'Missing bundled llama.cpp runtime manifest: %s\n' "$BOOTSTRAP_LLAMA_RUNTIME_DIR/llama-runtime-manifest.json" >&2
+    exit 1
+  fi
+  mkdir -p "$BUNDLED_ROOT/ai/bootstrap-runtimes/llama"
+  rsync -a --delete "$BOOTSTRAP_LLAMA_RUNTIME_DIR/" "$BUNDLED_ROOT/ai/bootstrap-runtimes/llama/"
+fi
 rsync -a "$ROOT/docs" "$BUNDLED_ROOT/" 2>/dev/null || true
 rsync -a "$ROOT/legal" "$BUNDLED_ROOT/" 2>/dev/null || true
 mkdir -p "$BUNDLED_ROOT/legal/generated"
@@ -151,6 +160,7 @@ fi
 
 forbidden_llama_runtime_refs="$(
   find "$BUNDLED_ROOT" \
+    -path "$BUNDLED_ROOT/ai/bootstrap-runtimes/llama" -prune -o \
     \( \
       -name 'vegpu-llama-runtime_*.deb' -o \
       -name '*llama*.dmg' -o \
@@ -164,7 +174,7 @@ forbidden_llama_runtime_refs="$(
     -print
 )"
 if [ -n "$forbidden_llama_runtime_refs" ]; then
-  printf 'Refusing bundle with bundled llama.cpp runtime artifacts; install runtimes through Core releases:\\n%s\\n' "$forbidden_llama_runtime_refs" >&2
+  printf 'Refusing bundle with stray llama.cpp runtime artifacts outside the controlled bootstrap runtime directory:\\n%s\\n' "$forbidden_llama_runtime_refs" >&2
   exit 1
 fi
 

@@ -95,6 +95,11 @@ on:
         description: "Existing Machine workflow run id when machine_mode=download-run."
         required: false
         type: string
+      llama_runtime_tag:
+        description: "llama.cpp runtime release tag from openresearchtools/llama-cpp-arm64-builds. Use latest for newest stable."
+        required: false
+        default: latest
+        type: string
       display_partial_run_id:
         description: "Optional vEGPU run id containing vEGPU-display-runtime-partial to resume a failed display build."
         required: false
@@ -429,13 +434,125 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  llama-runtime:
+    name: Fetch bundled llama.cpp runtime
+    runs-on: ubuntu-24.04
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    outputs:
+      cache_key: ${{ steps.resolve.outputs.cache_key }}
+    env:
+      LLAMA_RUNTIME_TAG: ${{ inputs.llama_runtime_tag || 'latest' }}
+
+    steps:
+      - name: Check out vEGPU
+        uses: actions/checkout@v6
+
+      - name: Resolve and download llama.cpp runtime assets
+        id: resolve
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/llama-runtime/archives"
+          gh api "repos/openresearchtools/llama-cpp-arm64-builds/releases?per_page=100" > "$RUNNER_TEMP/llama-releases.json"
+          python3 - "$RUNNER_TEMP/llama-releases.json" "$RUNNER_TEMP/vegpu-artifacts/llama-runtime" "$LLAMA_RUNTIME_TAG" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          releases = json.loads(Path(sys.argv[1]).read_text())
+          out = Path(sys.argv[2])
+          requested = sys.argv[3].strip()
+
+          def body_field(body, name):
+              match = re.search(rf"(?m)^{re.escape(name)}:\s*`([^`]+)`", body or "")
+              return match.group(1).strip() if match else ""
+
+          chosen = None
+          for item in releases:
+              if item.get("draft") or item.get("prerelease"):
+                  continue
+              source = body_field(item.get("body", ""), "Source")
+              if source != "ggml-org/llama.cpp":
+                  continue
+              if requested.lower() == "latest" or item.get("tag_name") == requested:
+                  chosen = item
+                  break
+          if chosen is None:
+              raise SystemExit(f"llama runtime release not found: {requested}")
+
+          assets = {asset["name"]: asset for asset in chosen.get("assets", [])}
+          required = {
+              "macos": "-bin-macos-arm64.tar.gz",
+              "cuda13": "-bin-debian-trixie-cuda13-arm64.tar.gz",
+              "vulkan": "-bin-debian-trixie-vulkan-arm64.tar.gz",
+          }
+          selected = {}
+          for key, suffix in required.items():
+              matches = [asset for name, asset in assets.items() if name.endswith(suffix)]
+              if len(matches) != 1:
+                  raise SystemExit(f"expected exactly one {suffix} asset, found {len(matches)}")
+              selected[key] = matches[0]
+
+          def body_sha(name):
+              body = chosen.get("body", "")
+              match = re.search(rf"(?im){re.escape(name)}.*?sha256[:=]\s*([a-f0-9]{{64}})", body)
+              return match.group(1).lower() if match else ""
+
+          manifest_assets = {}
+          for key, asset in selected.items():
+              dest = out / "archives" / asset["name"]
+              subprocess.run(["curl", "-fL", "--retry", "5", "--retry-delay", "3", "-o", str(dest), asset["browser_download_url"]], check=True)
+              actual = hashlib.sha256(dest.read_bytes()).hexdigest()
+              expected = body_sha(asset["name"])
+              if expected and actual.lower() != expected:
+                  raise SystemExit(f"sha256 mismatch for {asset['name']}")
+              manifest_assets[key] = {
+                  "name": asset["name"],
+                  "path": f"archives/{asset['name']}",
+                  "size": int(asset.get("size") or dest.stat().st_size),
+                  "sha256": actual,
+                  "downloadURL": asset["browser_download_url"],
+              }
+
+          manifest = {
+              "schemaVersion": 1,
+              "family": "llama",
+              "tag": chosen["tag_name"],
+              "name": chosen.get("name") or chosen["tag_name"],
+              "publishedAt": chosen.get("published_at") or "",
+              "source": "ggml-org/llama.cpp",
+              "sourceRef": body_field(chosen.get("body", ""), "Source ref"),
+              "assets": manifest_assets,
+          }
+          (out / "llama-runtime-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          cache_key = "llama-runtime-" + chosen["tag_name"] + "-" + hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()[:16]
+          print(f"cache_key={cache_key}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"cache_key={cache_key}\n")
+          PY
+          find "$RUNNER_TEMP/vegpu-artifacts/llama-runtime" -maxdepth 2 -type f -print | sort
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload bundled llama.cpp runtime
+        uses: actions/upload-artifact@v7
+        with:
+          name: vEGPU-llama-runtime-bootstrap
+          path: ${{ runner.temp }}/vegpu-artifacts/llama-runtime
+          if-no-files-found: error
+          retention-days: 90
+
   build-app:
     name: Build vEGPU.app
     runs-on: macos-15
     needs:
       - display-runtime
       - scaling-package
-    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' }}
+      - llama-runtime
+    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' && needs.llama-runtime.result == 'success' }}
     env:
       DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
       DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.VEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
@@ -451,7 +568,7 @@ jobs:
           path: |
             ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
             ${{ runner.temp }}/vegpu-artifacts/legal/generated
-          key: ${{ runner.os }}-vegpu-app-v2-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
+          key: ${{ runner.os }}-vegpu-app-v2-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
 
       - name: Resolve display runtime artifact run for app build
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' && env.DISPLAY_ARTIFACT_RUN_ID == '' }}
@@ -509,6 +626,13 @@ jobs:
           name: vEGPU-scaling-package
           path: ${{ runner.temp }}/vegpu-input/scaling-package
 
+      - name: Download bundled llama.cpp runtime
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: vEGPU-llama-runtime-bootstrap
+          path: ${{ runner.temp }}/vegpu-input/llama-runtime
+
       - name: Set up Go
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
         uses: actions/setup-go@v6
@@ -551,6 +675,7 @@ jobs:
           VEGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-input/display-runtime-source/display-runtime-source.tar.gz
           VEGPU_LEGAL_BUILD_DIR: ${{ runner.temp }}/vegpu-artifacts/legal/generated
           VEGPU_SCALING_PACKAGE_DIR: ${{ runner.temp }}/vegpu-input/scaling-package
+          VEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR: ${{ runner.temp }}/vegpu-input/llama-runtime
           VEGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/vegpu-build/utm-patched
 
       - name: Validate app bundle and notices
@@ -570,6 +695,10 @@ jobs:
           tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
           tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/libucontext.git/libucontext-source.tar.gz'
           find "$APP/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit | grep -q .
+          test -f "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json"
+          find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-macos-arm64.tar.gz' -print -quit | grep -q .
+          find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-cuda13-arm64.tar.gz' -print -quit | grep -q .
+          find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-vulkan-arm64.tar.gz' -print -quit | grep -q .
           if tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
             echo "generated app source tarball must not include scaling helper build artifacts" >&2
             exit 1
@@ -873,6 +1002,10 @@ jobs:
             codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-machine.pkg/Payload/Applications/vEGPU Machine.app"
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives/*-bin-macos-arm64.tar.gz' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives/*-bin-debian-trixie-cuda13-arm64.tar.gz' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives/*-bin-debian-trixie-vulkan-arm64.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/SourceBundles/*source*.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/packages/apple-dma-*.deb' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/source/apple-dma-*.tar.gz' -print -quit | grep -q .
@@ -969,3 +1102,97 @@ jobs:
           pkg="$(find "$RUNNER_TEMP/vegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' -print -quit)"
           test -n "$pkg"
           gh release upload "$TAG" "$pkg" --clobber
+
+      - name: Update release update manifest
+        if: ${{ inputs.mode == 'pre-release' || inputs.mode == 'full-release' || startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_VERSION}"
+          case "${BUILD_MODE}" in
+            pre-release)
+              CHANNEL="pre-release"
+              MANIFEST="releases/pre-releases-manifest.json"
+              TAG="v${VERSION}-pre-release"
+              PRERELEASE="true"
+              ;;
+            full-release)
+              CHANNEL="stable"
+              MANIFEST="releases/releases-manifest.json"
+              TAG="v${VERSION}"
+              PRERELEASE="false"
+              ;;
+            *)
+              if [ "$IS_TAG" != "true" ]; then
+                echo "Artifact-only builds do not update release manifests."
+                exit 0
+              fi
+              CHANNEL="stable"
+              MANIFEST="releases/releases-manifest.json"
+              TAG="v${VERSION}"
+              PRERELEASE="false"
+              ;;
+          esac
+          pkg="$(find "$RUNNER_TEMP/vegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' -print -quit)"
+          test -n "$pkg"
+          PKG_NAME="$(basename "$pkg")"
+          PKG_SIZE="$(stat -f%z "$pkg" 2>/dev/null || stat -c%s "$pkg")"
+          PKG_SHA256="$(shasum -a 256 "$pkg" | awk '{print $1}')"
+          RELEASE_PAGE="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          PACKAGE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${PKG_NAME}"
+          PUBLISHED_AT="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .published_at)"
+          export CHANNEL TAG PRERELEASE PKG_NAME PKG_SIZE PKG_SHA256 RELEASE_PAGE PACKAGE_URL PUBLISHED_AT
+
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          mkdir -p releases
+          if [ ! -f "$MANIFEST" ]; then
+            printf '{"schemaVersion":1,"channel":"%s","updatedAt":"","latest":null,"items":[]}\n' "$CHANNEL" > "$MANIFEST"
+          fi
+          python3 - "$MANIFEST" <<'PY'
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          manifest_path = Path(sys.argv[1])
+          data = json.loads(manifest_path.read_text())
+          entry = {
+              "version": os.environ["RELEASE_VERSION"],
+              "build": os.environ["BUILD_NUMBER"],
+              "tag": os.environ["TAG"],
+              "name": os.environ["TAG"],
+              "prerelease": os.environ["PRERELEASE"].lower() == "true",
+              "publishedAt": os.environ.get("PUBLISHED_AT", ""),
+              "releasePageURL": os.environ["RELEASE_PAGE"],
+              "packageURL": os.environ["PACKAGE_URL"],
+              "packageName": os.environ["PKG_NAME"],
+              "packageSize": int(os.environ["PKG_SIZE"]),
+              "packageSHA256": os.environ["PKG_SHA256"],
+              "minimumMacOS": "14.0",
+          }
+          items = [item for item in data.get("items", []) if item.get("tag") != entry["tag"]]
+          items.insert(0, entry)
+          data = {
+              "schemaVersion": 1,
+              "channel": os.environ["CHANNEL"],
+              "updatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+              "latest": entry,
+              "items": items[:20],
+          }
+          manifest_path.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- "$MANIFEST"; then
+            echo "Release manifest already current."
+          else
+            git add "$MANIFEST"
+            git commit -m "Update ${CHANNEL} release manifest for ${TAG}"
+            git push origin main
+          fi

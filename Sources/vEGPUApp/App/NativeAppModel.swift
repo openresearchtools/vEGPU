@@ -92,6 +92,7 @@ final class NativeAppModel: ObservableObject {
     let metricsService: MetricsService
     let vfioService: VfioService
     let displayControlMenu: DisplayControlMenuModel
+    let updates: AppUpdateService
     private var pollingStarted = false
     private var backgroundServicesStarted = false
     private var statusRefreshInFlight = false
@@ -122,6 +123,7 @@ final class NativeAppModel: ObservableObject {
         let ssh = SSHClient(paths: paths, networkStore: networkStore, progress: progress)
         self.metricsService = MetricsService(ssh: ssh, machinePid: { machine.currentPid() })
         self.vfioService = VfioService()
+        self.updates = AppUpdateService()
         self.sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
         if let data = UserDefaults.standard.data(forKey: PreferencesKeys.webShortcuts),
            let parsed = try? JSONDecoder().decode([WebShortcut].self, from: data) {
@@ -143,6 +145,21 @@ final class NativeAppModel: ObservableObject {
         webHelperStatus = goHelperSupervisor.status
         refreshDriverCards()
         refreshMetrics()
+    }
+
+    func checkForUpdates(silent: Bool = false) {
+        Task {
+            await updates.checkForUpdates(silent: silent)
+            if !silent {
+                appendOutput("[info] \(updates.statusText)")
+            }
+        }
+    }
+
+    func togglePrereleaseUpdates() {
+        updates.togglePrerelease()
+        appendOutput("[info] Update channel: \(updates.channel.title)")
+        checkForUpdates(silent: false)
     }
 
     func startPolling() {
@@ -1038,6 +1055,7 @@ final class NativeAppModel: ObservableObject {
 enum PreferencesKeys {
     static let sidebarCollapsed = "vegpu.sidebar.collapsed"
     static let webShortcuts = "vegpu.web.shortcuts"
+    static let updateChannel = "vegpu.update.channel"
 }
 
 struct MetricGroup: Equatable {

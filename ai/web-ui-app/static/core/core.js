@@ -46,7 +46,6 @@
 		runtimeLinuxBackend: "cuda13",
 		runtimeFetching: false,
 		runtimePairPending: new Map(),
-		defaultRuntimeEnsureStarted: false,
 		devices: [],
 		deviceError: "",
 		selectedId: null,
@@ -748,12 +747,7 @@
 			void refreshRouterModels(false).then(renderAll).catch(showError);
 			void refreshRuntime(false).then(renderAll).catch(showError);
 			void refreshRuntimeReleases(false).then(renderAll).catch(showError);
-			void refreshRuntimes(false)
-				.then(() => {
-					renderAll();
-					return ensureDefaultRuntimePair();
-				})
-				.catch(showError);
+			void refreshRuntimes(false).then(renderAll).catch(showError);
 			void refreshDevices(false).then(renderAll).catch(showError);
 			void refreshDownloads(true, false).then(renderDownloads).catch(showError);
 			void refreshModelCopies(true, false).then(renderModelTransfers).catch(showError);
@@ -833,25 +827,6 @@
 		const data = await apiFetch(`/api/runtimes/releases?family=${encodeURIComponent(state.runtimeFamily)}`);
 		state.runtimeReleases = data.releases ?? [];
 		if (render) renderRuntimeReleaseControls();
-	}
-
-	async function ensureDefaultRuntimePair() {
-		if (state.defaultRuntimeEnsureStarted || state.runtimeFetching) return;
-		if ((state.runtimes?.pairs ?? []).length > 0) return;
-		state.defaultRuntimeEnsureStarted = true;
-		state.runtimeFamily = "llama";
-		state.runtimeLinuxBackend = "cuda13";
-		setStatus("Installing latest llama.cpp CUDA runtime");
-		try {
-			if (state.runtimeReleases.length === 0 || state.runtimeFamily !== "llama") {
-				await refreshRuntimeReleases(false);
-			}
-			const latest = state.runtimeReleases[0];
-			if (!latest) throw new Error("No llama.cpp releases are available");
-			await fetchInstallRuntime(latest.tag, "cuda13");
-		} catch (error) {
-			showError(error);
-		}
 	}
 
 	async function refreshDevices(render = true) {
@@ -1375,13 +1350,13 @@
 		const payload = state.runtimes;
 		renderRuntimeReleaseControls();
 		if (!payload) {
-			el.runtimeInstallSummary.textContent = "Matched runtime releases loading...";
+			el.runtimeInstallSummary.textContent = "Bundled and user-managed runtime pairs loading...";
 			el.runtimeCards.innerHTML = `<div class="empty-state">No runtime data yet.</div>`;
 			renderRuntimePairSelector([]);
 			return;
 		}
 		const pairs = payload.pairs ?? [];
-		el.runtimeInstallSummary.textContent = `${pairs.length} matched runtime pair${pairs.length === 1 ? "" : "s"}`;
+		el.runtimeInstallSummary.textContent = `${pairs.length} bundled or user-managed runtime pair${pairs.length === 1 ? "" : "s"}`;
 		renderRuntimePairSelector(pairs);
 		if (pairs.length === 0) {
 			el.runtimeCards.innerHTML = `<div class="empty-state">No matched runtime pairs installed.</div>`;

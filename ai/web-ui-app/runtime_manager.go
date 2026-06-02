@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -100,11 +102,33 @@ type RuntimeInstallMetadata struct {
 	SHA256       string
 }
 
+type BootstrapRuntimeManifest struct {
+	SchemaVersion int                              `json:"schemaVersion"`
+	Family        string                           `json:"family"`
+	Tag           string                           `json:"tag"`
+	Name          string                           `json:"name"`
+	PublishedAt   string                           `json:"publishedAt"`
+	Source        string                           `json:"source"`
+	SourceRef     string                           `json:"sourceRef"`
+	Assets        map[string]BootstrapRuntimeAsset `json:"assets"`
+}
+
+type BootstrapRuntimeAsset struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Size        int64  `json:"size"`
+	SHA256      string `json:"sha256"`
+	DownloadURL string `json:"downloadURL"`
+}
+
 func NewRuntimeManager(appDir string, store *ConfigStore, runtimeSvc *RuntimeService) *RuntimeManager {
 	return &RuntimeManager{appDir: appDir, store: store, runtime: runtimeSvc}
 }
 
 func (m *RuntimeManager) List(ctx context.Context) (RuntimeListPayload, error) {
+	if err := m.ensureBootstrapRuntimes(ctx); err != nil {
+		return RuntimeListPayload{}, err
+	}
 	cfg := m.store.Get()
 	payload := RuntimeListPayload{
 		Current: RuntimeCurrent{
@@ -147,6 +171,177 @@ func (m *RuntimeManager) List(ctx context.Context) (RuntimeListPayload, error) {
 	payload.Pairs = runtimePairs(payload.Runtimes, cfg)
 	_ = ctx
 	return payload, nil
+}
+
+func (m *RuntimeManager) ensureBootstrapRuntimes(ctx context.Context) error {
+	manifest, root, err := m.readBootstrapRuntimeManifest()
+	if err != nil || manifest == nil {
+		return err
+	}
+	if normalizeReleaseFamily(manifest.Family) != "llama" {
+		return nil
+	}
+	for _, backend := range []string{"cuda13", "vulkan"} {
+		if err := m.ensureBootstrapRuntimePair(ctx, *manifest, root, backend); err != nil {
+			return err
+		}
+	}
+	cfg := m.store.Get()
+	if strings.TrimSpace(cfg.Runtime.ActiveRuntimePair) == "" || cfg.Runtime.ActiveVersion == "" || cfg.Runtime.ActiveVersion == "none" {
+		pairID := releasePairID(manifest.Family, manifest.Tag, "cuda13")
+		mac, macErr := m.loadRuntimeDirect("macos", pairID+"-macos")
+		linux, linuxErr := m.loadRuntimeDirect("linux", pairID+"-linux")
+		if macErr == nil && linuxErr == nil {
+			if err := m.selectRuntimePairLocal(mac, linux); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m *RuntimeManager) readBootstrapRuntimeManifest() (*BootstrapRuntimeManifest, string, error) {
+	root := filepath.Join(filepath.Dir(m.appDir), "bootstrap-runtimes", "llama")
+	manifestPath := filepath.Join(root, "llama-runtime-manifest.json")
+	raw, err := os.ReadFile(manifestPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, root, nil
+	}
+	if err != nil {
+		return nil, root, err
+	}
+	var manifest BootstrapRuntimeManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return nil, root, fmt.Errorf("read bundled llama runtime manifest: %w", err)
+	}
+	return &manifest, root, nil
+}
+
+func (m *RuntimeManager) bootstrapDeletedDir() string {
+	return filepath.Join(m.runtime.WorkDir(), "runtimes", ".bootstrap-deleted")
+}
+
+func (m *RuntimeManager) bootstrapPairDeleted(pairID string) bool {
+	_, err := os.Stat(filepath.Join(m.bootstrapDeletedDir(), sanitizeID(pairID)))
+	return err == nil
+}
+
+func (m *RuntimeManager) markBootstrapPairDeleted(pairID string) error {
+	dir := m.bootstrapDeletedDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, sanitizeID(pairID)), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644)
+}
+
+func (m *RuntimeManager) clearBootstrapPairDeleted(pairID string) error {
+	err := os.Remove(filepath.Join(m.bootstrapDeletedDir(), sanitizeID(pairID)))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+func (m *RuntimeManager) isBootstrapRuntimePair(pair RuntimePair) bool {
+	manifest, _, err := m.readBootstrapRuntimeManifest()
+	if err != nil || manifest == nil {
+		return false
+	}
+	for _, backend := range []string{"cuda13", "vulkan"} {
+		if pair.ID == releasePairID(manifest.Family, manifest.Tag, backend) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *RuntimeManager) ensureBootstrapRuntimePair(ctx context.Context, manifest BootstrapRuntimeManifest, root, backend string) error {
+	backend = normalizeLinuxBackend(backend)
+	if backend == "" {
+		return nil
+	}
+	pairID := releasePairID(manifest.Family, manifest.Tag, backend)
+	if m.bootstrapPairDeleted(pairID) {
+		return nil
+	}
+	macAsset, ok := manifest.Assets["macos"]
+	if !ok || strings.TrimSpace(macAsset.Path) == "" {
+		return fmt.Errorf("bundled llama runtime manifest is missing macOS asset")
+	}
+	linuxAsset, ok := manifest.Assets[backend]
+	if !ok || strings.TrimSpace(linuxAsset.Path) == "" {
+		return fmt.Errorf("bundled llama runtime manifest is missing %s Linux asset", backendLabel(backend))
+	}
+	if _, err := m.loadRuntimeDirect("macos", pairID+"-macos"); err != nil {
+		if _, err := m.installBootstrapArchive(ctx, "macos", pairID+"-macos", manifest, macAsset, root, backend); err != nil {
+			return err
+		}
+	}
+	if linuxRuntime, err := m.loadRuntimeDirect("linux", pairID+"-linux"); err == nil {
+		installed, active := mountedLinuxRuntimeState(linuxRuntime.ID)
+		changed := false
+		if linuxRuntime.VMInstalled != installed {
+			linuxRuntime.VMInstalled = installed
+			changed = true
+		}
+		if installed && strings.Contains(linuxRuntime.InstallError, "first boot") {
+			linuxRuntime.InstallError = ""
+			changed = true
+		} else if !installed && linuxRuntime.InstallError == "" {
+			linuxRuntime.InstallError = "VM runtime will install from the bundled seed on first boot; retry VM install after the VM is running."
+			changed = true
+		}
+		if active != linuxRuntime.Active && active {
+			linuxRuntime.Active = true
+			changed = true
+		}
+		if changed {
+			return writeRuntimeMetadata(linuxRuntime)
+		}
+		return nil
+	}
+	linuxRuntime, err := m.installBootstrapArchive(ctx, "linux", pairID+"-linux", manifest, linuxAsset, root, backend)
+	if err != nil {
+		return err
+	}
+	installed, active := mountedLinuxRuntimeState(linuxRuntime.ID)
+	linuxRuntime.VMInstalled = installed
+	linuxRuntime.Active = active
+	if !installed {
+		linuxRuntime.InstallError = "VM runtime will install from the bundled seed on first boot; retry VM install after the VM is running."
+	}
+	return writeRuntimeMetadata(linuxRuntime)
+}
+
+func (m *RuntimeManager) installBootstrapArchive(ctx context.Context, platform, id string, manifest BootstrapRuntimeManifest, asset BootstrapRuntimeAsset, root, backend string) (ManagedRuntime, error) {
+	archivePath := filepath.Clean(filepath.Join(root, asset.Path))
+	if !pathInside(root, archivePath) {
+		return ManagedRuntime{}, fmt.Errorf("bundled runtime archive escapes bootstrap directory: %s", asset.Path)
+	}
+	if strings.TrimSpace(asset.SHA256) != "" {
+		actual, err := fileSHA256Hex(archivePath)
+		if err != nil {
+			return ManagedRuntime{}, err
+		}
+		if !strings.EqualFold(actual, asset.SHA256) {
+			return ManagedRuntime{}, fmt.Errorf("bundled runtime archive checksum mismatch: %s", asset.Name)
+		}
+	}
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return ManagedRuntime{}, err
+	}
+	defer file.Close()
+	return m.installArchive(ctx, platform, id, asset.Name, file, RuntimeInstallMetadata{
+		Family:       manifest.Family,
+		ReleaseTag:   manifest.Tag,
+		SourceRef:    manifest.SourceRef,
+		LinuxBackend: backend,
+		PairID:       releasePairID(manifest.Family, manifest.Tag, backend),
+		AssetName:    asset.Name,
+		DownloadURL:  asset.DownloadURL,
+		SHA256:       asset.SHA256,
+	})
 }
 
 func (m *RuntimeManager) Upload(ctx context.Context, platform, archiveName string, archive io.Reader) (ManagedRuntime, error) {
@@ -437,7 +632,7 @@ func mountedLinuxRuntimeState(id string) (bool, bool) {
 		return false, false
 	}
 	root := filepath.Join(mount, "custom-llama-runtimes", sanitizeID(id))
-	if _, err := os.Stat(filepath.Join(root, "llama-server")); err != nil {
+	if _, err := findNamedFile(root, "llama-server"); err != nil {
 		return false, false
 	}
 	current, err := filepath.EvalSymlinks(filepath.Join(mount, "custom-llama-runtimes", "current"))
@@ -542,6 +737,15 @@ func (m *RuntimeManager) loadRuntime(id string) (ManagedRuntime, error) {
 		}
 	}
 	return ManagedRuntime{}, fmt.Errorf("runtime %s not found", id)
+}
+
+func (m *RuntimeManager) loadRuntimeDirect(platform, id string) (ManagedRuntime, error) {
+	platform = normalizeRuntimePlatform(platform)
+	id = sanitizeID(id)
+	if platform == "" || id == "" {
+		return ManagedRuntime{}, os.ErrNotExist
+	}
+	return readRuntimeMetadata(filepath.Join(m.platformDir(platform), id, runtimeMetadataFile))
 }
 
 func (m *RuntimeManager) listPlatform(platform string) ([]ManagedRuntime, error) {
@@ -677,6 +881,19 @@ func readJSONFile(path string, out any) error {
 		return err
 	}
 	return json.Unmarshal(raw, out)
+}
+
+func fileSHA256Hex(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func extractTarGz(reader io.Reader, dest string) error {

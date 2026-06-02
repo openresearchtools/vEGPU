@@ -117,6 +117,7 @@ func (m *RuntimeManager) FetchInstall(ctx context.Context, family, tag, linuxBac
 		return out, fmt.Errorf("release %s does not have matched macOS and %s Linux assets", release.Tag, backendLabel(backend))
 	}
 	pairID := releasePairID(release.Family, release.Tag, backend)
+	_ = m.clearBootstrapPairDeleted(pairID)
 
 	if pair, ok := m.loadRuntimePair(pairID); ok && pair.MacOS != nil && pair.Linux != nil {
 		activated, err := m.ActivatePair(ctx, pairID)
@@ -193,6 +194,7 @@ func (m *RuntimeManager) DeletePair(ctx context.Context, pairID string) error {
 	if pair.Active {
 		return fmt.Errorf("runtime pair %s is active; choose another runtime before deleting it", pairID)
 	}
+	shouldTombstone := m.isBootstrapRuntimePair(pair)
 	if pair.MacOS != nil {
 		if err := m.Delete(ctx, pair.MacOS.ID); err != nil {
 			return err
@@ -201,26 +203,28 @@ func (m *RuntimeManager) DeletePair(ctx context.Context, pairID string) error {
 	if pair.Linux == nil {
 		return nil
 	}
-	if pair.Linux.VMInstalled && !pair.Linux.VMDeletePending {
+	linux := *pair.Linux
+	if linux.VMInstalled && !linux.VMDeletePending {
 		deleteCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		err := m.runtime.DeleteBridgeRuntime(deleteCtx, pair.Linux.ID)
+		err := m.runtime.DeleteBridgeRuntime(deleteCtx, linux.ID)
 		cancel()
 		if err != nil {
-			linux := *pair.Linux
 			linux.InstallError = err.Error()
 			linux.VMDeletePending = true
 			_ = writeRuntimeMetadata(linux)
 		}
 	}
-	pair, _ = m.loadRuntimePair(pairID)
-	if pair.Linux == nil {
-		return nil
-	}
 	cfg := m.store.Get()
-	if m.isRuntimeActive(*pair.Linux, cfg) {
-		return fmt.Errorf("runtime %s is active; choose another runtime before deleting it", pair.Linux.ID)
+	if m.isRuntimeActive(linux, cfg) {
+		return fmt.Errorf("runtime %s is active; choose another runtime before deleting it", linux.ID)
 	}
-	return os.RemoveAll(pair.Linux.InstallDir)
+	if err := os.RemoveAll(linux.InstallDir); err != nil {
+		return err
+	}
+	if shouldTombstone {
+		return m.markBootstrapPairDeleted(pairID)
+	}
+	return nil
 }
 
 func (m *RuntimeManager) downloadAndInstallArchive(ctx context.Context, platform, id string, release RuntimeRelease, asset RuntimeReleaseAsset, backend string) (ManagedRuntime, error) {

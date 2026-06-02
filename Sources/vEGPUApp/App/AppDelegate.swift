@@ -184,11 +184,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         legalController().exportVEGPUMachineSources()
     }
 
+    @objc func checkForUpdates() {
+        Task {
+            await model.updates.checkForUpdates(silent: false)
+            await showUpdateStatusAlert()
+        }
+    }
+
+    @objc func togglePrereleaseUpdates() {
+        model.togglePrereleaseUpdates()
+    }
+
+    @objc func installAvailableUpdate() {
+        Task {
+            await installAvailableUpdateFlow()
+        }
+    }
+
     private func startLaunchServicesIfNeeded() {
         guard !launchStartupHandled else { return }
         launchStartupHandled = true
         model.refreshStatus()
         model.displayControlMenu.refresh()
+        model.checkForUpdates(silent: true)
         model.startPolling()
         model.startBackgroundServices()
 
@@ -241,6 +259,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if helpMenu.numberOfItems > 0 {
             helpMenu.addItem(.separator())
         }
+        addHelpMenuItem("Check for Updates...", action: #selector(checkForUpdates), to: helpMenu)
+        addHelpMenuItem("Use Pre-release Updates", action: #selector(togglePrereleaseUpdates), to: helpMenu)
+        addHelpMenuItem("Install Available Update...", action: #selector(installAvailableUpdate), to: helpMenu)
+        helpMenu.addItem(.separator())
         addHelpMenuItem("vEGPU Licenses and Notices...", action: #selector(showLegalNotices), to: helpMenu)
         addHelpMenuItem("Reveal vEGPU Notice Files", action: #selector(revealVEGPUNotices), to: helpMenu)
         addHelpMenuItem("Reveal vEGPU Source Archive", action: #selector(revealVEGPUSource), to: helpMenu)
@@ -256,6 +278,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         menu.addItem(item)
+    }
+
+    private func installAvailableUpdateFlow() async {
+        do {
+            let update = try await model.updates.refreshAndReturnAvailableUpdate()
+            guard let update else {
+                await showPlainAlert(title: "vEGPU is up to date.", message: model.updates.statusText)
+                return
+            }
+            guard await confirmUpdate(update) else { return }
+            let packageURL = try await model.updates.downloadPackage(for: update)
+            try await stopRuntimeForUpdate()
+            try await closeVEGPUMachineForUpdate()
+            try model.updates.openInstaller(packageURL: packageURL)
+            explicitQuitRequested = true
+            NSApplication.shared.terminate(nil)
+        } catch {
+            showMainWindow()
+            await showPlainAlert(title: "Update failed.", message: String(describing: error), style: .critical)
+        }
+    }
+
+    private func stopRuntimeForUpdate() async throws {
+        do {
+            try await model.quitAndStopRuntime()
+        } catch {
+            showMainWindow()
+            let result = await showStopFailedAlert(error: error)
+            guard result == .alertSecondButtonReturn else {
+                throw error
+            }
+            try await model.machineService.forceKillMachineProcess()
+            model.shutdownBackgroundServices()
+        }
+    }
+
+    private func closeVEGPUMachineForUpdate() async throws {
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.vegpu.machine")
+        guard !apps.isEmpty else { return }
+        for app in apps {
+            app.terminate()
+        }
+        for _ in 0..<50 {
+            if NSRunningApplication.runningApplications(withBundleIdentifier: "com.vegpu.machine").isEmpty {
+                return
+            }
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+        throw RuntimeUpdateFlowError.message("vEGPU Machine.app is still running. Close it and run the update again.")
+    }
+
+    private func showUpdateStatusAlert() async {
+        if let update = model.updates.availableUpdate {
+            await showPlainAlert(
+                title: "vEGPU \(update.version) is available.",
+                message: "The update package will be downloaded and opened in Installer.app."
+            )
+        } else {
+            await showPlainAlert(title: "Update Check", message: model.updates.statusText)
+        }
+    }
+
+    private func confirmUpdate(_ update: AppUpdateService.Entry) async -> Bool {
+        await MainActor.run {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Install vEGPU \(update.version)?"
+            alert.informativeText = [
+                "vEGPU will shut down any running VM/runtime, close vEGPU Machine.app if it is open, open \(update.packageName) in Installer.app, and then quit.",
+                "",
+                "The installer remains the user-approved path for replacing app files, refreshing vEGPU Machine, and handling DriverKit approval or reboot prompts."
+            ].joined(separator: "\n")
+            alert.addButton(withTitle: "Download and Open Installer")
+            alert.addButton(withTitle: "Cancel")
+            return alert.runModal() == .alertFirstButtonReturn
+        }
+    }
+
+    private func showPlainAlert(title: String, message: String, style: NSAlert.Style = .informational) async {
+        await MainActor.run {
+            let alert = NSAlert()
+            alert.alertStyle = style
+            alert.messageText = title
+            alert.informativeText = message
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
     }
 
     private func showStopFailedAlert(error: Error) async -> NSApplication.ModalResponse {
@@ -284,6 +393,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             alert.informativeText = String(describing: error)
             alert.addButton(withTitle: "OK")
             alert.runModal()
+        }
+    }
+}
+
+private enum RuntimeUpdateFlowError: LocalizedError {
+    case message(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .message(message): return message
         }
     }
 }

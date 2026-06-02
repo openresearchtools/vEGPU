@@ -22,9 +22,11 @@ that app-facing surface for:
 - packaged app integration instead of a standalone llama.cpp server bundle
 
 vEGPU does not store llama.cpp runtime binaries in this source repository.
-Runtime binaries such as llama-server, rpc-server, and libllama/libggml
-libraries are obtained through configured runtime release channels and carry
-their own license files.
+Release packages bundle the latest llama.cpp ARM64 runtime build available at
+vEGPU release time from openresearchtools/llama-cpp-arm64-builds. Runtime
+binaries such as llama-server, rpc-server, and libllama/libggml libraries carry
+their own license files. Additional llama.cpp and TurboQuant runtime versions
+remain user-managed through the /core runtime release workflow.
 
 llama.cpp is MIT licensed. The generated vEGPU legal bundle includes the
 llama.cpp MIT license as:
@@ -54,4 +56,3 @@ vEGPU modifications
 OpenResearchTools vEGPU modifications in this directory are distributed as part
 of the vEGPU app source tree under the repository license unless an individual
 file or embedded upstream notice states a more specific license.
-

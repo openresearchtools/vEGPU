@@ -72,9 +72,11 @@ Upstream:
   https://github.com/ggml-org/llama.cpp
 
 vEGPU does not store llama.cpp runtime binaries in this source repository.
-Runtime artifacts are obtained through configured runtime release channels and
-carry their own license files. The vEGPU app source bundle includes the
-modified web UI/static sources used by the app.
+Release packages bundle the latest llama.cpp ARM64 runtime build available at
+vEGPU release time from openresearchtools/llama-cpp-arm64-builds. Additional
+llama.cpp and TurboQuant runtime versions remain user-managed through /core.
+Runtime artifacts carry their own license files. The vEGPU app source bundle
+includes the modified web UI/static sources used by the app.
 
 The llama.cpp MIT license is kept in `legal/LICENSES/llama.cpp-MIT.txt`.
 Directory-specific provenance is kept in `ai/web-ui-app/NOTICE`.

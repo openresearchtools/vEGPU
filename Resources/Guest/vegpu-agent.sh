@@ -4,6 +4,7 @@ set -euo pipefail
 STATE_DIR=/var/lib/vegpu
 PACKAGE_DIR=$STATE_DIR/packages
 MANIFEST_FILE=$STATE_DIR/manifest.json
+LLAMA_RUNTIME_ROOT=/home/vegpu/custom-llama-runtimes
 PIN_FILE=/etc/apt/preferences.d/vegpu-kernel-pin
 NVIDIA_PIN_FILE=/etc/apt/preferences.d/vegpu-nvidia-pin
 NVIDIA_REPO_URL=https://developer.download.nvidia.com/compute/cuda/repos/debian13/sbsa
@@ -94,6 +95,88 @@ ingest_package() {
   install -m 0644 "$source" "$STATE_DIR/$relative"
 }
 
+runtime_id() {
+  printf '%s\n' "$*" |
+    tr '[:upper:]' '[:lower:]' |
+    sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+}
+
+runtime_wrapper() {
+  local root="$1"
+  local rel="$2"
+  local executable="$root/$rel"
+  local bin_dir
+  bin_dir="$(dirname "$executable")"
+  cat <<EOF
+#!/bin/sh
+export LD_LIBRARY_PATH=$bin_dir:$root:$root/lib:\${LD_LIBRARY_PATH:-}
+exec "$executable" "\$@"
+EOF
+}
+
+validate_tar_gz_paths() {
+  local archive="$1"
+  if tar -tzf "$archive" | grep -E '(^/|(^|/)[.][.](/|$))' >/dev/null; then
+    log "refusing unsafe runtime archive paths: $archive"
+    return 1
+  fi
+}
+
+install_seed_llama_runtime_archive() {
+  local id="$1"
+  local archive="$2"
+  local activate="$3"
+  local root="$LLAMA_RUNTIME_ROOT/$id"
+  local tmp="$root.tmp"
+  local server rpc server_rel rpc_rel
+  [ -f "$archive" ] || { log "seed llama runtime archive missing: $archive"; return 1; }
+  validate_tar_gz_paths "$archive"
+  install -d -o vegpu -g vegpu -m 0755 "$LLAMA_RUNTIME_ROOT"
+  if [ ! -x "$root/llama-server" ] && ! find "$root" -type f -name llama-server -perm -111 -print -quit 2>/dev/null | grep -q .; then
+    rm -rf "$tmp"
+    install -d -o vegpu -g vegpu -m 0755 "$tmp"
+    tar -xzf "$archive" -C "$tmp"
+    server="$(find "$tmp" -type f -name llama-server -print -quit)"
+    [ -n "$server" ] || { log "runtime archive has no llama-server: $archive"; rm -rf "$tmp"; return 1; }
+    rpc="$(find "$tmp" -type f -name rpc-server -print -quit || true)"
+    chmod 0755 "$server"
+    [ -n "$rpc" ] && chmod 0755 "$rpc"
+    chmod -R u+rwX,go+rX "$tmp"
+    chown -R vegpu:vegpu "$tmp"
+    rm -rf "$root"
+    mv "$tmp" "$root"
+  fi
+  if [ "$activate" = "true" ]; then
+    server="$(find "$root" -type f -name llama-server -print -quit)"
+    rpc="$(find "$root" -type f -name rpc-server -print -quit || true)"
+    [ -n "$server" ] || { log "installed runtime has no llama-server: $root"; return 1; }
+    server_rel="${server#"$root"/}"
+    ln -sfn "$root" "$LLAMA_RUNTIME_ROOT/current"
+    runtime_wrapper "$LLAMA_RUNTIME_ROOT/current" "$server_rel" >/usr/local/bin/llama-server
+    chmod 0755 /usr/local/bin/llama-server
+    if [ -n "$rpc" ]; then
+      rpc_rel="${rpc#"$root"/}"
+      runtime_wrapper "$LLAMA_RUNTIME_ROOT/current" "$rpc_rel" >/usr/local/bin/rpc-server
+      chmod 0755 /usr/local/bin/rpc-server
+    fi
+  fi
+}
+
+install_seed_llama_runtimes() {
+  local dir="$1"
+  local manifest="$dir/llama-runtime-manifest.json"
+  local tag pair archive
+  [ -f "$manifest" ] || return 0
+  tag="$(jq -r '.tag // empty' "$manifest")"
+  [ -n "$tag" ] || { log "seed llama runtime manifest has no tag"; return 1; }
+  for backend in cuda13 vulkan; do
+    archive="$(jq -r --arg backend "$backend" '.assets[$backend].path // empty' "$manifest")"
+    [ -n "$archive" ] || { log "seed llama runtime missing $backend archive"; return 1; }
+    pair="$(runtime_id "llama-$tag-$backend")"
+    install_seed_llama_runtime_archive "$pair-linux" "$dir/$archive" "$([ "$backend" = cuda13 ] && printf true || printf false)"
+  done
+}
+
 seed_bundle_dir() {
   local base dev
   for base in     /var/lib/cloud/seed/nocloud     /var/lib/cloud/seed/nocloud-net     /run/cloud-init/seed/nocloud     /run/cloud-init/seed/nocloud-net     /run/cloud-init/iso9660     /mnt/vegpu-seed
@@ -126,6 +209,9 @@ ingest_seed_bundle() {
       relative="$(cd "$bundle" && realpath --relative-to="$bundle" "$source")"
       ingest_package "$source" "$relative"
     done < <(find "$bundle/packages" -type f -print0)
+  fi
+  if [ -d "$bundle/llama-runtimes" ]; then
+    install_seed_llama_runtimes "$bundle/llama-runtimes"
   fi
 }
 

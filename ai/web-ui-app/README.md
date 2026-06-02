@@ -14,7 +14,10 @@ The app serves:
 - `http://127.0.0.1:9292/` - embedded llama.cpp chat UI
 - `http://127.0.0.1:9292/core` - standalone router, model, device, and runtime settings
 
-Mutable config is `app.yaml` beside the binary. Runtime binaries are not bundled; install a matched pair from `/core` before loading models.
+Mutable config is stored under the vEGPU app support directory. vEGPU release
+packages ship the latest llama.cpp ARM64 runtime pair available at vEGPU
+release time from `openresearchtools/llama-cpp-arm64-builds`; `/core` still
+lets users fetch, activate, retry, and delete additional matched runtime pairs.
 
 ## Discovery
 
@@ -22,7 +25,22 @@ Automatic discovery scans app-local models, Hugging Face cache, LM Studio, and l
 
 ## Runtime
 
-`/core` installs matched macOS and Linux runtime pairs from `openresearchtools/llama-cpp-arm64-builds` releases. Users choose the runtime family (`llama.cpp` or TurboQuant), release tag, and Linux backend (`CUDA 13` by default or `Vulkan`). Each pair is kept in its own runtime folder, so users can keep multiple matched versions, activate one pair at a time, and delete inactive pairs to reclaim space. macOS selection points the router at the extracted `llama-server`; Linux VM selection installs/switches `/usr/local/bin/llama-server` and `/usr/local/bin/rpc-server` wrappers to the matching release.
+Release packages include one bundled llama.cpp runtime release: macOS ARM64,
+Debian Trixie CUDA 13 ARM64, and Debian Trixie Vulkan ARM64. On first app
+startup, the bundled release is installed into the normal managed runtime
+folders; CUDA is selected by default and Vulkan remains installed for later
+selection. On first VM boot, the seed bundle installs the Linux CUDA and Vulkan
+runtimes under `/home/vegpu/custom-llama-runtimes`.
+
+`/core` also installs matched macOS and Linux runtime pairs from
+`openresearchtools/llama-cpp-arm64-builds` releases. Users choose the runtime
+family (`llama.cpp` or TurboQuant), release tag, and Linux backend (`CUDA 13`
+by default or `Vulkan`). Each pair is kept in its own runtime folder, so users
+can keep multiple matched versions, activate one pair at a time, and delete
+inactive pairs to reclaim space. macOS selection points the router at the
+extracted `llama-server`; Linux VM selection installs/switches
+`/usr/local/bin/llama-server` and `/usr/local/bin/rpc-server` wrappers to the
+matching release.
 
 The runtime flag catalog is parsed from the selected release runtime when it exists, with conservative fallback flags when it does not.
 

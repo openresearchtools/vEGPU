@@ -100,6 +100,9 @@ $RUNNER_TEMP/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.g
 - `full-release`: does the same build, then creates or updates a stable GitHub
   release with one asset: the combined `.pkg`.
 
+Pre-release and full-release runs also update the matching app update manifest
+in `releases/`. Artifact-only runs do not update either manifest.
+
 Workflow inputs:
 
 - `utm_repository` / `utm_commit`: select the UTM dependency recipe fork and
@@ -112,6 +115,10 @@ Workflow inputs:
   `CFBundleShortVersionString` and `CFBundleVersion`; when `machine_mode=trigger`
   the same values are passed to the Machine workflow so a newly built
   `vEGPU Machine.app` carries matching version metadata.
+- `llama_runtime_tag`: selects the bundled llama.cpp runtime release from
+  `openresearchtools/llama-cpp-arm64-builds`; `latest` resolves to the newest
+  stable llama.cpp release and bundles macOS, Debian Trixie CUDA 13, and Debian
+  Trixie Vulkan ARM64 archives.
 - `publish_release=true`: manual override to publish a release from
   `artifact-only`; release assets still contain only the combined `.pkg`.
 
