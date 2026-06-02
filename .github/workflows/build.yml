@@ -127,7 +127,7 @@ jobs:
 
     steps:
       - name: Check out vEGPU
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install verifier tools
         run: |
@@ -147,7 +147,7 @@ jobs:
 
     steps:
       - name: Check out vEGPU
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate display runtime mode
         run: |
@@ -201,7 +201,7 @@ jobs:
       - name: Restore display runtime artifact cache
         id: display-runtime-artifact-cache
         if: ${{ env.DISPLAY_MODE == 'build' }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
@@ -237,7 +237,7 @@ jobs:
 
       - name: Cache display runtime build directory
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
           key: ${{ runner.os }}-display-runtime-work-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
@@ -290,7 +290,7 @@ jobs:
 
       - name: Upload failed display runtime partial state
         if: ${{ failure() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-display-runtime-partial
           path: ${{ runner.temp }}/vegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz
@@ -316,7 +316,7 @@ jobs:
 
       - name: Upload display frameworks
         if: ${{ env.DISPLAY_MODE == 'build' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-display-frameworks-macos-arm64
           path: ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
@@ -325,7 +325,7 @@ jobs:
 
       - name: Upload display runtime source bundle
         if: ${{ env.DISPLAY_MODE == 'build' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-display-runtime-source
           path: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
@@ -342,7 +342,7 @@ jobs:
 
     steps:
       - name: Check out vEGPU
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate scaling package mode
         run: |
@@ -388,7 +388,7 @@ jobs:
       - name: Restore scaling package cache
         id: scaling-package-cache
         if: ${{ env.SCALING_MODE == 'build' }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vegpu-artifacts/scaling-package
           key: ${{ runner.os }}-scaling-package-v2-${{ hashFiles('scripts/build-scaling-app-package.sh', 'Resources/Guest/scaling-app/**') }}
@@ -422,7 +422,7 @@ jobs:
           dpkg-deb -c "$package" | grep -F './usr/share/doc/vegpu-scaling/copyright'
 
       - name: Upload scaling package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-scaling-package
           path: ${{ runner.temp }}/vegpu-artifacts/scaling-package
@@ -442,11 +442,11 @@ jobs:
 
     steps:
       - name: Check out vEGPU
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Restore vEGPU.app artifact cache
         id: app-artifact-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
@@ -490,28 +490,28 @@ jobs:
 
       - name: Download source-built display frameworks
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vEGPU-display-frameworks-macos-arm64
           path: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
 
       - name: Download display runtime source bundle
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vEGPU-display-runtime-source
           path: ${{ runner.temp }}/vegpu-input/display-runtime-source
 
       - name: Download Linux scaling helper package
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vEGPU-scaling-package
           path: ${{ runner.temp }}/vegpu-input/scaling-package
 
       - name: Set up Go
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: ai/web-ui-app/go.mod
           cache-dependency-path: |
@@ -521,7 +521,7 @@ jobs:
 
       - name: Cache SwiftPM build directory
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vegpu-build/swiftpm-release
           key: ${{ runner.os }}-swiftpm-release-v2-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
@@ -531,7 +531,7 @@ jobs:
 
       - name: Cache patched UTM package worktree
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vegpu-build/utm-patched
           key: ${{ runner.os }}-utm-patched-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('third_party/utm/patches/*.patch', 'scripts/apply-utm-patches.sh') }}
@@ -589,7 +589,7 @@ jobs:
           tar -tzf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" | grep -F 'vEGPU.app/Contents/MacOS/vEGPUApp'
 
       - name: Upload vEGPU.app archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-app
           path: ${{ runner.temp }}/vegpu-artifacts/app-archive/vEGPU-app.tar.gz
@@ -597,7 +597,7 @@ jobs:
           retention-days: 90
 
       - name: Upload generated vEGPU notices and source
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-legal-generated
           path: ${{ runner.temp }}/vegpu-artifacts/legal/generated
@@ -617,7 +617,7 @@ jobs:
 
     steps:
       - name: Check out vEGPU
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate Machine mode
         run: |
@@ -665,7 +665,7 @@ jobs:
 
       - name: Download Machine artifacts from reusable workflow
         if: ${{ env.MACHINE_MODE == 'trigger' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: vEGPU-Machine-*-build-output
           path: ${{ runner.temp }}/vegpu-input/machine-reusable
@@ -709,7 +709,7 @@ jobs:
           codesign --verify --deep --strict "$APP"
 
       - name: Upload Machine artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-machine-artifacts
           path: ${{ runner.temp }}/vegpu-artifacts/machine
@@ -739,10 +739,10 @@ jobs:
 
     steps:
       - name: Check out vEGPU
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download vEGPU.app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vEGPU-app
           path: ${{ runner.temp }}/vegpu-input/app-archive
@@ -755,13 +755,13 @@ jobs:
           codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-input/app/vEGPU.app"
 
       - name: Download vEGPU legal payload
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vEGPU-legal-generated
           path: ${{ runner.temp }}/vegpu-input/legal
 
       - name: Download Machine artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vEGPU-machine-artifacts
           path: ${{ runner.temp }}/vegpu-input/machine
@@ -904,7 +904,7 @@ jobs:
           find "$ASSETS" -maxdepth 1 -type f -print | sort
 
       - name: Upload package assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vEGPU-package-assets
           path: ${{ runner.temp }}/vegpu-artifacts/release-assets
