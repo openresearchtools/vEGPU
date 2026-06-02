@@ -829,7 +829,11 @@ jobs:
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'DriverKit extension refresh/activation' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'SIP disabled' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          if grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
+            echo "installer should allow closing and restarting later" >&2
+            exit 1
+          fi
+          grep -F 'You can close this installer and restart macOS later' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources/CONCLUSION.txt"
           if grep -F 'Selected by default when Machine is missing, older, or the same version with no installed DriverKit extension' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
             echo "installer should not show stale combined Machine/DriverKit description" >&2
             exit 1
