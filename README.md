@@ -105,8 +105,9 @@ present. If graceful deactivation fails or the old app is missing while the
 extension is still listed, it falls back to `systemextensionsctl uninstall`.
 After package files are installed and permissions/quarantine are cleaned, it
 calls the installed Machine app to submit a fresh activation request, logs
-direct `systemextensionsctl list` status, and asks macOS to offer the normal
-Restart Now / Later choice.
+direct `systemextensionsctl list` status, and shows a final summary telling the
+user to restart macOS before using eGPU passthrough. The installer can be closed
+so the restart can happen later.
 
 System Integrity Protection must be disabled before installation. vEGPU uses an
 ad-hoc DriverKit host extension for PCIe/eGPU passthrough, which is a serious
@@ -118,9 +119,11 @@ GitHub Actions is the release build path. The workflow can build artifact-only
 packages, pre-releases, or releases while reusing cached display runtime,
 scaling helper, and Machine artifacts when their inputs have not changed.
 
-The clean repository intentionally does not commit generated display
-frameworks, QEMU/Machine binaries, runtime downloads, model files, or VM disk
-images.
+The source repository stays clean: it does not store generated frameworks,
+Machine app binaries, runtime download caches, model files, or VM disk images.
+GitHub Actions builds or reuses the required display runtime, scaling helper,
+Machine app, DriverKit host extension, guest tools, notices, and source
+archives, then bundles the complete installable payload into the release `.pkg`.
 
 ## Links
 
