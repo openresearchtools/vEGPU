@@ -246,48 +246,129 @@ update_agent() {
   install -m 0755 "$source" /usr/local/libexec/vegpu/vegpu-agent
 }
 
-manifest_expected_kernel() {
-  [ -f "$MANIFEST_FILE" ] || { printf 'unknown\n'; return 0; }
-  jq -r '.kernel.version // "unknown"' "$MANIFEST_FILE" 2>/dev/null || printf 'unknown\n'
+manifest_has_dkms_packages() {
+  [ -f "$MANIFEST_FILE" ] || return 1
+  jq -e '(.driver.dkmsPackages // []) | length > 0' "$MANIFEST_FILE" >/dev/null 2>&1
 }
 
-apply_kernel_pin() {
-  local expected
+apply_kernel_policy() {
   rm -f "$PIN_FILE"
-  expected="$(manifest_expected_kernel)"
-  if [ -z "$expected" ] || [ "$expected" = "unknown" ]; then
-    log "no manifest kernel available; leaving kernel package policy unchanged"
-    return 0
-  fi
-  install -d "$(dirname "$PIN_FILE")"
-  cat >"$PIN_FILE" <<EOS
-Package: linux-image-arm64 linux-headers-arm64
-Pin: version *
-Pin-Priority: -1
-
-Package: linux-image-$expected linux-headers-$expected
-Pin: version *
-Pin-Priority: 1001
-EOS
-  apt-mark hold linux-image-arm64 linux-headers-arm64 >/dev/null 2>&1 || true
-}
-
-remove_kernel_pin() {
-  rm -f "$PIN_FILE"
+  log "kernel packages are DKMS-managed; leaving Debian kernel updates enabled"
   apt-mark unhold linux-image-arm64 linux-headers-arm64 >/dev/null 2>&1 || true
-  dpkg-query -W -f='${Package}\n' 'linux-image-*' 'linux-headers-*' 'linux-kbuild-*' 2>/dev/null | xargs -r apt-mark unhold >/dev/null 2>&1 || true
 }
 
 install_dkms_prereqs() {
   export DEBIAN_FRONTEND=noninteractive
-  local running_kernel
-  running_kernel="$(uname -r)"
-  if [ ! -d "/lib/modules/$(uname -r)/build" ]; then
-    apt_get update
-    apt_get install -y "linux-headers-$running_kernel" ||
-      { install_manifest_packages '.kernel.packages' || true; apt_get install -y "linux-headers-$running_kernel" || true; }
-  fi
+  apt_get update
   apt_get install -y dkms build-essential kmod
+  ensure_headers_for_kernel "$(uname -r)"
+}
+
+installed_kernel_versions() {
+  {
+    uname -r
+    find /lib/modules -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null || true
+  } | awk 'NF' | sort -u
+}
+
+ensure_headers_for_kernel() {
+  local kernel="$1"
+  [ -n "$kernel" ] || return 1
+  if [ -d "/lib/modules/$kernel/build" ]; then
+    return 0
+  fi
+  apt_get install -y "linux-headers-$kernel"
+}
+
+driver_dkms_installed() {
+  dpkg-query -W -f='${db:Status-Abbrev}\n' apple-dma-dkms vegpu-guest-dma-dkms 2>/dev/null |
+    grep -q '^ii '
+}
+
+install_driver_dkms_packages() {
+  if manifest_has_dkms_packages; then
+    install_manifest_packages '.driver.dkmsPackages'
+  elif [ -d "$PACKAGE_DIR" ]; then
+    local packages=()
+    mapfile -t packages < <(find "$PACKAGE_DIR" -maxdepth 1 -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'vegpu-guest-dma-dkms_*.deb' \) -print 2>/dev/null | sort)
+    if [ "${#packages[@]}" -gt 0 ]; then
+      repair_dpkg_state || true
+      dpkg_install "${packages[@]}" || apt_get -f install -y
+      repair_dpkg_state || true
+    fi
+  fi
+  driver_dkms_installed
+}
+
+dkms_autoinstall_for_installed_kernels() {
+  local kernel running failed
+  running="$(uname -r)"
+  failed=0
+  while IFS= read -r kernel; do
+    [ -n "$kernel" ] || continue
+    if ! ensure_headers_for_kernel "$kernel"; then
+      log "missing headers for installed kernel $kernel"
+      [ "$kernel" = "$running" ] && failed=1
+      continue
+    fi
+    if ! dkms autoinstall -k "$kernel"; then
+      log "DKMS autoinstall failed for kernel $kernel"
+      [ "$kernel" = "$running" ] && failed=1
+    fi
+  done < <(installed_kernel_versions)
+  return "$failed"
+}
+
+guest_dma_modules() {
+  printf '%s\n' apple_dma vegpu_guest_dma
+}
+
+module_vermagic_for_kernel() {
+  local module="$1"
+  local kernel="$2"
+  modinfo -k "$kernel" -F vermagic "$module" 2>/dev/null | head -1 || true
+}
+
+module_matches_kernel() {
+  local module="$1"
+  local kernel="$2"
+  local vermagic
+  vermagic="$(module_vermagic_for_kernel "$module" "$kernel")"
+  case "$vermagic" in
+    "$kernel "*) return 0 ;;
+    "$kernel") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+current_kernel_dma_module() {
+  local module
+  while IFS= read -r module; do
+    [ -n "$module" ] || continue
+    if module_matches_kernel "$module" "$(uname -r)"; then
+      printf '%s\n' "$module"
+      return 0
+    fi
+  done < <(guest_dma_modules)
+  return 1
+}
+
+load_current_kernel_dma_module() {
+  local module
+  module="$(current_kernel_dma_module || true)"
+  [ -n "$module" ] || return 1
+  modprobe "$module"
+  lsmod | awk '{print $1}' | grep -qx "$module"
+}
+
+purge_legacy_module_packages() {
+  local pkgs=()
+  mapfile -t pkgs < <(dpkg-query -W -f='${Package}\t${db:Status-Abbrev}\n' \
+      'apple-dma-modules-*' 'vegpu-guest-dma-modules-*' 2>/dev/null |
+    awk '$2 ~ /^ii/ {print $1}')
+  [ "${#pkgs[@]}" -gt 0 ] || return 0
+  log "removing legacy DMA module packages now that DKMS owns the driver: ${pkgs[*]}"
+  apt_get purge -y "${pkgs[@]}" || true
 }
 
 setup_dkms_autorebuild() {
@@ -308,8 +389,9 @@ EOS
 Description=Run vEGPU DKMS refresh after boot and periodically
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=12h
+OnBootSec=30s
+OnUnitActiveSec=1h
+AccuracySec=30s
 Persistent=true
 
 [Install]
@@ -325,14 +407,18 @@ EOS
 }
 
 ensure_driver_persistence() {
+  local kernel
   install -d /etc/modules-load.d /etc/initramfs-tools "$STATE_DIR"
   printf 'apple_dma\n' >/etc/modules-load.d/apple-dma-load.conf
   touch /etc/initramfs-tools/modules
   grep -qxF apple_dma /etc/initramfs-tools/modules || printf 'apple_dma\n' >>/etc/initramfs-tools/modules
-  depmod -a || true
-  if command -v update-initramfs >/dev/null 2>&1; then
-    update-initramfs -u -k "$(uname -r)" || true
-  fi
+  while IFS= read -r kernel; do
+    [ -n "$kernel" ] || continue
+    depmod -a "$kernel" || true
+    if command -v update-initramfs >/dev/null 2>&1; then
+      update-initramfs -u -k "$kernel" || true
+    fi
+  done < <(installed_kernel_versions)
   touch "$STATE_DIR/driver-persistent"
 }
 
@@ -740,68 +826,6 @@ install_manifest_packages() {
   fi
 }
 
-kernel_package_tokens() {
-  local kernel="$1"
-  local token alt
-  token="${kernel/+/-}"
-  printf '%s\n' "$token"
-  alt="$(printf '%s\n' "$kernel" | sed -E 's/\+deb([0-9]+)\.[0-9]+-/+deb\1-/')"
-  alt="${alt/+/-}"
-  if [ "$alt" != "$token" ]; then
-    printf '%s\n' "$alt"
-  fi
-}
-
-is_driver_module_package() {
-  local file="$1"
-  local package
-  package="$(dpkg-deb -f "$file" Package 2>/dev/null || basename "$file")"
-  case "$package" in
-    apple-dma-modules-*|vegpu-guest-dma-modules-*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-driver_module_package_matches_kernel() {
-  local file="$1"
-  local kernel="$2"
-  local package token
-  package="$(dpkg-deb -f "$file" Package 2>/dev/null || basename "$file")"
-  while IFS= read -r token; do
-    [ -n "$token" ] || continue
-    case "$package $file" in
-      *"$token"*) return 0 ;;
-    esac
-  done < <(kernel_package_tokens "$kernel")
-  return 1
-}
-
-install_driver_prebuilt_for_kernel() {
-  local kernel="$1"
-  local manifest
-  manifest="$(manifest_path)"
-  [ -f "$manifest" ] || return 1
-  mapfile -t rows < <(jq -r '.driver.prebuiltPackages[]? | if type == "string" then [. , ""] else [.path, (.sha512 // "")] end | @tsv' "$manifest")
-  [ "${#rows[@]}" -gt 0 ] || return 1
-  local files=()
-  for row in "${rows[@]}"; do
-    local rel expected file
-    rel="$(printf '%s' "$row" | cut -f1)"
-    expected="$(printf '%s' "$row" | cut -f2)"
-    file="$STATE_DIR/$rel"
-    verify_package "$file" "$expected"
-    if is_driver_module_package "$file" && ! driver_module_package_matches_kernel "$file" "$kernel"; then
-      log "skipping prebuilt driver package for another kernel: $(basename "$file")"
-      continue
-    fi
-    files+=("$file")
-  done
-  [ "${#files[@]}" -gt 0 ] || return 1
-  repair_dpkg_state || true
-  dpkg_install "${files[@]}" || apt_get -f install -y
-  repair_dpkg_state || true
-}
-
 disable_idle() {
   local human_user=vegpu
   local home=/home/vegpu
@@ -898,42 +922,22 @@ update_tools() {
 }
 
 install_driver() {
-  [ -f "$MANIFEST_FILE" ] || { log "manifest has not been pushed by vEGPU yet"; return 1; }
   setup_dkms_autorebuild
-  ensure_driver_persistence
-  if modprobe apple_dma 2>/dev/null || modprobe vegpu_guest_dma 2>/dev/null; then
-    ensure_driver_persistence
-    return 0
-  fi
-  local driver_package_count
-  driver_package_count="$(jq '[.driver.prebuiltPackages[]?, .driver.dkmsPackages[]?] | length' "$MANIFEST_FILE")"
-  if [ "$driver_package_count" = "0" ]; then
-    log "manifest has no guest DMA driver packages"
+  install_dkms_prereqs
+  if ! install_driver_dkms_packages; then
+    log "apple DMA DKMS package is not installed and no DKMS package is available in the guest package cache"
     return 1
   fi
-  if install_driver_prebuilt_for_kernel "$(uname -r)"; then
-    ensure_driver_persistence
-    depmod -a || true
-    if modprobe apple_dma 2>/dev/null || modprobe vegpu_guest_dma 2>/dev/null; then
-      ensure_driver_persistence
-      return 0
-    fi
-  else
-    log "no prebuilt guest DMA driver package matched kernel $(uname -r); falling back to DKMS"
-  fi
-
-  install_dkms_prereqs
-  install_manifest_packages '.driver.dkmsPackages'
-  dkms autoinstall || true
+  dkms_autoinstall_for_installed_kernels
   ensure_driver_persistence
   depmod -a || true
-  modprobe apple_dma 2>/dev/null || modprobe vegpu_guest_dma 2>/dev/null || true
-  if lsmod | awk '{print $1}' | grep -qxE 'apple_dma|vegpu_guest_dma'; then
+  if load_current_kernel_dma_module; then
+    purge_legacy_module_packages
     ensure_driver_persistence
     rm -f "$STATE_DIR/dkms-refresh-needed"
     return 0
   fi
-  log "guest DMA driver module is not loaded after install"
+  log "guest DMA DKMS module is not built/loaded for running kernel $(uname -r)"
   status_json >&2 || true
   rm -f "$STATE_DIR/dkms-refresh-needed"
   return 1
@@ -941,29 +945,27 @@ install_driver() {
 
 dkms_refresh() {
   setup_dkms_autorebuild
-  [ -f "$MANIFEST_FILE" ] || { log "manifest has not been pushed by vEGPU yet"; return 0; }
-  local driver_package_count
-  driver_package_count="$(jq '[.driver.prebuiltPackages[]?, .driver.dkmsPackages[]?] | length' "$MANIFEST_FILE")"
-  if [ "$driver_package_count" = "0" ]; then
-    log "manifest has no guest DMA driver packages"
-    return 0
-  fi
   install_dkms_prereqs
-  install_manifest_packages '.driver.dkmsPackages'
-  dkms autoinstall -k "$(uname -r)" || dkms autoinstall || true
+  if ! install_driver_dkms_packages; then
+    log "apple DMA DKMS package is not installed and no DKMS package is available in the guest package cache"
+    return 1
+  fi
+  dkms_autoinstall_for_installed_kernels
   ensure_driver_persistence
   depmod -a || true
-  modprobe apple_dma 2>/dev/null || modprobe vegpu_guest_dma 2>/dev/null || true
+  load_current_kernel_dma_module || true
+  if current_kernel_dma_module >/dev/null 2>&1; then
+    purge_legacy_module_packages
+  fi
   status_json >"$STATE_DIR/dkms-refresh-status.json" || true
   rm -f "$STATE_DIR/dkms-refresh-needed"
 }
 
 update_kernel() {
-  [ -f "$MANIFEST_FILE" ] || { log "manifest has not been pushed by vEGPU yet"; return 1; }
-  remove_kernel_pin
-  install_manifest_packages '.kernel.packages'
-  install_driver
-  apply_kernel_pin
+  apply_kernel_policy
+  apt_get update
+  apt_get install -y linux-image-arm64 linux-headers-arm64
+  dkms_refresh
   touch "$STATE_DIR/reboot-required"
 }
 
@@ -1152,8 +1154,9 @@ EOS
 status_json() {
   local manifest="none"
   local manifest_id="none"
-  local expected_kernel="unknown"
-  local kernel_match="unknown"
+  local driver_module=""
+  local driver_vermagic=""
+  local driver_kernel_match="no"
   local module_loaded="no"
   local driver_ready="no"
   local driver_installed="no"
@@ -1166,10 +1169,15 @@ status_json() {
   manifest="$(manifest_path)"
   if [ -f "$manifest" ]; then
     manifest_id="$(jq -r '.id // "unknown"' "$manifest" 2>/dev/null || printf unknown)"
-    expected_kernel="$(jq -r '.kernel.version // "unknown"' "$manifest" 2>/dev/null || printf unknown)"
-    if [ "$expected_kernel" = "$(uname -r)" ]; then kernel_match="yes"; else kernel_match="no"; fi
   fi
-  if modinfo apple_dma >/dev/null 2>&1 || modinfo vegpu_guest_dma >/dev/null 2>&1; then driver_installed="yes"; fi
+  driver_module="$(current_kernel_dma_module || true)"
+  if [ -n "$driver_module" ]; then
+    driver_installed="yes"
+    driver_kernel_match="yes"
+    driver_vermagic="$(module_vermagic_for_kernel "$driver_module" "$(uname -r)")"
+  elif modinfo apple_dma >/dev/null 2>&1 || modinfo vegpu_guest_dma >/dev/null 2>&1; then
+    driver_installed="yes"
+  fi
   if lsmod | awk '{print $1}' | grep -qxE 'apple_dma|vegpu_guest_dma'; then module_loaded="yes"; fi
   if [ -f "$STATE_DIR/driver-persistent" ] ||
      grep -qxF apple_dma /etc/modules-load.d/apple-dma-load.conf 2>/dev/null; then driver_persistent="yes"; fi
@@ -1188,17 +1196,55 @@ status_json() {
   done
   bound_devices="$(printf '%s' "$bound_devices" | xargs 2>/dev/null || true)"
   driver_error="$(dmesg 2>/dev/null | grep -iE 'apple_dma .*managed PCI device .*not found|apple_dma .*unsupported version|apple_dma .*max_entries=0|apple_dma .*failed|apple_dma .*fatal' | tail -1 || true)"
-  if [ "$module_loaded" = "yes" ] && [ "$kernel_match" != "no" ]; then driver_ready="yes"; fi
+  if [ "$module_loaded" = "yes" ] && [ "$driver_kernel_match" = "yes" ]; then driver_ready="yes"; fi
   if [ "$module_loaded" = "yes" ] && [ "$bound_count" -gt 0 ]; then passthrough_ready="yes"; fi
-  jq -n     --arg user vegpu     --arg kernel "$(uname -r)"     --arg manifest "$manifest_id"     --arg expectedKernel "$expected_kernel"     --arg kernelMatchesManifest "$kernel_match"     --arg driver "$(dkms status 2>/dev/null | tr '\n' ';' || true)"     --arg driverInstalled "$driver_installed"     --arg driverPersistent "$driver_persistent"     --arg moduleLoaded "$module_loaded"     --arg driverLoaded "$module_loaded"     --arg driverReady "$driver_ready"     --arg passthroughReady "$passthrough_ready"     --arg dmaDevicePresent "$dma_device_present"     --arg boundDevices "$bound_devices"     --arg driverError "$driver_error"     --argjson boundDeviceCount "$bound_count"     --arg reboot "$([ -f "$STATE_DIR/reboot-required" ] && printf yes || printf no)"     '{user:$user,kernel:$kernel,manifest:$manifest,expectedKernel:$expectedKernel,kernelMatchesManifest:$kernelMatchesManifest,dkms:$driver,driverInstalled:$driverInstalled,driverPersistent:$driverPersistent,moduleLoaded:$moduleLoaded,driverLoaded:$driverLoaded,driverReady:$driverReady,passthroughReady:$passthroughReady,dmaDevicePresent:$dmaDevicePresent,boundDeviceCount:$boundDeviceCount,boundDevices:$boundDevices,driverError:$driverError,rebootRequired:$reboot}'
+  jq -n \
+    --arg user vegpu \
+    --arg kernel "$(uname -r)" \
+    --arg manifest "$manifest_id" \
+    --arg driver "$(dkms status 2>/dev/null | tr '\n' ';' || true)" \
+    --arg driverModule "$driver_module" \
+    --arg driverVermagic "$driver_vermagic" \
+    --arg driverKernelMatchesRunning "$driver_kernel_match" \
+    --arg driverInstalled "$driver_installed" \
+    --arg driverPersistent "$driver_persistent" \
+    --arg moduleLoaded "$module_loaded" \
+    --arg driverLoaded "$module_loaded" \
+    --arg driverReady "$driver_ready" \
+    --arg passthroughReady "$passthrough_ready" \
+    --arg dmaDevicePresent "$dma_device_present" \
+    --arg boundDevices "$bound_devices" \
+    --arg driverError "$driver_error" \
+    --argjson boundDeviceCount "$bound_count" \
+    --arg reboot "$([ -f "$STATE_DIR/reboot-required" ] && printf yes || printf no)" \
+    '{
+      user:$user,
+      kernel:$kernel,
+      manifest:$manifest,
+      dkms:$driver,
+      driverModule:$driverModule,
+      driverVermagic:$driverVermagic,
+      driverKernelMatchesRunning:$driverKernelMatchesRunning,
+      driverInstalled:$driverInstalled,
+      driverPersistent:$driverPersistent,
+      moduleLoaded:$moduleLoaded,
+      driverLoaded:$moduleLoaded,
+      driverReady:$driverReady,
+      passthroughReady:$passthroughReady,
+      dmaDevicePresent:$dmaDevicePresent,
+      boundDeviceCount:$boundDeviceCount,
+      boundDevices:$boundDevices,
+      driverError:$driverError,
+      rebootRequired:$reboot
+    }'
 }
 
 case "${1:-status}" in
   status)
     if [ "${2:-}" = "--json" ]; then status_json; else status_json; fi
     ;;
-  apply-kernel-pin)
-    apply_kernel_pin
+  apply-kernel-policy)
+    apply_kernel_policy
     ;;
   ingest-manifest)
     shift

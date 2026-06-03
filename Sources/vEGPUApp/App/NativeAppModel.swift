@@ -873,7 +873,7 @@ final class NativeAppModel: ObservableObject {
             "manifest: \(manifest.id)",
             "kernel: \(manifest.kernel.version)",
             "driver: \(manifest.driver.version)",
-            "packages: \(manifest.guestPackages.count) guest, \(manifest.kernel.packages.count) kernel, \(manifest.driver.prebuiltPackages.count + manifest.driver.dkmsPackages.count) driver"
+            "packages: \(manifest.guestPackages.count) guest, \(manifest.driver.dkmsPackages.count) DKMS driver"
         ].joined(separator: "\n")
     }
 

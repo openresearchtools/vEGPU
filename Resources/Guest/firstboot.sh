@@ -36,8 +36,7 @@ apt_get install -y openssh-server ca-certificates curl jq gnupg iptables nfs-com
 mkdir -p /run/vegpu/shares /var/lib/vegpu /usr/local/libexec/vegpu
 
 /usr/local/libexec/vegpu/vegpu-agent ingest-seed-bundle || true
-/usr/local/libexec/vegpu/vegpu-agent apply-kernel-pin
-apt_get install -y dkms build-essential "linux-headers-$(uname -r)" || true
+/usr/local/libexec/vegpu/vegpu-agent apply-kernel-policy
 
 mkdir -p /run/vegpu/shares /var/lib/vegpu /usr/local/libexec/vegpu
 

@@ -32,7 +32,10 @@ public final class GuestSyncService: @unchecked Sendable {
         try await syncGuiAssets()
         try await syncScalingApp()
         if !force, let runtimePid, markerMatches(runtimePid: runtimePid, fingerprint: fingerprint) {
-            return false
+            if await guestDriverReady() {
+                return false
+            }
+            progress.report(ProgressEvent(stage: "driver", message: "Refreshing Linux guest DMA driver for current kernel"))
         }
 
         let temp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vegpu-guest-sync-\(UUID().uuidString)", isDirectory: true)
@@ -49,9 +52,7 @@ public final class GuestSyncService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "guest-sync", message: "Applying runtime manifest"))
         _ = try await ssh.agent(["ingest-manifest", "/tmp/vegpu-sync/manifest.json"])
 
-        try await syncPackages(kind: "driver prebuilt", packages: manifest.driver.prebuiltPackages)
         try await syncPackages(kind: "driver DKMS", packages: manifest.driver.dkmsPackages)
-        try await syncPackages(kind: "kernel", packages: manifest.kernel.packages)
         try await syncPackages(kind: "guest", packages: manifest.guestPackages)
         progress.report(ProgressEvent(stage: "guest-tools", message: "Installing or refreshing guest tools"))
         _ = try await ssh.agent(["update-tools"])
@@ -182,8 +183,7 @@ public final class GuestSyncService: @unchecked Sendable {
         }
         return status["driverInstalled"] as? String == "yes" &&
             status["moduleLoaded"] as? String == "yes" &&
-            status["driverReady"] as? String == "yes" &&
-            status["kernelMatchesManifest"] as? String != "no"
+            status["driverReady"] as? String == "yes"
     }
 
     private func guestSyncFingerprint(manifest: RuntimeManifest) throws -> String {
@@ -223,7 +223,7 @@ public final class GuestSyncService: @unchecked Sendable {
                 hasher.update(data: data)
             }
         }
-        for package in manifest.driver.prebuiltPackages + manifest.driver.dkmsPackages + manifest.kernel.packages + manifest.guestPackages {
+        for package in manifest.driver.dkmsPackages + manifest.guestPackages {
             hasher.update(data: Data([0]))
             hasher.update(data: Data(package.path.utf8))
             hasher.update(data: Data([0]))

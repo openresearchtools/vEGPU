@@ -111,7 +111,7 @@
                 <strong>GUI.</strong> The internal Linux desktop is rendered inside the macOS app through the UTM-derived SPICE, ANGLE, and CocoaSpice path, so setup and normal GUI work stay accelerated without using the passed-through NVIDIA card for the desktop. Secondary-click on the GUI display exposes screen/session controls, while external Xorg sessions can still run on physical monitors driven by the eGPU.
               </p>
               <p class="carousel-caption" data-caption="1">
-                <strong>Runtime.</strong> The Runtime view starts and stops the vEGPU Machine server, shows whether the VM/control routes are alive, and keeps Mac, guest, network, disk, and VM GPU telemetry in one place. It also launches the recipe-based Debian setup and NVIDIA/CUDA helper install flow, because the download does not ship a prebuilt VM or preinstalled GPU driver stack.
+                <strong>Runtime.</strong> The Runtime view starts and stops the vEGPU Machine server, shows whether the VM/control routes are alive, and keeps Mac, guest, network, disk, and VM GPU telemetry in one place. It also launches the recipe-based Debian setup and NVIDIA/CUDA helper install flow, because the download does not ship a bundled VM or preinstalled GPU driver stack.
               </p>
               <p class="carousel-caption" data-caption="2">
                 <strong>Models.</strong> The Models view manages model files and llama.cpp launches. Pick the Mac backend, the Linux/eGPU backend, or a split run where llama.cpp RPC bridges host and guest; TurboQuant is only the optional llama.cpp build/flag path for KV-cache quantization, not a separate GPU target. The UI assembles the real launch details: devices, RPC endpoint, GPU layers, tensor split, and cache type.
@@ -156,7 +156,7 @@
             <span class="feature-code">OPS</span>
             <h3>Recipe-based Debian runtime</h3>
             <p>
-              vEGPU downloads the official Debian cloud image and scripts the setup. It does not ship a prebuilt VM and it does not vendor NVIDIA drivers or CUDA. The helper only installs from NVIDIA repositories inside Linux.
+              vEGPU downloads the official Debian cloud image and scripts the setup. It does not ship a bundled VM and it does not vendor NVIDIA drivers or CUDA. The helper only installs from NVIDIA repositories inside Linux.
             </p>
           </article>
           <article>

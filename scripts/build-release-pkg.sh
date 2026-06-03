@@ -528,8 +528,8 @@ QEMU, the Apple VFIO backend, the DriverKit host application, the
 VFIOUserPCIDriver DriverKit system extension, the embedded qemu-vfio-apple
 launcher/CLI, QEMU firmware and runtime payloads, bundled QEMU tools and
 libraries, QEMU-side SPICE/virgl visual-runtime adaptations, guest-driver
-packages, and guest-side apple_dma source/prebuilt/DKMS materials where
-included by the release.
+packages, and guest-side apple_dma DKMS source materials where included by the
+release.
 
 Installed Machine-side notices, license texts, and source bundles are
 available inside:

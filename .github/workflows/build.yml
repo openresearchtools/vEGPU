@@ -814,7 +814,11 @@ jobs:
           test -f "$APP/Contents/Resources/ThirdPartyNotices/LICENSES"
           test -f "$APP/Contents/Resources/guest-tools/manifest.json"
           test -d "$APP/Contents/Resources/guest-tools/source"
-          find "$APP/Contents/Resources/guest-tools/packages" -type f -name 'apple-dma-*.deb' -print -quit | grep -q .
+          find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'vegpu-guest-dma-dkms_*.deb' \) -print -quit | grep -q .
+          if find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-modules-*.deb' -o -name 'vegpu-guest-dma-modules-*.deb' \) -print -quit | grep -q .; then
+            echo "Machine guest tools must not contain kernel-versioned DMA module packages" >&2
+            exit 1
+          fi
           find "$APP/Contents/Resources/guest-tools/source" -type f -name 'apple-dma-*.tar.gz' -print -quit | grep -q .
           find "$RUNNER_TEMP/vegpu-artifacts/machine" -maxdepth 1 -type f -name 'vEGPU-Machine-*-source.tar.gz' -print -quit | grep -q .
           if find "$RUNNER_TEMP/vegpu-artifacts/machine" -path '*/downloaded/*' -print -quit | grep -q .; then
@@ -995,7 +999,11 @@ jobs:
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives/*-bin-debian-trixie-cuda13-arm64.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives/*-bin-debian-trixie-vulkan-arm64.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/SourceBundles/*source*.tar.gz' -print -quit | grep -q .
-            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/packages/apple-dma-*.deb' -print -quit | grep -q .
+            find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/packages/apple-dma-dkms_*.deb' -print -quit | grep -q .
+            if find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/packages/apple-dma-modules-*.deb' -print -quit | grep -q .; then
+              echo "installer must not contain kernel-versioned apple DMA module packages" >&2
+              exit 1
+            fi
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU Machine.app*/Contents/Resources/guest-tools/source/apple-dma-*.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package/vegpu-scaling_*.deb' -print -quit | grep -q .
             grep -R -- '--driver-deactivate' "$RUNNER_TEMP/vegpu-check/pkg-expanded-full"

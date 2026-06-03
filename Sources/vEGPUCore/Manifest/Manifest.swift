@@ -28,7 +28,6 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
             case version
             case debianPackageVersion
             case packages
-            case prebuiltPackages
         }
 
         public init(version: String, debianPackageVersion: String?, packages: [ManifestPackage]) {
@@ -42,7 +41,6 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
             version = try container.decode(String.self, forKey: .version)
             debianPackageVersion = try container.decodeIfPresent(String.self, forKey: .debianPackageVersion)
             packages = try container.decodeIfPresent([ManifestPackage].self, forKey: .packages)
-                ?? container.decodeIfPresent([ManifestPackage].self, forKey: .prebuiltPackages)
                 ?? []
         }
 
@@ -57,7 +55,6 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
     public struct Driver: Codable, Equatable, Sendable {
         public var version: String
         public var moduleName: String
-        public var prebuiltPackages: [ManifestPackage]
         public var dkmsPackages: [ManifestPackage]
     }
 
@@ -89,7 +86,7 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
             variant: "generic"
         ),
         kernel: Kernel(version: "6.12.86+deb13-arm64", debianPackageVersion: "6.12.86-1", packages: []),
-        driver: Driver(version: "0.1.0", moduleName: "apple_dma", prebuiltPackages: [], dkmsPackages: []),
+        driver: Driver(version: "0.1.0", moduleName: "apple_dma", dkmsPackages: []),
         nvidia: Nvidia(
             repository: "https://developer.download.nvidia.com/compute/cuda/repos/debian13/sbsa",
             branch: "595.71.05",

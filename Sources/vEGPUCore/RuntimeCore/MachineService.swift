@@ -252,12 +252,8 @@ public final class MachineService: @unchecked Sendable {
             let driverPersistent = raw["driverPersistent"] as? String == "yes"
             let moduleLoaded = raw["moduleLoaded"] as? String == "yes" || raw["driverLoaded"] as? String == "yes"
             let boundCount = (raw["boundDeviceCount"] as? NSNumber)?.intValue ?? Int(raw["boundDeviceCount"] as? String ?? "0") ?? 0
-            let kernelMatchesManifest = raw["kernelMatchesManifest"] as? String != "no"
-            let driverReady = (raw["driverReady"] as? String == "yes" || moduleLoaded) && kernelMatchesManifest
+            let driverReady = raw["driverReady"] as? String == "yes"
             let passthroughReady = raw["passthroughReady"] as? String == "yes" || (driverReady && boundCount > 0)
-            let kernel = textValue(raw["kernel"], fallback: "unknown kernel")
-            let expectedKernel = textValue(raw["expectedKernel"], fallback: "")
-            let kernelNote = !expectedKernel.isEmpty && expectedKernel != "unknown" && expectedKernel != kernel ? " - expected \(expectedKernel)" : ""
             let boundDevices = textValue(raw["boundDevices"], fallback: "")
             if driverReady && passthroughReady {
                 return GuestDriverStatus(
@@ -271,15 +267,15 @@ public final class MachineService: @unchecked Sendable {
                 return GuestDriverStatus(ready: true, canReinstall: false, state: "ready", detail: "Installed and loaded; waiting for passthrough device")
             }
             if driverInstalled || driverPersistent {
-                return GuestDriverStatus(ready: false, canReinstall: true, state: "not-loaded", detail: "Installed but not loaded\(kernelNote)")
+                return GuestDriverStatus(ready: false, canReinstall: true, state: "not-loaded", detail: moduleLoaded ? "Loaded module does not match the running kernel" : "DKMS module is not loaded")
             }
             return GuestDriverStatus(
                 ready: false,
                 canReinstall: true,
                 state: "not-loaded",
                 detail: boundDevices.isEmpty
-                    ? "Not installed for this kernel\(kernelNote)"
-                    : "Not installed for this kernel - stale binding: \(boundDevices)\(kernelNote)"
+                    ? "DKMS module is not installed for this kernel"
+                    : "DKMS module is not installed for this kernel - stale binding: \(boundDevices)"
             )
         } catch {
             return GuestDriverStatus(

@@ -203,7 +203,7 @@ public final class CloudInitService: @unchecked Sendable {
         let bundle = seedDir.appendingPathComponent("vegpu", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         try JSON.write(manifest, to: bundle.appendingPathComponent("manifest.json"))
-        let packages = manifest.driver.prebuiltPackages + manifest.driver.dkmsPackages + manifest.kernel.packages + manifest.guestPackages
+        let packages = manifest.driver.dkmsPackages + manifest.guestPackages
         for package in packages {
             try copySeedPackage(bundle: bundle, package: package)
         }
