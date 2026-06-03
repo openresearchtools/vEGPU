@@ -293,6 +293,8 @@ write_no_idle_flags() {
   install -d /etc/X11/xorg.conf.d
   cat >"$NO_IDLE_CONF" <<'CONF'
 Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
     Option "BlankTime" "0"
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"
