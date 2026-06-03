@@ -403,6 +403,31 @@ current_display_mode() {
   fi
 }
 
+active_spice_xorg_has_external_gpu() {
+  [ -f /var/log/Xorg.0.log ] || return 1
+  grep -Eq 'modeset\(G0\)|NVIDIA\(G0\)' /var/log/Xorg.0.log
+}
+
+reconcile_spice_xorg() {
+  local mode virtio_bdf before after contaminated=0
+  mode="$(current_display_mode)"
+  [ "$mode" = "external-primary" ] && return 0
+
+  active_spice_xorg_has_external_gpu && contaminated=1
+  before="$(sha256sum "$XORG_CONF" "$NO_IDLE_CONF" 2>/dev/null || true)"
+  virtio_bdf="$(detect_virtio_gpu_bdf)"
+  write_spice_only_xorg "$(xorg_bus_id_from_bdf "$virtio_bdf")"
+  write_no_idle_flags
+  write_mode_file <<CONF
+VEGPU_DISPLAY_MODE=spice
+CONF
+  after="$(sha256sum "$XORG_CONF" "$NO_IDLE_CONF" 2>/dev/null || true)"
+
+  if [ "$contaminated" -eq 1 ] || [ "$before" != "$after" ]; then
+    restart_lightdm_for_mode spice
+  fi
+}
+
 json_value() {
   python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
 }
@@ -934,6 +959,9 @@ CONF
 VEGPU_DISPLAY_MODE=spice
 CONF
     ;;
+  reconcile-spice)
+    reconcile_spice_xorg
+    ;;
   external-primary)
     nvidia_bdf="$(normalize_bdf "${2:?missing NVIDIA PCI bus id}")"
     nvidia_index="${3:-}"
@@ -989,7 +1017,7 @@ CONF
     session_outputs_json "${2:?missing session id}"
     ;;
   *)
-    printf 'usage: %s {install-global-defaults|spice|boot-spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>}\n' "$0" >&2
+    printf 'usage: %s {install-global-defaults|spice|boot-spice|reconcile-spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>}\n' "$0" >&2
     exit 2
     ;;
 esac
@@ -1446,6 +1474,7 @@ if [ "${1:-}" = "--install-display-control-only" ]; then
   run_customization write-prefs
   run_customization disable-idle
   install_display_control
+  /usr/local/sbin/vegpu-display-mode-helper reconcile-spice
   exit 0
 fi
 

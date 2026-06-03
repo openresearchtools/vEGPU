@@ -690,20 +690,6 @@ HandleSuspendKey=ignore
 HandleHibernateKey=ignore
 EOS
   /usr/bin/timeout 15s systemctl restart systemd-logind >/dev/null 2>&1 || true
-  install -d /etc/X11/xorg.conf.d
-  cat >/etc/X11/xorg.conf.d/90-vegpu-no-idle.conf <<'EOS'
-Section "ServerFlags"
-    Option "BlankTime" "0"
-    Option "StandbyTime" "0"
-    Option "SuspendTime" "0"
-    Option "OffTime" "0"
-EndSection
-
-Section "Monitor"
-    Identifier "Virtual-1"
-    Option "DPMS" "false"
-EndSection
-EOS
   vegpu_customization_xfconf_set xfce4-session /general/LockCommand string ""
   vegpu_customization_xfconf_set xfce4-power-manager /xfce4-power-manager/presentation-mode bool true
   vegpu_customization_xfconf_set xfce4-power-manager /xfce4-power-manager/blank-on-ac int 0
