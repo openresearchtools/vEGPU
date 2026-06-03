@@ -307,14 +307,6 @@ vegpu_customization_theme_css() {
   color: #1f1d1a;
 }
 
-XfdesktopIconView.view,
-XfdesktopIconView.view label,
-XfdesktopIconView.view cell,
-XfdesktopIconView.view * {
-  color: #1f1d1a;
-  -gtk-icon-shadow: none;
-  text-shadow: none;
-}
 CSS
   else
     cat <<'CSS'
@@ -418,14 +410,6 @@ CSS
   color: #fff5dd;
 }
 
-XfdesktopIconView.view,
-XfdesktopIconView.view label,
-XfdesktopIconView.view cell,
-XfdesktopIconView.view * {
-  color: #f0e9d8;
-  -gtk-icon-shadow: none;
-  text-shadow: none;
-}
 CSS
   fi
 }
@@ -486,6 +470,47 @@ vegpu_customization_seed_xsettings() {
   vegpu_customization_xsettings_xml >"$GLOBAL_XFCE_CONFIG_DIR/xsettings.xml"
   chmod 0644 "$GLOBAL_XFCE_CONFIG_DIR/xsettings.xml"
   vegpu_customization_write_user_file "$config_dir/xsettings.xml" <"$GLOBAL_XFCE_CONFIG_DIR/xsettings.xml"
+}
+
+vegpu_customization_desktop_icon_label_rgba() {
+  if [ "$(vegpu_customization_appearance)" = "light" ]; then
+    printf '%s\n' "0.1215686275 0.1137254902 0.1019607843 1.0"
+  else
+    printf '%s\n' "0.9411764706 0.9137254902 0.8470588235 1.0"
+  fi
+}
+
+vegpu_customization_desktop_icon_label_xml() {
+  local red green blue alpha
+  read -r red green blue alpha <<EOF
+$(vegpu_customization_desktop_icon_label_rgba)
+EOF
+  cat <<EOF
+  <property name="desktop-icons" type="empty">
+    <property name="use-custom-label-text-color" type="bool" value="true"/>
+    <property name="label-text-color" type="array">
+      <value type="double" value="$red"/>
+      <value type="double" value="$green"/>
+      <value type="double" value="$blue"/>
+      <value type="double" value="$alpha"/>
+    </property>
+    <property name="use-custom-label-background-color" type="bool" value="false"/>
+  </property>
+EOF
+}
+
+vegpu_customization_apply_desktop_icon_label_color_now() {
+  local red green blue alpha
+  read -r red green blue alpha <<EOF
+$(vegpu_customization_desktop_icon_label_rgba)
+EOF
+  vegpu_customization_xfconf_set xfce4-desktop /desktop-icons/use-custom-label-text-color bool true
+  vegpu_customization_run_session /usr/bin/timeout 4s xfconf-query -c xfce4-desktop -p /desktop-icons/label-text-color -n -a \
+    -t double -s "$red" \
+    -t double -s "$green" \
+    -t double -s "$blue" \
+    -t double -s "$alpha" >/dev/null 2>&1 || true
+  vegpu_customization_xfconf_set xfce4-desktop /desktop-icons/use-custom-label-background-color bool false
 }
 
 vegpu_customization_wallpaper_monitor_xml() {
@@ -599,6 +624,7 @@ vegpu_customization_seed_wallpaper() {
   {
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
     printf '%s\n' '<channel name="xfce4-desktop" version="1.0">'
+    vegpu_customization_desktop_icon_label_xml
     printf '%s\n' '  <property name="backdrop" type="empty">'
     printf '%s\n' '    <property name="screen0" type="empty">'
     while IFS= read -r monitor; do
@@ -752,6 +778,7 @@ vegpu_customization_apply_global_settings_now() {
   vegpu_customization_xfconf_set xfce4-panel /plugins/plugin-1/button-icon string "$menu_icon"
   vegpu_customization_xfconf_set xfce4-panel /plugins/plugin-1/show-button-title bool true
   vegpu_customization_xfconf_set xfce4-panel /plugins/plugin-1/button-title string Applications
+  vegpu_customization_apply_desktop_icon_label_color_now
   vegpu_customization_apply_wallpaper_now
 }
 
