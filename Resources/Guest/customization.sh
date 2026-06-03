@@ -308,6 +308,14 @@ vegpu_customization_theme_css() {
 }
 
 XfdesktopIconView.view,
+XfdesktopIconView.view.label,
+XfdesktopIconView.view.label:backdrop,
+XfdesktopIconView.view.label:selected,
+XfdesktopIconView.view.label:selected:backdrop,
+XfdesktopIconView.view .label,
+XfdesktopIconView.view .label:backdrop,
+XfdesktopIconView.view .label:selected,
+XfdesktopIconView.view .label:selected:backdrop,
 XfdesktopIconView.view label,
 XfdesktopIconView.view cell,
 XfdesktopIconView.view * {
@@ -419,6 +427,14 @@ CSS
 }
 
 XfdesktopIconView.view,
+XfdesktopIconView.view.label,
+XfdesktopIconView.view.label:backdrop,
+XfdesktopIconView.view.label:selected,
+XfdesktopIconView.view.label:selected:backdrop,
+XfdesktopIconView.view .label,
+XfdesktopIconView.view .label:backdrop,
+XfdesktopIconView.view .label:selected,
+XfdesktopIconView.view .label:selected:backdrop,
 XfdesktopIconView.view label,
 XfdesktopIconView.view cell,
 XfdesktopIconView.view * {
