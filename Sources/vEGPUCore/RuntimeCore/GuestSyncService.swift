@@ -115,7 +115,7 @@ public final class GuestSyncService: @unchecked Sendable {
                 "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
                 "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) -f install -y",
                 "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a",
-                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) install -y \(shellQuote(remote))",
+                aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions),
                 "rm -f \(shellQuote(remote))"
             ].joined(separator: " && ")
             _ = try await ssh.ssh(command)
@@ -152,6 +152,13 @@ public final class GuestSyncService: @unchecked Sendable {
             .filter { $0.lastPathComponent.hasPrefix("vegpu-scaling_") && $0.pathExtension == "deb" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .last
+    }
+
+    private func aptInstallLocalDebCommand(remote: String, aptOptions: String) -> String {
+        let remoteURL = URL(fileURLWithPath: remote)
+        let remoteDir = remoteURL.deletingLastPathComponent().path
+        let relativeDeb = "./\(remoteURL.lastPathComponent)"
+        return "cd \(shellQuote(remoteDir)) && sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) install -y \(shellQuote(relativeDeb))"
     }
 
     private func syncPackages(kind: String, packages: [ManifestPackage]) async throws {

@@ -251,7 +251,8 @@ final class DisplayControlService: @unchecked Sendable {
         if let package = scalingAppPackage(in: root) {
             let remote = "/tmp/vegpu-scaling-app-\(UUID().uuidString)-\(package.lastPathComponent)"
             try await ssh.scpToGuest(localPath: package.path, remotePath: remote)
-            _ = try await ssh.ssh("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600 install -y \(shellQuote(remote)) && rm -f \(shellQuote(remote))", timeout: 60)
+            let aptOptions = "-o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600"
+            _ = try await ssh.ssh("\(aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions)) && rm -f \(shellQuote(remote))", timeout: 60)
             return
         }
         let files: [(String, String)] = [
@@ -284,6 +285,13 @@ final class DisplayControlService: @unchecked Sendable {
             .filter { $0.lastPathComponent.hasPrefix("vegpu-scaling_") && $0.pathExtension == "deb" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .last
+    }
+
+    private func aptInstallLocalDebCommand(remote: String, aptOptions: String) -> String {
+        let remoteURL = URL(fileURLWithPath: remote)
+        let remoteDir = remoteURL.deletingLastPathComponent().path
+        let relativeDeb = "./\(remoteURL.lastPathComponent)"
+        return "cd \(shellQuote(remoteDir)) && sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) install -y \(shellQuote(relativeDeb))"
     }
 
     private func listGPUsDirectly() async throws -> [DisplayControlGPU] {
