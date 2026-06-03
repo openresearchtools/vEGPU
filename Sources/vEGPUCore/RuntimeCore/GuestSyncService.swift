@@ -110,7 +110,15 @@ public final class GuestSyncService: @unchecked Sendable {
         if let package = scalingAppPackage(in: root) {
             let remote = "/tmp/vegpu-sync/\(package.lastPathComponent)"
             try await ssh.scpToGuest(localPath: package.path, remotePath: remote)
-            _ = try await ssh.ssh("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600 install -y \(shellQuote(remote)) && rm -f \(shellQuote(remote))")
+            let aptOptions = "-o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600"
+            let command = [
+                "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) -f install -y",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) install -y \(shellQuote(remote))",
+                "rm -f \(shellQuote(remote))"
+            ].joined(separator: " && ")
+            _ = try await ssh.ssh(command)
             return
         }
         let files: [(String, String)] = [

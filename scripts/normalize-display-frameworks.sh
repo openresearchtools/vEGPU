@@ -24,7 +24,7 @@ framework_bundle_id() {
   case "$name" in
     EGL) printf 'com.vegpu.app.angle.EGL' ;;
     GLESv2) printf 'com.vegpu.app.angle.GLESv2' ;;
-    *) printf 'com.vegpu.app.display.%s' "$(sanitize_bundle_component "$name")" ;;
+    *) printf 'com.utmapp.%s' "$name" ;;
   esac
 }
 
