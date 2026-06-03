@@ -1247,9 +1247,9 @@ run_customization() {
 }
 
 main() {
-  session_env
   case "${1:-}" in
     --apply-primary-display)
+      session_env
       run_customization apply-primary-display
       return 0
       ;;
