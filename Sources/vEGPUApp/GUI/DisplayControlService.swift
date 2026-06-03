@@ -198,6 +198,18 @@ final class DisplayControlService: @unchecked Sendable {
         _ = try await ssh.ssh(command, timeout: 15)
     }
 
+    func rescanSessionDisplays(_ session: DisplaySession) async throws {
+        try await prepareDisplayHelper(force: true)
+        let command = "/usr/local/bin/vegpu-display-control session-rescan \(shellQuote(session.id))"
+        _ = try await ssh.ssh(command, timeout: 30)
+    }
+
+    func restartSession(_ session: DisplaySession) async throws {
+        try await prepareDisplayHelper(force: true)
+        let command = "/usr/local/bin/vegpu-display-control session-restart \(shellQuote(session.id))"
+        _ = try await ssh.ssh(command, timeout: 60)
+    }
+
     func switchToExternalPrimary(gpu: DisplayControlGPU) async throws {
         try await prepareDisplayHelper(force: true)
         let command = "/usr/local/bin/vegpu-display-control external-primary \(shellQuote(gpu.bdf)) \(shellQuote(gpu.index))"
@@ -393,9 +405,31 @@ final class DisplayControlMenuModel: ObservableObject {
         }
     }
 
+    func rescanSessionDisplays(_ session: DisplaySession) {
+        perform(postReconnect: false) {
+            try await self.service.rescanSessionDisplays(session)
+        }
+    }
+
+    func restartSession(_ session: DisplaySession) {
+        guard confirmSessionRestart(session) else { return }
+        perform(postReconnect: false) {
+            try await self.service.restartSession(session)
+        }
+    }
+
     func enterOrderedSession(number: Int) {
         guard number > 0, sessions.indices.contains(number - 1) else { return }
         enterSession(sessions[number - 1])
+    }
+
+    func handleShortcutDigit(_ digit: Int) {
+        guard (1...9).contains(digit) else { return }
+        if digit == 1 {
+            releaseSession()
+        } else {
+            enterOrderedSession(number: digit - 1)
+        }
     }
 
     func reload() {
@@ -509,6 +543,16 @@ final class DisplayControlMenuModel: ObservableObject {
         alert.messageText = title
         alert.informativeText = "This restarts only the Linux graphical session. The VM runtime, SSH, and background compute stay running."
         alert.addButton(withTitle: "Switch")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func confirmSessionRestart(_ session: DisplaySession) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Restart \(session.display) \(session.name)?"
+        alert.informativeText = "This restarts only this GPU display session. Other GPU sessions, SSH, the VM runtime, and background compute stay running. Windows on this GPU display session will close."
+        alert.addButton(withTitle: "Restart")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
     }

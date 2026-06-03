@@ -9,6 +9,7 @@ final class NativeAppModel: ObservableObject {
         case runtime = "Runtime"
         case files = "Files"
         case gui = "GUI"
+        case externalDisplays = "External Displays"
         case models = "Models"
         case chat = "Chat"
 
@@ -92,6 +93,7 @@ final class NativeAppModel: ObservableObject {
     let metricsService: MetricsService
     let vfioService: VfioService
     let displayControlMenu: DisplayControlMenuModel
+    let spiceSession: SpiceSessionController
     let updates: AppUpdateService
     private var pollingStarted = false
     private var backgroundServicesStarted = false
@@ -113,6 +115,8 @@ final class NativeAppModel: ObservableObject {
         self.guiRetina = loadedConfig.guiRetina
         let machine = MachineService(paths: paths, progress: progress)
         self.machineService = machine
+        let files = MachineFiles(machineDir: paths.machine)
+        self.spiceSession = SpiceSessionController(socketURL: files.spiceSocket, paths: paths)
         self.displayControlMenu = DisplayControlMenuModel(paths: paths, machine: machine)
         self.llmsRuntime = LlmsRuntimeService(paths: paths, machine: machine)
         self.nativeBridge = NativeBridgeService(runtime: llmsRuntime)

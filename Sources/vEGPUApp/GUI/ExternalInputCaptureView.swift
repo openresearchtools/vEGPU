@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import SwiftUI
 
 struct ExternalInputCaptureView: NSViewRepresentable {
@@ -36,6 +37,7 @@ final class ExternalInputCaptureNSView: NSView {
     private var eventTapSource: CFRunLoopSource?
     private var cursorHidden = false
     private var previousWindowTitle: String?
+    private static var requestedInputCapturePermission = false
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -43,17 +45,16 @@ final class ExternalInputCaptureNSView: NSView {
     }
 
     private func enableCapture() {
-        window?.makeKeyAndOrderFront(nil)
-        window?.makeFirstResponder(nil)
         updateWindowTitle()
-        if !installEventTap() {
+        if installEventTap() {
+            centerHostCursor()
+            CGAssociateMouseAndMouseCursorPosition(boolean_t(0))
+            if !cursorHidden {
+                NSCursor.hide()
+                cursorHidden = true
+            }
+        } else if window?.isVisible == true {
             installLocalMonitor()
-        }
-        centerHostCursor()
-        CGAssociateMouseAndMouseCursorPosition(boolean_t(0))
-        if !cursorHidden {
-            NSCursor.hide()
-            cursorHidden = true
         }
     }
 
@@ -105,6 +106,7 @@ final class ExternalInputCaptureNSView: NSView {
 
     private func installEventTap() -> Bool {
         guard eventTap == nil else { return true }
+        guard Self.ensureInputCapturePermissionPrompted() else { return false }
         let userInfo = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -141,6 +143,30 @@ final class ExternalInputCaptureNSView: NSView {
         eventTap = tap
         eventTapSource = source
         return true
+    }
+
+    private static func ensureInputCapturePermissionPrompted() -> Bool {
+        let listenGranted = CGPreflightListenEventAccess()
+        let accessibilityGranted = AXIsProcessTrusted()
+        if listenGranted && accessibilityGranted {
+            return true
+        }
+
+        guard !requestedInputCapturePermission else {
+            return CGPreflightListenEventAccess() && AXIsProcessTrusted()
+        }
+        requestedInputCapturePermission = true
+
+        if !listenGranted {
+            _ = CGRequestListenEventAccess()
+        }
+        if !accessibilityGranted {
+            let options = [
+                "AXTrustedCheckOptionPrompt": true
+            ] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+        }
+        return CGPreflightListenEventAccess() && AXIsProcessTrusted()
     }
 
     private func removeEventTap() {

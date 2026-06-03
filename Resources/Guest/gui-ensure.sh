@@ -941,6 +941,40 @@ session_outputs_json() {
   printf '}\n'
 }
 
+session_rescan_displays() {
+  local id="$1" display xauthority
+  session_load_env "$id" || {
+    printf 'No display session state for %s\n' "$id" >&2
+    return 1
+  }
+  session_xorg_running "$id" || {
+    printf 'Display session is not running: %s\n' "$id" >&2
+    return 1
+  }
+  display="$DISPLAY_NAME"
+  xauthority="$XAUTHORITY_FILE"
+  session_wait_for_xorg "$display" "$xauthority"
+  session_run_user "$display" "$xauthority" "$CUSTOMIZATION_SCRIPT" apply-display
+}
+
+session_restart() {
+  local id="$1" bdf idx was_active=0
+  session_load_env "$id" || {
+    printf 'No display session state for %s\n' "$id" >&2
+    return 1
+  }
+  bdf="${GPU_BDF:?missing session GPU_BDF}"
+  idx="${GPU_INDEX:-}"
+  if [ "$(cat "$SESSION_ROOT/active" 2>/dev/null || true)" = "$id" ]; then
+    was_active=1
+  fi
+  session_stop "$id"
+  session_start "$bdf" "$idx"
+  if [ "$was_active" -eq 1 ]; then
+    session_enter "$id"
+  fi
+}
+
 sessions_json() {
   local first=1 active idx name raw_bdf bdf valid id display running outputs
   install -d -m 0755 "$SESSION_ROOT" "$SESSION_STATE_ROOT"
@@ -1040,8 +1074,14 @@ CONF
   session-outputs)
     session_outputs_json "${2:?missing session id}"
     ;;
+  session-rescan)
+    session_rescan_displays "${2:?missing session id}"
+    ;;
+  session-restart)
+    session_restart "${2:?missing session id}"
+    ;;
   *)
-    printf 'usage: %s {install-global-defaults|boot-spice|configure-current|spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>}\n' "$0" >&2
+    printf 'usage: %s {install-global-defaults|boot-spice|configure-current|spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>|session-rescan <id>|session-restart <id>}\n' "$0" >&2
     exit 2
     ;;
 esac
@@ -1230,6 +1270,14 @@ session_outputs() {
   sudo -n /usr/local/sbin/vegpu-display-mode-helper session-outputs "${1:?missing session id}"
 }
 
+session_rescan() {
+  sudo -n /usr/local/sbin/vegpu-display-mode-helper session-rescan "${1:?missing session id}"
+}
+
+session_restart() {
+  sudo -n /usr/local/sbin/vegpu-display-mode-helper session-restart "${1:?missing session id}"
+}
+
 apply_display() {
   [ -x "$CUSTOMIZATION_SCRIPT" ] || {
     printf 'Missing vEGPU GUI customization script: %s\n' "$CUSTOMIZATION_SCRIPT" >&2
@@ -1290,8 +1338,14 @@ case "${1:-status}" in
   session-outputs)
     session_outputs "${2:?missing session id}"
     ;;
+  session-rescan)
+    session_rescan "${2:?missing session id}"
+    ;;
+  session-restart)
+    session_restart "${2:?missing session id}"
+    ;;
   *)
-    printf 'usage: %s {status [--json]|list-gpus --json|external-primary <pci-bdf> [index]|spice|reload|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>|--apply-primary-display}\n' "$0" >&2
+    printf 'usage: %s {status [--json]|list-gpus --json|external-primary <pci-bdf> [index]|spice|reload|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>|session-rescan <id>|session-restart <id>|--apply-primary-display}\n' "$0" >&2
     exit 2
     ;;
 esac

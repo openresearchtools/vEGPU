@@ -60,6 +60,8 @@ struct PersistentTabHost: NSViewControllerRepresentable {
                     controller = NSHostingController(rootView: AnyView(FilesTabView(model: model)))
                 case .gui:
                     controller = NSHostingController(rootView: AnyView(GUIDisplayTabView(model: model)))
+                case .externalDisplays:
+                    controller = NSHostingController(rootView: AnyView(ExternalDisplaysView(model: model)))
                 case .models:
                     controller = NSHostingController(rootView: AnyView(WebUITabBrowser(tabID: tab.id, title: "Models", url: URL(string: "http://127.0.0.1:9292/core")!)))
                 case .chat:

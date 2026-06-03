@@ -297,6 +297,7 @@ private extension NativeAppModel.Section {
         case .runtime: return "R"
         case .files: return "F"
         case .gui: return "G"
+        case .externalDisplays: return "ED"
         case .models: return "M"
         case .chat: return "C"
         }
@@ -307,6 +308,7 @@ private extension NativeAppModel.Section {
         case .runtime: return "bolt.horizontal.circle"
         case .files: return "folder"
         case .gui: return "display"
+        case .externalDisplays: return "display.2"
         case .models: return "square.stack.3d.up"
         case .chat: return "bubble.left.and.bubble.right"
         }
@@ -315,7 +317,7 @@ private extension NativeAppModel.Section {
     var isWebTab: Bool {
         switch self {
         case .models, .chat: return true
-        case .runtime, .files, .gui: return false
+        case .runtime, .files, .gui, .externalDisplays: return false
         }
     }
 }

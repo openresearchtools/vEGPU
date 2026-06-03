@@ -79,6 +79,87 @@ window.addEventListener("resize", resize);
 prefersReducedMotion.addEventListener("change", start);
 start();
 
+const releasePanel = document.querySelector("[data-release-panel]");
+
+if (releasePanel) {
+  const releaseStatus = releasePanel.querySelector("[data-release-status]");
+  const channels = [
+    {
+      key: "stable",
+      label: "latest stable release",
+      manifest: "releases/releases-manifest.json",
+    },
+    {
+      key: "prerelease",
+      label: "latest pre-release",
+      manifest: "releases/pre-releases-manifest.json",
+    },
+  ];
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "";
+    const units = ["B", "KB", "MB", "GB"];
+    let size = bytes;
+    let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) {
+      size /= 1024;
+      unit += 1;
+    }
+    return `${size >= 10 || unit === 0 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`;
+  }
+
+  function versionLabel(entry) {
+    const version = String(entry.version || entry.tag || "").trim();
+    if (!version) return "Download";
+    return version.startsWith("v") ? version : `v${version}`;
+  }
+
+  function updateReleaseCard(channel, entry) {
+    const link = releasePanel.querySelector(`[data-release-link="${channel.key}"]`);
+    const version = releasePanel.querySelector(`[data-release-version="${channel.key}"]`);
+    if (!link || !version) return false;
+    if (!entry) return false;
+
+    const href = String(entry.packageURL || "").trim();
+    if (!href) return false;
+
+    const size = formatBytes(Number(entry.packageSize || 0));
+    const packageName = String(entry.packageName || "").trim();
+    const build = String(entry.build || "").trim();
+    const details = [packageName, size, build ? `build ${build}` : ""].filter(Boolean).join(", ");
+
+    link.href = href;
+    link.hidden = false;
+    version.textContent = versionLabel(entry);
+    link.setAttribute("aria-label", `${channel.label} ${versionLabel(entry)}${details ? `, ${details}` : ""}`);
+    return true;
+  }
+
+  async function loadReleaseManifest(channel) {
+    const response = await fetch(channel.manifest, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Unable to load ${channel.manifest}`);
+    }
+    return response.json();
+  }
+
+  Promise.allSettled(channels.map(async (channel) => {
+    const manifest = await loadReleaseManifest(channel);
+    return updateReleaseCard(channel, manifest.latest);
+  })).then((results) => {
+    const availableCount = results.filter((result) => result.status === "fulfilled" && result.value).length;
+    if (!releaseStatus) return;
+
+    if (availableCount === 0) {
+      releaseStatus.textContent = "Currently there are no pre-built releases.";
+      releaseStatus.hidden = false;
+      return;
+    }
+
+    releaseStatus.hidden = true;
+  });
+}
+
 const carousel = document.querySelector("[data-carousel]");
 if (carousel) {
   const slides = Array.from(carousel.querySelectorAll("[data-slide]"));

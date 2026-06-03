@@ -15,32 +15,16 @@ struct DisplayControlMenuItems: View {
             .disabled(model.busy)
 
             Divider()
-            if model.sessions.isEmpty {
-                Button(model.busy ? "Loading sessions..." : "No external GPUs found") {}
-                    .disabled(true)
-            } else {
-                ForEach(Array(model.sessions.enumerated()), id: \.element.id) { offset, session in
-                    Button("\(session.running ? "Enter" : "Start") \(session.title) (Option-Cmd-\(offset + 2))") {
-                        perform {
-                            model.enterSession(session)
-                        }
-                    }
-                    .disabled(model.busy)
-                    if session.running {
-                        Button("Stop \(session.display) \(session.name)") {
-                            perform {
-                                model.stopSession(session)
-                            }
-                        }
-                        .disabled(model.busy)
-                    }
-                }
-            }
-
-            Divider()
-            Button("Refresh Sessions") {
+            Button("Refresh GUI Status") {
                 perform {
                     model.refresh()
+                }
+            }
+            .disabled(model.busy)
+
+            Button("Reload vEGPU GUI Display") {
+                perform {
+                    model.reload()
                 }
             }
             .disabled(model.busy)
@@ -58,9 +42,9 @@ struct DisplayControlMenuItems: View {
                 }
             }
 
-            Button("Fallback: Switch to SPICE") {
+            Button("Return to vEGPU GUI") {
                 perform {
-                    model.switchToSpice()
+                    model.releaseSession()
                 }
             }
             .disabled(model.busy)

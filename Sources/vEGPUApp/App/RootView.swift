@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import vEGPUCore
 
 struct RootView: View {
     @ObservedObject var model: NativeAppModel
@@ -67,10 +68,22 @@ struct RootView: View {
         .onChange(of: selectedTab) { _, tab in
             model.setActiveTab(tab)
         }
+        .onAppear {
+            syncExternalCapture(mode: model.runtimeLaunchMode, activeSessionID: displayControl.activeSessionID)
+        }
         .onChange(of: model.runtimeLaunchMode) { _, mode in
-            if mode != .gui, selectedTab == .section(.gui) {
+            if mode != .gui, selectedTab.isGUIRuntimeSection {
                 selectedTab = .section(.runtime)
             }
+            syncExternalCapture(mode: mode, activeSessionID: displayControl.activeSessionID)
+        }
+        .onChange(of: displayControl.activeSessionID) { _, activeSessionID in
+            syncExternalCapture(mode: model.runtimeLaunchMode, activeSessionID: activeSessionID)
+        }
+        .overlay {
+            ExternalInputCaptureView(session: model.spiceSession)
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
         }
     }
 
@@ -79,18 +92,43 @@ struct RootView: View {
         case .headless:
             return [.runtime, .files, .models, .chat]
         case .gui:
-            return [.runtime, .files, .gui, .models, .chat]
+            return [.runtime, .files, .gui, .externalDisplays, .models, .chat]
         }
     }
 
     private var windowTitle: String {
-        guard selectedTab == .section(.gui), !displayControl.sessions.isEmpty else { return "vEGPU" }
+        guard selectedTab.isGUIRuntimeSection, !displayControl.sessions.isEmpty else { return "vEGPU" }
         var parts = ["Option-Cmd-1 Release"]
         parts += displayControl.sessions.enumerated().map { index, _ in
             "Option-Cmd-\(index + 2) External \(index + 1)"
         }
         let prefix = displayControl.activeSessionID == nil ? "vEGPU" : "vEGPU - Captured"
         return "\(prefix) - \(parts.joined(separator: " · "))"
+    }
+
+    private func syncExternalCapture(mode: RuntimeLaunchMode, activeSessionID: String?) {
+        model.spiceSession.setDynamicResolutionEnabled(true)
+        guard mode == .gui, activeSessionID != nil else {
+            model.spiceSession.setExternalInputCapture(false)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            if model.runtimeLaunchMode == .gui, displayControl.activeSessionID != nil {
+                model.spiceSession.start()
+                model.spiceSession.setExternalInputCapture(true)
+            }
+        }
+    }
+}
+
+private extension NativeAppModel.Tab {
+    var isGUIRuntimeSection: Bool {
+        switch self {
+        case .section(.gui), .section(.externalDisplays):
+            return true
+        default:
+            return false
+        }
     }
 }
 

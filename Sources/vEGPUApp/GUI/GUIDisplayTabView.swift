@@ -4,13 +4,12 @@ import vEGPUCore
 
 struct GUIDisplayTabView: View {
     @ObservedObject var model: NativeAppModel
-    @StateObject private var session: SpiceSessionController
+    @ObservedObject private var session: SpiceSessionController
     @ObservedObject private var displayControl: DisplayControlMenuModel
 
     init(model: NativeAppModel) {
         self.model = model
-        let files = MachineFiles(machineDir: model.paths.machine)
-        self._session = StateObject(wrappedValue: SpiceSessionController(socketURL: files.spiceSocket, paths: model.paths))
+        self.session = model.spiceSession
         self.displayControl = model.displayControlMenu
     }
 
@@ -20,13 +19,6 @@ struct GUIDisplayTabView: View {
         .onAppear {
             session.start()
             displayControl.refresh()
-            syncExternalCapture(displayControl.activeSessionID)
-        }
-        .onDisappear {
-            session.disconnect()
-        }
-        .onReceive(displayControl.$activeSessionID) { activeSessionID in
-            syncExternalCapture(activeSessionID)
         }
         .onReceive(NotificationCenter.default.publisher(for: .vegpuRuntimeWillStop)) { _ in
             session.disconnect()
@@ -37,9 +29,7 @@ struct GUIDisplayTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .vegpuExternalSessionShortcut)) { notification in
             guard let digit = notification.object as? Int else { return }
             if digit == 1 {
-                releaseExternalInput()
-            } else {
-                displayControl.enterOrderedSession(number: digit - 1)
+                session.setExternalInputCapture(false)
             }
         }
     }
@@ -51,116 +41,19 @@ struct GUIDisplayTabView: View {
                 SpiceDisplayView(session: session, retina: model.guiRetina)
                     .background(Color.black)
                     .ignoresSafeArea()
-                ExternalInputCaptureView(session: session)
-                    .frame(width: 0, height: 0)
-                    .allowsHitTesting(false)
             }
-            .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
         } else {
             InternalDisplayUnavailableView(
                 status: session.status,
                 message: displayControl.message,
                 busy: displayControl.busy,
                 reconnect: { session.reconnect() },
-                switchToSpice: { displayControl.releaseSession() },
-                reload: { displayControl.refresh() }
+                returnToGUI: { displayControl.releaseSession() },
+                reload: { displayControl.reload() }
             )
-            .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
         }
     }
 
-    private func syncExternalCapture(_ activeSessionID: String?) {
-        session.setDynamicResolutionEnabled(true)
-        if activeSessionID == nil {
-            session.setExternalInputCapture(false)
-        } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                if displayControl.activeSessionID != nil {
-                    session.setExternalInputCapture(true)
-                }
-            }
-        }
-    }
-
-    private func releaseExternalInput() {
-        session.setExternalInputCapture(false)
-        displayControl.releaseSession()
-    }
-}
-
-private struct ExternalSessionShortcutMonitor: NSViewRepresentable {
-    @ObservedObject var model: DisplayControlMenuModel
-    @ObservedObject var session: SpiceSessionController
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(model: model, session: session)
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        context.coordinator.install()
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.model = model
-        context.coordinator.session = session
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.uninstall()
-    }
-
-    @MainActor
-    final class Coordinator {
-        var model: DisplayControlMenuModel
-        var session: SpiceSessionController
-        private var localMonitor: Any?
-        private var globalMonitor: Any?
-
-        init(model: DisplayControlMenuModel, session: SpiceSessionController) {
-            self.model = model
-            self.session = session
-        }
-
-        func install() {
-            guard localMonitor == nil, globalMonitor == nil else { return }
-            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                self?.handle(event, consume: true) ?? event
-            }
-            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                _ = self?.handle(event, consume: false)
-            }
-        }
-
-        func uninstall() {
-            if let localMonitor {
-                NSEvent.removeMonitor(localMonitor)
-            }
-            if let globalMonitor {
-                NSEvent.removeMonitor(globalMonitor)
-            }
-            localMonitor = nil
-            globalMonitor = nil
-        }
-
-        private func handle(_ event: NSEvent, consume: Bool) -> NSEvent? {
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard flags == [.command, .option],
-                  let text = event.charactersIgnoringModifiers,
-                  let digit = Int(text),
-                  (1...9).contains(digit) else {
-                return event
-            }
-            if digit == 1 {
-                session.setExternalInputCapture(false)
-                model.releaseSession()
-            } else {
-                model.enterOrderedSession(number: digit - 1)
-            }
-            return consume ? nil : event
-        }
-    }
 }
 
 private struct InternalDisplayUnavailableView: View {
@@ -168,7 +61,7 @@ private struct InternalDisplayUnavailableView: View {
     let message: String?
     let busy: Bool
     let reconnect: () -> Void
-    let switchToSpice: () -> Void
+    let returnToGUI: () -> Void
     let reload: () -> Void
 
     var body: some View {
@@ -194,7 +87,7 @@ private struct InternalDisplayUnavailableView: View {
                     Label("Reload", systemImage: "arrow.clockwise")
                 }
                 .disabled(busy)
-                Button(action: switchToSpice) {
+                Button(action: returnToGUI) {
                     Label("Switch to vEGPU GUI", systemImage: "display")
                 }
                 .disabled(busy)

@@ -547,6 +547,11 @@ connected_outputs() {
     awk '$2 == "connected" { print $1 }' || true
 }
 
+current_primary_output() {
+  session_run /usr/bin/timeout 4s xrandr --query 2>/dev/null |
+    awk '$2 == "connected" && $3 == "primary" { print $1; exit }' || true
+}
+
 wallpaper_targets() {
   {
     printf '%s\n' monitordefault
@@ -638,15 +643,32 @@ best_mode_for_output() {
     }'
 }
 
-apply_display() {
-  local output mode
-  while read -r output mode; do
-    [ -n "${output:-}" ] && [ -n "${mode:-}" ] || continue
-    session_run xrandr --output "$output" --mode "$mode" --primary >/dev/null 2>&1 || true
-  done < <(best_mode_for_output)
+reapply_scaling() {
   if command -v vegpu-scaling >/dev/null 2>&1; then
     session_run vegpu-scaling --display "${DISPLAY:-:0}" reapply --quiet >/dev/null 2>&1 || true
   fi
+}
+
+apply_output_mode() {
+  local output="$1" mode="$2" primary="$3"
+  [ -n "$output" ] && [ -n "$mode" ] || return 0
+  if [ "$output" = "$primary" ]; then
+    session_run xrandr --output "$output" --mode "$mode" --primary >/dev/null 2>&1 || true
+  else
+    session_run xrandr --output "$output" --mode "$mode" >/dev/null 2>&1 || true
+  fi
+}
+
+apply_display() {
+  local output mode primary
+  primary="$(current_primary_output)"
+  if [ -z "$primary" ]; then
+    primary="$(connected_outputs | head -n 1)"
+  fi
+  while read -r output mode; do
+    apply_output_mode "${output:-}" "${mode:-}" "$primary"
+  done < <(best_mode_for_output)
+  reapply_scaling
 }
 
 disable_idle() {

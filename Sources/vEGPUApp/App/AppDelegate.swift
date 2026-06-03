@@ -5,6 +5,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let model = NativeAppModel()
     private var tray: AppTrayController?
+    private var displayHotkeys: DisplayHotkeyCoordinator?
     private weak var mainWindow: NSWindow?
     private var mainWindowController: NSWindowController?
     private var legalNoticesWindowController: LegalNoticesWindowController?
@@ -36,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let tray = AppTrayController(appDelegate: self)
         tray.configure(model: model)
         self.tray = tray
+        let displayHotkeys = DisplayHotkeyCoordinator(model: model.displayControlMenu)
+        displayHotkeys.start()
+        self.displayHotkeys = displayHotkeys
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(workspaceDidWake),
@@ -70,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if explicitQuitRequested {
             model.shutdownBackgroundServices()
+            displayHotkeys?.invalidate()
             tray?.invalidate()
             return .terminateNow
         }

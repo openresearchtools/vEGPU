@@ -1137,7 +1137,7 @@ jobs:
           git fetch origin main
           git checkout main
           git pull --ff-only origin main
-          mkdir -p releases
+          mkdir -p releases website/releases
           if [ ! -f "$MANIFEST" ]; then
             printf '{"schemaVersion":1,"channel":"%s","updatedAt":"","latest":null,"items":[]}\n' "$CHANNEL" > "$MANIFEST"
           fi
@@ -1175,12 +1175,14 @@ jobs:
           }
           manifest_path.write_text(json.dumps(data, indent=2) + "\n")
           PY
+          WEBSITE_MANIFEST="website/${MANIFEST}"
+          cp "$MANIFEST" "$WEBSITE_MANIFEST"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- "$MANIFEST"; then
+          if git diff --quiet -- "$MANIFEST" "$WEBSITE_MANIFEST"; then
             echo "Release manifest already current."
           else
-            git add "$MANIFEST"
+            git add "$MANIFEST" "$WEBSITE_MANIFEST"
             git commit -m "Update ${CHANNEL} release manifest for ${TAG}"
             git push origin main
           fi
