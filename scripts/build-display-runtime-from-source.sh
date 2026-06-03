@@ -176,8 +176,8 @@ archive_git_snapshot() {
 
 patch_angle_for_xcode26() {
   local fence="$BUILD_DIR/WebKit.git/Source/ThirdParty/ANGLE/src/libANGLE/Fence.h"
-  local metal_state_cache="$BUILD_DIR/WebKit.git/Source/ThirdParty/ANGLE/src/libANGLE/renderer/metal/mtl_state_cache.mm"
-  python3 - "$fence" "$metal_state_cache" <<'PY'
+  local angle_src="$BUILD_DIR/WebKit.git/Source/ThirdParty/ANGLE/src"
+  python3 - "$fence" "$angle_src" <<'PY'
 import pathlib
 import sys
 
@@ -189,15 +189,21 @@ if fence.exists():
     if old in text:
         fence.write_text(text.replace(old, new, 1))
 
-metal_state_cache = pathlib.Path(sys.argv[2])
-if metal_state_cache.exists():
-    text = metal_state_cache.read_text()
-    patched = (
-        text.replace("memset(this,", "memset((void *)this,")
-            .replace("memcpy(this,", "memcpy((void *)this,")
-    )
-    if patched != text:
-        metal_state_cache.write_text(patched)
+angle_src = pathlib.Path(sys.argv[2])
+if angle_src.exists():
+    for path in angle_src.rglob("*"):
+        if path.suffix not in {".cc", ".cpp", ".h", ".hpp", ".mm"}:
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        patched = (
+            text.replace("memset(this,", "memset((void *)this,")
+                .replace("memcpy(this,", "memcpy((void *)this,")
+        )
+        if patched != text:
+            path.write_text(patched)
 PY
 }
 
@@ -280,9 +286,9 @@ OpenResearchTools build-time source adjustment:
 - Source/ThirdParty/ANGLE/src/libANGLE/Fence.h removes a redundant virtual
   specifier from FenceNV's destructor so the pinned UTM/WebKit ANGLE source
   builds with Xcode 26's -Werror,-Wunnecessary-virtual-specifier diagnostics.
-- Source/ThirdParty/ANGLE/src/libANGLE/renderer/metal/mtl_state_cache.mm casts
-  `this` to `void *` at legacy memset/memcpy call sites so the same pinned
-  source builds with Xcode 26's -Werror,-Wnontrivial-memcall diagnostics.
+- Source/ThirdParty/ANGLE/src casts `this` to `void *` at legacy memset/memcpy
+  call sites so the same pinned source builds with Xcode 26's
+  -Werror,-Wnontrivial-memcall diagnostics.
 
 The exact patch is included next to this file as:
 OPENRESEARCHTOOLS-LOCAL-MODIFICATIONS.patch
