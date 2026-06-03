@@ -336,6 +336,8 @@ build_angle() {
       NORMAL_UMBRELLA_FRAMEWORKS_DIR="" \
       CODE_SIGNING_ALLOWED=NO \
       COMPILER_INDEX_STORE_ENABLE=NO \
+      OTHER_CFLAGS='$(inherited) -Wno-nontrivial-memcall -Wno-unnecessary-virtual-specifier' \
+      OTHER_CPLUSPLUSFLAGS='$(inherited) -Wno-nontrivial-memcall -Wno-unnecessary-virtual-specifier' \
       IPHONEOS_DEPLOYMENT_TARGET="14.0" \
       MACOSX_DEPLOYMENT_TARGET="11.0" \
       XROS_DEPLOYMENT_TARGET="1.0"
