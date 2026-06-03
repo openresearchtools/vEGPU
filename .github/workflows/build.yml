@@ -970,18 +970,22 @@ jobs:
           for line in root.findall("./choices-outline/line"):
               if line.attrib.get("choice") == "com.vegpu.install.driver":
                   raise SystemExit("DriverKit choice must not appear separately in the installer outline")
-          pkg_refs = {ref.attrib.get("id"): ref for ref in root.findall("pkg-ref")}
-          expected_conclusions = {
-              "com.vegpu.pkg.app": "none",
-              "com.vegpu.pkg.machine": "RecommendRestart",
-              "com.vegpu.pkg.driver": "RecommendRestart",
-          }
-          for pkg_id, conclusion in expected_conclusions.items():
+          pkg_refs = {}
+          for ref in root.findall("pkg-ref"):
+              pkg_id = ref.attrib.get("id")
+              if pkg_id and (ref.text or ref.attrib.get("version") or ref.attrib.get("onConclusion")):
+                  pkg_refs[pkg_id] = ref
+          app = pkg_refs.get("com.vegpu.pkg.app")
+          if app is None:
+              raise SystemExit("missing com.vegpu.pkg.app")
+          if app.attrib.get("onConclusion", "none") not in ("none", "None"):
+              raise SystemExit("com.vegpu.pkg.app must not request restart")
+          for pkg_id in ("com.vegpu.pkg.machine", "com.vegpu.pkg.driver"):
               ref = pkg_refs.get(pkg_id)
               if ref is None:
                   raise SystemExit(f"missing {pkg_id}")
-              if ref.attrib.get("onConclusion") != conclusion:
-                  raise SystemExit(f"{pkg_id} must use onConclusion={conclusion}")
+              if ref.attrib.get("onConclusion") != "RecommendRestart":
+                  raise SystemExit(f"{pkg_id} must use onConclusion=RecommendRestart")
           PY
           grep -F 'System Integrity Protection must be disabled' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources/WELCOME.html"
           grep -F 'Finished.' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources/CONCLUSION.txt"
