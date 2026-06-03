@@ -902,6 +902,18 @@ session_outputs_json() {
   printf '}\n'
 }
 
+session_reload() {
+  local id="$1" display xauthority
+  session_load_env "$id"
+  session_xorg_running "$id" || session_start "$GPU_BDF" "$GPU_INDEX"
+  session_load_env "$id"
+  display="$DISPLAY_NAME"
+  xauthority="$XAUTHORITY_FILE"
+  session_configure_outputs "$display" "$xauthority"
+  DISPLAY="$display" XAUTHORITY="$xauthority" run_customization apply-primary-display || true
+  session_outputs_json "$id"
+}
+
 sessions_json() {
   local first=1 active idx name raw_bdf bdf valid id display running outputs
   install -d -m 0755 "$SESSION_ROOT" "$SESSION_STATE_ROOT"
@@ -1013,11 +1025,14 @@ CONF
   session-stop)
     session_stop "${2:?missing session id}"
     ;;
+  session-reload)
+    session_reload "${2:?missing session id}"
+    ;;
   session-outputs)
     session_outputs_json "${2:?missing session id}"
     ;;
   *)
-    printf 'usage: %s {install-global-defaults|spice|boot-spice|reconcile-spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>}\n' "$0" >&2
+    printf 'usage: %s {install-global-defaults|spice|boot-spice|reconcile-spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-reload <id>|session-outputs <id>}\n' "$0" >&2
     exit 2
     ;;
 esac
@@ -1215,6 +1230,10 @@ session_stop() {
   sudo -n /usr/local/sbin/vegpu-display-mode-helper session-stop "${1:?missing session id}"
 }
 
+session_reload() {
+  sudo -n /usr/local/sbin/vegpu-display-mode-helper session-reload "${1:?missing session id}"
+}
+
 session_outputs() {
   sudo -n /usr/local/sbin/vegpu-display-mode-helper session-outputs "${1:?missing session id}"
 }
@@ -1286,6 +1305,10 @@ main() {
       ;;
     session-stop)
       session_stop "${2:?missing session id}"
+      return 0
+      ;;
+    session-reload)
+      session_reload "${2:?missing session id}"
       return 0
       ;;
     session-outputs)

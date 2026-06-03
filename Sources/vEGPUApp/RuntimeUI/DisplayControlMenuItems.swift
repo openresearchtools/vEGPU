@@ -27,6 +27,12 @@ struct DisplayControlMenuItems: View {
                     }
                     .disabled(model.busy)
                     if session.running {
+                        Button("Reload \(session.display) \(session.name)") {
+                            perform {
+                                model.reloadSession(session)
+                            }
+                        }
+                        .disabled(model.busy)
                         Button("Stop \(session.display) \(session.name)") {
                             perform {
                                 model.stopSession(session)
@@ -38,7 +44,7 @@ struct DisplayControlMenuItems: View {
             }
 
             Divider()
-            Button("Refresh Sessions") {
+            Button("Refresh Session List") {
                 perform {
                     model.refresh()
                 }
@@ -58,7 +64,7 @@ struct DisplayControlMenuItems: View {
                 }
             }
 
-            Button("Fallback: Switch to SPICE") {
+            Button("Return to Embedded GUI") {
                 perform {
                     model.switchToSpice()
                 }

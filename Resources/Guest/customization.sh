@@ -414,6 +414,25 @@ CSS
   fi
 }
 
+vegpu_customization_strip_desktop_icon_shadow_theme() {
+  local root="$1" file
+  for file in "$root"/gtk-3.0/gtk.css "$root"/gtk-3.0/gtk-dark.css; do
+    [ -f "$file" ] || continue
+    perl -pi -e '
+      if (/XfdesktopIconView/) {
+        s/[[:space:]]*text-shadow:[^;{}]+;//g;
+        s/[[:space:]]*-gtk-icon-shadow:[^;{}]+;//g;
+      }
+    ' "$file"
+  done
+  file="$root/gtk-2.0/gtkrc"
+  [ -f "$file" ] || return 0
+  perl -pi -e '
+    s/(XfdesktopIconView::(?:selected-)?shadow-[xy]-offset[[:space:]]*=[[:space:]]*)-?[0-9]+/${1}0/g;
+    s/(XfdesktopIconView::shadow-blur-radius[[:space:]]*=[[:space:]]*)-?[0-9]+/${1}0/g;
+  ' "$file"
+}
+
 vegpu_customization_install_theme_variant() {
   local name="$1" base="$2" appearance="$3" tmp dest css
   dest="/usr/share/themes/$name"
@@ -433,6 +452,7 @@ EOF
   install -d "$tmp/gtk-3.0"
   css="$tmp/gtk-3.0/gtk.css"
   [ -f "$css" ] || : >"$css"
+  vegpu_customization_strip_desktop_icon_shadow_theme "$tmp"
   vegpu_customization_theme_css "$appearance" >>"$css"
   rm -rf "$dest"
   mv "$tmp" "$dest"

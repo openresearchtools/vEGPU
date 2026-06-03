@@ -198,6 +198,12 @@ final class DisplayControlService: @unchecked Sendable {
         _ = try await ssh.ssh(command, timeout: 15)
     }
 
+    func reloadSession(_ session: DisplaySession) async throws {
+        try await prepareDisplayHelper()
+        let command = "/usr/local/bin/vegpu-display-control session-reload \(shellQuote(session.id))"
+        _ = try await ssh.ssh(command, timeout: 30)
+    }
+
     func switchToExternalPrimary(gpu: DisplayControlGPU) async throws {
         try await prepareDisplayHelper(force: true)
         let command = "/usr/local/bin/vegpu-display-control external-primary \(shellQuote(gpu.bdf)) \(shellQuote(gpu.index))"
@@ -425,6 +431,12 @@ final class DisplayControlMenuModel: ObservableObject {
     func refreshOutputs(_ session: DisplaySession) {
         perform(postReconnect: false) {
             try await self.service.refreshOutputs(session)
+        }
+    }
+
+    func reloadSession(_ session: DisplaySession) {
+        perform(postReconnect: false) {
+            try await self.service.reloadSession(session)
         }
     }
 
