@@ -693,8 +693,6 @@ EOS
   install -d /etc/X11/xorg.conf.d
   cat >/etc/X11/xorg.conf.d/90-vegpu-no-idle.conf <<'EOS'
 Section "ServerFlags"
-    Option "AutoAddGPU" "false"
-    Option "AutoBindGPU" "false"
     Option "BlankTime" "0"
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"

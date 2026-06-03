@@ -36,7 +36,7 @@ for framework in "${ANGLE_REQUIRED_FRAMEWORKS[@]}"; do
 done
 if [ "${#missing_angle_frameworks[@]}" -gt 0 ]; then
   printf 'Missing app-side display framework(s): %s\n' "${missing_angle_frameworks[*]}" >&2
-  printf 'Build or download the vEGPU-display-frameworks-macos-arm64 artifact and set VEGPU_DISPLAY_FRAMEWORKS_OUT.\n' >&2
+  printf 'Build or download the vEGPU-display-frameworks-macos26-arm64 artifact and set VEGPU_DISPLAY_FRAMEWORKS_OUT.\n' >&2
   exit 1
 fi
 for notice in SOURCE.md ANGLE.plist LICENSE; do

@@ -28,6 +28,27 @@ framework_bundle_id() {
   esac
 }
 
+normalize_install_name() {
+  local framework="$1"
+  local name="$2"
+  local binary=""
+
+  case "$name" in
+    EGL|GLESv2) ;;
+    *) return 0 ;;
+  esac
+
+  if [ -f "$framework/Versions/A/$name" ]; then
+    binary="$framework/Versions/A/$name"
+  elif [ -f "$framework/$name" ]; then
+    binary="$framework/$name"
+  fi
+
+  if [ -n "$binary" ] && command -v install_name_tool >/dev/null 2>&1; then
+    install_name_tool -id "@rpath/$name.framework/Versions/A/$name" "$binary"
+  fi
+}
+
 normalize_framework() {
   local framework="$1"
   local name
@@ -50,6 +71,8 @@ normalize_framework() {
       fi
     done
   fi
+
+  normalize_install_name "$framework" "$name"
 
   local infos=()
   while IFS= read -r info; do

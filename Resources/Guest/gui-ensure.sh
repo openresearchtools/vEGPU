@@ -293,8 +293,6 @@ write_no_idle_flags() {
   install -d /etc/X11/xorg.conf.d
   cat >"$NO_IDLE_CONF" <<'CONF'
 Section "ServerFlags"
-    Option "AutoAddGPU" "false"
-    Option "AutoBindGPU" "false"
     Option "BlankTime" "0"
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"
@@ -312,6 +310,11 @@ write_spice_only_xorg() {
   local virtio_busid="$1"
   install -d /etc/X11/xorg.conf.d "$MODE_DIR"
   cat >"$XORG_CONF" <<CONF
+Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
+EndSection
+
 Section "Device"
     Identifier "vEGPU Virtio Display"
     Driver "modesetting"
@@ -336,6 +339,11 @@ write_external_primary_xorg() {
   local nvidia_busid="$1"
   install -d /etc/X11/xorg.conf.d "$MODE_DIR"
   cat >"$XORG_CONF" <<CONF
+Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
+EndSection
+
 Section "Device"
     Identifier "vEGPU External NVIDIA"
     Driver "nvidia"
@@ -1351,6 +1359,11 @@ CONF
 write_spice_only_xorg_display() {
   local busid="$1"
   write_root_file_if_changed /etc/X11/xorg.conf.d/20-vegpu-virtio-display.conf <<EOS
+Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
+EndSection
+
 Section "Device"
     Identifier "vEGPU Virtio Display"
     Driver "modesetting"
@@ -1374,6 +1387,11 @@ EOS
 write_external_primary_xorg_display() {
   local nvidia_busid="$1"
   write_root_file_if_changed /etc/X11/xorg.conf.d/20-vegpu-virtio-display.conf <<EOS
+Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
+EndSection
+
 Section "Device"
     Identifier "vEGPU External NVIDIA"
     Driver "nvidia"

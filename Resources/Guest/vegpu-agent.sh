@@ -689,9 +689,98 @@ install_manifest_packages() {
   fi
 }
 
+disable_idle() {
+  local human_user=vegpu
+  local home=/home/vegpu
+
+  log "installing no-sleep/no-idle guest policy"
+
+  install -d /etc/systemd/logind.conf.d /etc/systemd/sleep.conf.d /etc/X11/xorg.conf.d /usr/local/libexec/vegpu
+
+  if command -v systemctl >/dev/null 2>&1; then
+    timeout 15s systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null 2>&1 || true
+    timeout 15s systemctl disable --now light-locker xfce4-screensaver xscreensaver >/dev/null 2>&1 || true
+  fi
+
+  cat >/etc/systemd/logind.conf.d/90-vegpu-no-sleep.conf <<'EOS'
+[Login]
+IdleAction=ignore
+IdleActionSec=infinity
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
+EOS
+
+  cat >/etc/systemd/sleep.conf.d/90-vegpu-no-sleep.conf <<'EOS'
+[Sleep]
+AllowSuspend=no
+AllowHibernation=no
+AllowSuspendThenHibernate=no
+AllowHybridSleep=no
+EOS
+
+  cat >/etc/X11/xorg.conf.d/90-vegpu-no-idle.conf <<'EOS'
+Section "ServerFlags"
+    Option "BlankTime" "0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
+EndSection
+
+Section "Monitor"
+    Identifier "Virtual-1"
+    Option "DPMS" "false"
+EndSection
+EOS
+
+  cat >/usr/local/libexec/vegpu/no-idle-session.sh <<'EOS'
+#!/bin/sh
+set +e
+
+while :; do
+  xset s off -dpms s noblank >/dev/null 2>&1 || true
+  xset dpms force on >/dev/null 2>&1 || true
+  xfce4-screensaver-command --deactivate >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/presentation-mode -n -t bool -s true >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-ac -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-battery -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-enabled -n -t bool -s false >/dev/null 2>&1 || true
+  sleep 60
+done
+EOS
+  chmod 0755 /usr/local/libexec/vegpu/no-idle-session.sh
+
+  if [ -d "$home" ]; then
+    install -d -o "$human_user" -g "$human_user" "$home/.config/autostart"
+    cat >"$home/.config/autostart/vegpu-no-idle.desktop" <<'EOS'
+[Desktop Entry]
+Type=Application
+Name=vEGPU No Idle Lock
+Exec=/usr/local/libexec/vegpu/no-idle-session.sh
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+EOS
+    chown "$human_user:$human_user" "$home/.config/autostart/vegpu-no-idle.desktop" || true
+  fi
+
+  if [ -x /usr/local/libexec/vegpu/customization.sh ]; then
+    /usr/local/libexec/vegpu/customization.sh disable-idle >/dev/null 2>&1 || true
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    timeout 15s systemctl daemon-reload >/dev/null 2>&1 || true
+    timeout 15s systemctl restart systemd-logind >/dev/null 2>&1 || true
+  fi
+}
+
 update_tools() {
+  disable_idle
   [ -f "$MANIFEST_FILE" ] || { log "manifest has not been pushed by vEGPU yet"; return 0; }
   install_manifest_packages '.guestPackages'
+  disable_idle
   touch "$STATE_DIR/tools-updated"
 }
 
@@ -1014,6 +1103,9 @@ case "${1:-status}" in
     ;;
   update-tools)
     update_tools
+    ;;
+  disable-idle)
+    disable_idle
     ;;
   install-driver|reinstall-driver)
     install_driver

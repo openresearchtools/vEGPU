@@ -422,7 +422,7 @@ vEGPU app-side display runtime source bundle
 
 This archive accompanies the app-side display frameworks copied into:
 
-  the vEGPU-display-frameworks-macos-arm64 workflow artifact
+  the vEGPU-display-frameworks-macos26-arm64 workflow artifact
 
 It records the pinned UTM dependency recipe, UTM dependency patches/sources
 file, downloaded upstream source archives, and git source bundles used to

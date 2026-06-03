@@ -124,6 +124,7 @@ env:
   RELEASE_VERSION: ${{ inputs.release_version || '0.1.0' }}
   BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
   DISPLAY_SOURCE_REQUIRED: true
+  MACOS_ARTIFACT_ABI: macos26-arm64
 
 jobs:
   source-check:
@@ -144,7 +145,7 @@ jobs:
 
   display-runtime:
     name: Build display runtime from source
-    runs-on: macos-15
+    runs-on: macos-26
     if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     env:
       DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
@@ -170,8 +171,8 @@ jobs:
           pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
           gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
           run_id="$(python3 scripts/resolve-artifact-run.py "$pages" \
-            vEGPU-display-frameworks-macos-arm64 \
-            vEGPU-display-runtime-source)"
+            vEGPU-display-frameworks-macos26-arm64 \
+            vEGPU-display-runtime-source-macos26-arm64)"
           test -n "$run_id"
           echo "DISPLAY_ARTIFACT_RUN_ID=$run_id" >> "$GITHUB_ENV"
           echo "Resolved display runtime artifacts from vEGPU run $run_id"
@@ -194,11 +195,11 @@ jobs:
             "$RUNNER_TEMP/vegpu-artifacts/display-runtime-source"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-frameworks-macos-arm64 \
+            --name vEGPU-display-frameworks-macos26-arm64 \
             --dir "$RUNNER_TEMP/vegpu-artifacts/display-frameworks/macos-arm64"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-runtime-source \
+            --name vEGPU-display-runtime-source-macos26-arm64 \
             --dir "$RUNNER_TEMP/vegpu-artifacts/display-runtime-source"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -211,7 +212,7 @@ jobs:
           path: |
             ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
             ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
-          key: ${{ runner.os }}-display-runtime-artifacts-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-artifacts-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
 
       - name: Install display-runtime build requirements
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
@@ -245,10 +246,10 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
-          key: ${{ runner.os }}-display-runtime-work-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
           restore-keys: |
-            ${{ runner.os }}-display-runtime-work-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-
-            ${{ runner.os }}-display-runtime-work-v2-
+            ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-
+            ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-
 
       - name: Restore failed display runtime partial artifact
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' && inputs.display_partial_run_id != '' }}
@@ -309,6 +310,8 @@ jobs:
           test -d "$FRAMEWORKS/spice-client-glib-2.0.8.framework"
           test -d "$FRAMEWORKS/EGL.framework"
           test -d "$FRAMEWORKS/GLESv2.framework"
+          otool -D "$FRAMEWORKS/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
+          otool -D "$FRAMEWORKS/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
           test -f "$SOURCE"
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/README'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/utm-patches/sources'
@@ -323,7 +326,7 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' }}
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-display-frameworks-macos-arm64
+          name: vEGPU-display-frameworks-macos26-arm64
           path: ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
           if-no-files-found: error
           retention-days: 90
@@ -332,7 +335,7 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' }}
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-display-runtime-source
+          name: vEGPU-display-runtime-source-macos26-arm64
           path: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
           if-no-files-found: error
           retention-days: 90
@@ -547,7 +550,7 @@ jobs:
 
   build-app:
     name: Build vEGPU.app
-    runs-on: macos-15
+    runs-on: macos-26
     needs:
       - display-runtime
       - scaling-package
@@ -568,7 +571,7 @@ jobs:
           path: |
             ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
             ${{ runner.temp }}/vegpu-artifacts/legal/generated
-          key: ${{ runner.os }}-vegpu-app-v2-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-vegpu-app-v3-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
 
       - name: Resolve display runtime artifact run for app build
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' && env.DISPLAY_ARTIFACT_RUN_ID == '' }}
@@ -576,8 +579,8 @@ jobs:
           pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
           gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
           run_id="$(python3 scripts/resolve-artifact-run.py "$pages" \
-            vEGPU-display-frameworks-macos-arm64 \
-            vEGPU-display-runtime-source)"
+            vEGPU-display-frameworks-macos26-arm64 \
+            vEGPU-display-runtime-source-macos26-arm64)"
           test -n "$run_id"
           echo "DISPLAY_ARTIFACT_RUN_ID=$run_id" >> "$GITHUB_ENV"
           echo "Resolved display runtime artifacts from vEGPU run $run_id"
@@ -596,11 +599,11 @@ jobs:
             "$RUNNER_TEMP/vegpu-input/display-runtime-source"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-frameworks-macos-arm64 \
+            --name vEGPU-display-frameworks-macos26-arm64 \
             --dir "$RUNNER_TEMP/vegpu-input/display-frameworks/macos-arm64"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-runtime-source \
+            --name vEGPU-display-runtime-source-macos26-arm64 \
             --dir "$RUNNER_TEMP/vegpu-input/display-runtime-source"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -609,14 +612,14 @@ jobs:
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-display-frameworks-macos-arm64
+          name: vEGPU-display-frameworks-macos26-arm64
           path: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
 
       - name: Download display runtime source bundle
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-display-runtime-source
+          name: vEGPU-display-runtime-source-macos26-arm64
           path: ${{ runner.temp }}/vegpu-input/display-runtime-source
 
       - name: Download Linux scaling helper package
@@ -648,17 +651,17 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vegpu-build/swiftpm-release
-          key: ${{ runner.os }}-swiftpm-release-v2-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
           restore-keys: |
-            ${{ runner.os }}-swiftpm-release-v2-${{ hashFiles('Package.swift', 'Package.resolved') }}-
-            ${{ runner.os }}-swiftpm-release-v2-
+            ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+            ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-
 
       - name: Cache patched UTM package worktree
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/vegpu-build/utm-patched
-          key: ${{ runner.os }}-utm-patched-v2-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('third_party/utm/patches/*.patch', 'scripts/apply-utm-patches.sh') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-utm-patched-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('third_party/utm/patches/*.patch', 'scripts/apply-utm-patches.sh') }}
 
       - name: Build vEGPU.app
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
@@ -690,6 +693,8 @@ jobs:
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-LICENSE.txt"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-SOURCE.md"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-IMPORT.txt"
+          otool -D "$APP/Contents/Frameworks/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
+          otool -D "$APP/Contents/Frameworks/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
           tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
@@ -735,7 +740,7 @@ jobs:
 
   machine-artifacts:
     name: Build/fetch vEGPU Machine and DKMS guest tools
-    runs-on: macos-15
+    runs-on: macos-26
     needs:
       - machine-build
     if: ${{ always() && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
@@ -860,7 +865,7 @@ jobs:
 
   package:
     name: Package installer
-    runs-on: macos-15
+    runs-on: macos-26
     needs:
       - build-app
       - machine-artifacts

@@ -27,6 +27,9 @@ apt_get() {
   return "$code"
 }
 
+mkdir -p /run/vegpu/shares /var/lib/vegpu /usr/local/libexec/vegpu
+/usr/local/libexec/vegpu/vegpu-agent disable-idle || true
+
 apt_get update
 apt_get install -y openssh-server ca-certificates curl jq gnupg iptables nfs-common nfs-kernel-server rpcbind kmod sudo tmux
 apt_get install -y dkms build-essential linux-headers-arm64 || true
