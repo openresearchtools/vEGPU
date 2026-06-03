@@ -216,6 +216,11 @@ final class DisplayControlService: @unchecked Sendable {
 
     private func prepareDisplayHelper(force: Bool = false) async throws {
         guard force || !helperPrepared else { return }
+        if !force, await displayHelperAlreadyInstalled() {
+            helperPrepared = true
+            return
+        }
+
         let source = paths.resources.appendingPathComponent("Guest/gui-ensure.sh")
         let customizationSource = paths.resources.appendingPathComponent("Guest/customization.sh")
         guard FileManager.default.fileExists(atPath: source.path) else {
@@ -228,7 +233,6 @@ final class DisplayControlService: @unchecked Sendable {
         let customizationRemote = "/tmp/vegpu-customization-\(UUID().uuidString).sh"
         try await ssh.scpToGuest(localPath: source.path, remotePath: remote)
         try await ssh.scpToGuest(localPath: customizationSource.path, remotePath: customizationRemote)
-        try await uploadScalingApp()
         let config = MachineConfigStore(paths: paths).load()
         let guiPrefs = [
             "VEGPU_GUI_RETINA=\(config.guiRetina ? "1" : "0")",
@@ -246,52 +250,13 @@ final class DisplayControlService: @unchecked Sendable {
         helperPrepared = true
     }
 
-    private func uploadScalingApp() async throws {
-        let root = paths.resources.appendingPathComponent("Guest/scaling-app", isDirectory: true)
-        if let package = scalingAppPackage(in: root) {
-            let remote = "/tmp/vegpu-scaling-app-\(UUID().uuidString)-\(package.lastPathComponent)"
-            try await ssh.scpToGuest(localPath: package.path, remotePath: remote)
-            let aptOptions = "-o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600"
-            _ = try await ssh.ssh("\(aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions)) && rm -f \(shellQuote(remote))", timeout: 60)
-            return
-        }
-        let files: [(String, String)] = [
-            ("install.sh", "0755"),
-            ("bin/vegpu-scaling", "0755"),
-            ("src/vegpu_scaling.py", "0644"),
-            ("share/applications/vegpu-scaling.desktop", "0644"),
-            ("share/icons/hicolor/scalable/apps/vegpu-scaling.svg", "0644"),
-            ("share/xdg/autostart/vegpu-scaling-reapply.desktop", "0644")
-        ]
-        guard FileManager.default.fileExists(atPath: root.appendingPathComponent("install.sh").path) else { return }
-        _ = try await ssh.ssh("sudo -n rm -rf /usr/local/libexec/vegpu/scaling-app && sudo -n install -d /usr/local/libexec/vegpu/scaling-app", timeout: 10)
-        for (relative, mode) in files {
-            let source = root.appendingPathComponent(relative).path
-            guard FileManager.default.fileExists(atPath: source) else { continue }
-            let remote = "/tmp/vegpu-scaling-app-\(UUID().uuidString)-\(URL(fileURLWithPath: relative).lastPathComponent)"
-            let destination = "/usr/local/libexec/vegpu/scaling-app/\(relative)"
-            try await ssh.scpToGuest(localPath: source, remotePath: remote)
-            _ = try await ssh.ssh("sudo -n install -D -m \(mode) \(shellQuote(remote)) \(shellQuote(destination)) && rm -f \(shellQuote(remote))", timeout: 10)
-        }
-        _ = try await ssh.ssh("sudo -n env VEGPU_SCALING_SKIP_DEPS=1 /usr/local/libexec/vegpu/scaling-app/install.sh", timeout: 20)
-    }
-
-    private func scalingAppPackage(in root: URL) -> URL? {
-        let packageDir = root.appendingPathComponent("package", isDirectory: true)
-        guard let items = try? FileManager.default.contentsOfDirectory(at: packageDir, includingPropertiesForKeys: nil) else {
-            return nil
-        }
-        return items
-            .filter { $0.lastPathComponent.hasPrefix("vegpu-scaling_") && $0.pathExtension == "deb" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .last
-    }
-
-    private func aptInstallLocalDebCommand(remote: String, aptOptions: String) -> String {
-        let remoteURL = URL(fileURLWithPath: remote)
-        let remoteDir = remoteURL.deletingLastPathComponent().path
-        let relativeDeb = "./\(remoteURL.lastPathComponent)"
-        return "cd \(shellQuote(remoteDir)) && sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) install -y \(shellQuote(relativeDeb))"
+    private func displayHelperAlreadyInstalled() async -> Bool {
+        let command = [
+            "test -x /usr/local/bin/vegpu-display-control",
+            "test -x /usr/local/sbin/vegpu-display-mode-helper",
+            "test -x /usr/local/libexec/vegpu/customization.sh"
+        ].joined(separator: " && ")
+        return (try? await ssh.ssh(command, timeout: 5)) != nil
     }
 
     private func listGPUsDirectly() async throws -> [DisplayControlGPU] {

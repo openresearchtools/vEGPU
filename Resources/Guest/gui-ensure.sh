@@ -1440,9 +1440,7 @@ restart_lightdm_for_display_config() {
 
 if [ "${1:-}" = "--install-display-control-only" ]; then
   install_customization_script
-  install_scaling_app
   run_customization write-prefs
-  run_customization disable-idle
   install_display_control
   exit 0
 fi

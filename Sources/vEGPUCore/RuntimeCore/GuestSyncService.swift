@@ -3,7 +3,6 @@ import Foundation
 
 public struct GuestSyncMarker: Codable, Equatable, Sendable {
     public var fingerprint: String
-    public var runtimePid: Int32
     public var syncedAt: String
 }
 
@@ -23,17 +22,19 @@ public final class GuestSyncService: @unchecked Sendable {
     }
 
     @discardableResult
-    public func sync(force: Bool = false, runtimePid: Int32? = nil) async throws -> Bool {
+    public func sync(force: Bool = false, runtimePid _: Int32? = nil) async throws -> Bool {
         let manifest = try manifestStore.load()
         let fingerprint = try guestSyncFingerprint(manifest: manifest)
+        if !force, markerMatches(fingerprint: fingerprint) {
+            progress.report(ProgressEvent(stage: "guest-sync", message: "Guest GUI/runtime payload already current"))
+            return false
+        }
+
         progress.report(ProgressEvent(stage: "guest-sync", message: "Refreshing guest scripts"))
         _ = try await ssh.ssh("mkdir -p /tmp/vegpu-sync")
         try await syncGuestScripts()
         try await syncGuiAssets()
         try await syncScalingApp()
-        if !force, let runtimePid, markerMatches(runtimePid: runtimePid, fingerprint: fingerprint) {
-            return false
-        }
 
         let temp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vegpu-guest-sync-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -67,9 +68,7 @@ public final class GuestSyncService: @unchecked Sendable {
             }
         }
         _ = try await ssh.agent(["status", "--json"])
-        if let runtimePid {
-            try JSON.write(GuestSyncMarker(fingerprint: fingerprint, runtimePid: runtimePid, syncedAt: ISO8601DateFormatter().string(from: Date())), to: markerURL)
-        }
+        try JSON.write(GuestSyncMarker(fingerprint: fingerprint, syncedAt: ISO8601DateFormatter().string(from: Date())), to: markerURL)
         progress.report(ProgressEvent(stage: "guest-sync", message: "Guest sync complete", level: .success))
         return true
     }
@@ -241,8 +240,8 @@ public final class GuestSyncService: @unchecked Sendable {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    private func markerMatches(runtimePid: Int32, fingerprint: String) -> Bool {
+    private func markerMatches(fingerprint: String) -> Bool {
         guard let marker = try? JSON.read(GuestSyncMarker.self, from: markerURL) else { return false }
-        return marker.runtimePid == runtimePid && marker.fingerprint == fingerprint
+        return marker.fingerprint == fingerprint
     }
 }

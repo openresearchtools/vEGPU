@@ -21,16 +21,11 @@ final class DisplayResizeCoordinator {
             return nil
         }
         pending?.cancel()
-        pending = Task { [weak self, weak display] in
-            guard !Task.isCancelled, let display else { return }
-            self?.lastRequested = next
-            for delay in [UInt64(0), 250_000_000, 750_000_000, 1_500_000_000, 3_000_000_000] {
-                if delay > 0 {
-                    try? await Task.sleep(nanoseconds: delay)
-                }
-                guard !Task.isCancelled else { return }
-                display.requestResolution(CGRect(origin: .zero, size: next))
-            }
+        pending = Task { @MainActor [weak self, weak display] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled, let self, let display else { return }
+            self.lastRequested = next
+            display.requestResolution(CGRect(origin: .zero, size: next))
         }
         return next
     }
