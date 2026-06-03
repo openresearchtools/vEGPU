@@ -174,6 +174,22 @@ archive_git_snapshot() {
   fi
 }
 
+patch_angle_for_xcode26() {
+  local fence="$BUILD_DIR/WebKit.git/Source/ThirdParty/ANGLE/src/libANGLE/Fence.h"
+  [ -f "$fence" ] || return 0
+  python3 - "$fence" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+old = "    virtual ~FenceNV();\n"
+new = "    ~FenceNV();\n"
+if old in text:
+    path.write_text(text.replace(old, new, 1))
+PY
+}
+
 download_display_sources() {
   mkdir -p "$BUILD_DIR"
   download "$PKG_CONFIG_SRC"
@@ -201,6 +217,7 @@ download_display_sources() {
   download "$PHODAV_SRC"
   download "$SPICE_CLIENT_SRC"
   ensure_git_checkout "$WEBKIT_REPO" "$WEBKIT_COMMIT" "$WEBKIT_SUBDIRS"
+  patch_angle_for_xcode26
   ensure_git_checkout "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
 }
 
@@ -244,6 +261,14 @@ stage_display_source_preflight() {
     "$SOURCE_PREFLIGHT/git-sources/WebKit.git" \
     "WebKit" \
     "${webkit_source_paths[@]}"
+  if ! grep -q 'virtual ~FenceNV();' "$webkit_repo/Source/ThirdParty/ANGLE/src/libANGLE/Fence.h" 2>/dev/null; then
+    cat >"$SOURCE_PREFLIGHT/git-sources/WebKit.git/LOCAL_MODIFICATIONS" <<'EOF'
+OpenResearchTools build-time source adjustment:
+- Source/ThirdParty/ANGLE/src/libANGLE/Fence.h removes a redundant virtual
+  specifier from FenceNV's destructor so the pinned UTM/WebKit ANGLE source
+  builds with Xcode 26's -Werror,-Wunnecessary-virtual-specifier diagnostics.
+EOF
+  fi
 
   if [ ! -f "$SOURCE_PREFLIGHT/git-sources/WebKit.git/WebKit-source.tar.gz" ]; then
     printf 'Display runtime source preflight failed: could not create WebKit/ANGLE source snapshot.\n' >&2
