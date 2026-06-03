@@ -303,8 +303,14 @@ EOF
   fi
 }
 
+spice_client_has_egl_scanout() {
+  local spice_client="$PREFIX/Frameworks/spice-client-glib-2.0.8.framework/Versions/A/spice-client-glib-2.0.8"
+  [ -f "$spice_client" ] &&
+    strings "$spice_client" | grep -Fq 'SPICE_DISABLE_GL_SCANOUT'
+}
+
 have_display_frameworks() {
-  [ -d "$PREFIX/Frameworks/spice-client-glib-2.0.8.framework" ] &&
+  spice_client_has_egl_scanout &&
     [ -d "$PREFIX/Frameworks/EGL.framework" ] &&
     [ -d "$PREFIX/Frameworks/GLESv2.framework" ]
 }
