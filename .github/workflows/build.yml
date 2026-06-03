@@ -947,7 +947,7 @@ jobs:
           grep -F 'enable_localSystem="true"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'enable_anywhere="false"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -F 'DriverKit extension refresh/activation' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -F 'DriverKit refresh/activation' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           if grep -F 'choice id="com.vegpu.install.driver"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
             echo "DriverKit refresh must not be a standalone installer choice" >&2
             exit 1
