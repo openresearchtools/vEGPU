@@ -410,9 +410,9 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
   <p>The embedded display side is partially based on UTM app work. The Machine side builds on Scott J. Goldman's scottjg/qemu-vfio-apple as the main Apple VFIO/DriverKit/QEMU base, with additional QEMU-side visual-runtime work adapted from UTM QEMU and UTM virglrenderer.</p>
 
   <h2>Installation Behavior</h2>
-  <p>The Installation Type screen shows separate choices for vEGPU.app, vEGPU Machine.app files, and DriverKit extension refresh/activation.</p>
-  <p>For combined releases, vEGPU Machine.app is selected by default when it is missing or older than the installer payload. DriverKit refresh/activation is selected by default when Machine.app is changing or the DriverKit extension is not currently installed.</p>
-  <p>If the installed vEGPU Machine app is the same or newer version and its DriverKit extension is already installed, the Machine and DriverKit choices remain visible but are not selected by default.</p>
+  <p>The Installation Type screen shows separate choices for vEGPU.app and vEGPU Machine.app. DriverKit extension refresh/activation is bundled under the Machine choice.</p>
+  <p>For combined releases, vEGPU Machine.app is selected by default when it is missing or older than the installer payload. DriverKit refresh/activation follows the Machine.app choice and is not run when the Machine.app choice is not selected.</p>
+  <p>If the installed vEGPU Machine app is the same or newer version, the Machine and DriverKit choices remain visible but are not selected by default.</p>
   <p>When DriverKit refresh/activation is selected, the installer attempts to ask the existing vEGPU Machine app to deactivate the old DriverKit extension when possible. Forced removal is used only when an old extension is still listed and graceful deactivation is unavailable or did not complete.</p>
   <p>The installer then asks the installed vEGPU Machine.app to submit a fresh DriverKit activation request and writes driver-install diagnostics to <span class="code">/var/log/vegpu-driver-install.log</span>.</p>
   <p>macOS may still require approval in System Settings and/or a restart before the driver becomes active. This installer does not bypass Apple's system-extension approval flow.</p>
@@ -765,20 +765,17 @@ function driverNeedsRefresh() {
     <line choice="com.vegpu.status.driver.missing"/>
     <line choice="com.vegpu.install.app"/>
     <line choice="com.vegpu.install.machine"/>
-    <line choice="com.vegpu.install.driver"/>
   </choices-outline>
   <choice id="com.vegpu.status.sip" title="SIP disabled" description="System Integrity Protection is disabled, so the DriverKit passthrough installer can continue. If SIP were enabled, this installer would stop before installation and show the Recovery instructions." start_selected="true" start_enabled="false" start_visible="true"/>
   <choice id="com.vegpu.status.machine.current" title="vEGPU Machine.app already installed/current" description="The installed vEGPU Machine.app is the same version or newer than this package, so the Machine app file payload is not selected by default." start_selected="true" start_enabled="false" start_visible="!machineNeedsInstall()"/>
   <choice id="com.vegpu.status.machine.needs" title="vEGPU Machine.app missing or older" description="vEGPU Machine.app is missing or older than this package, so the Machine app file payload is selected by default." start_selected="false" start_enabled="false" start_visible="machineNeedsInstall()"/>
-  <choice id="com.vegpu.status.driver.installed" title="DriverKit extension installed" description="systemextensionsctl currently lists com.vegpu.machine.VFIOUserPCIDriver. DriverKit refresh is selected only if Machine.app is changing." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
-  <choice id="com.vegpu.status.driver.missing" title="DriverKit extension not installed" description="systemextensionsctl does not currently list com.vegpu.machine.VFIOUserPCIDriver, so DriverKit refresh/activation is selected by default." start_selected="false" start_enabled="false" start_visible="!driverInstalled()"/>
+  <choice id="com.vegpu.status.driver.installed" title="DriverKit extension installed" description="systemextensionsctl currently lists com.vegpu.machine.VFIOUserPCIDriver. DriverKit refresh runs only when the vEGPU Machine.app choice is selected." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
+  <choice id="com.vegpu.status.driver.missing" title="DriverKit extension not installed" description="systemextensionsctl does not currently list com.vegpu.machine.VFIOUserPCIDriver. Select vEGPU Machine.app to install or activate the DriverKit extension." start_selected="false" start_enabled="false" start_visible="!driverInstalled()"/>
   <choice id="com.vegpu.install.app" title="vEGPU.app" description="Required main application installed in /Applications. Includes the launcher, GUI, app-side display client, AI/runtime controls, notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.app"/>
   </choice>
-  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
+  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app + DriverKit refresh/activation" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications. DriverKit refresh/activation is bundled with this choice and does not run when this choice is not selected." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.machine"/>
-  </choice>
-  <choice id="com.vegpu.install.driver" title="DriverKit extension refresh/activation" description="Deactivate any old vEGPU DriverKit extension, force-uninstall only if it remains listed, then activate the installed vEGPU Machine DriverKit extension." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.driver"/>
   </choice>
   <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>

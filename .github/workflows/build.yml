@@ -948,6 +948,26 @@ jobs:
           grep -F 'enable_anywhere="false"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'vEGPU Machine.app' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -F 'DriverKit extension refresh/activation' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          if grep -F 'choice id="com.vegpu.install.driver"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
+            echo "DriverKit refresh must not be a standalone installer choice" >&2
+            exit 1
+          fi
+          python3 - "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(sys.argv[1]).getroot()
+          choices = {choice.attrib.get("id"): choice for choice in root.findall("choice")}
+          machine = choices.get("com.vegpu.install.machine")
+          if machine is None:
+              raise SystemExit("missing Machine installer choice")
+          refs = [ref.attrib.get("id") for ref in machine.findall("pkg-ref")]
+          if "com.vegpu.pkg.driver" not in refs:
+              raise SystemExit("DriverKit package must be bundled under the Machine installer choice")
+          for line in root.findall("./choices-outline/line"):
+              if line.attrib.get("choice") == "com.vegpu.install.driver":
+                  raise SystemExit("DriverKit choice must not appear separately in the installer outline")
+          PY
           grep -F 'SIP disabled' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           if grep -F 'onConclusion="RecommendRestart"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
             echo "installer should allow closing and restarting later" >&2
