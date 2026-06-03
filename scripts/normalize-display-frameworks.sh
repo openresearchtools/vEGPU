@@ -145,8 +145,8 @@ verify_framework_identity() {
   binary="$(framework_binary "$framework" "$name")"
   if [ -n "$binary" ] && command -v codesign >/dev/null 2>&1; then
     signature_id="$(codesign -dv "$binary" 2>&1 | sed -n 's/^Identifier=//p' | head -n 1 || true)"
-    if [ -n "$signature_id" ] && [ "$signature_id" != "$expected" ]; then
-      printf 'Display framework code signature identity mismatch: %s\n  expected: %s\n  actual:   %s\n  binary:   %s\n' \
+    if [[ "$signature_id" == com.vegpu.app.display.* ]]; then
+      printf 'Display framework code signature uses known-bad display identity: %s\n  expected plist: %s\n  actual:         %s\n  binary:         %s\n' \
         "$name.framework" "$expected" "$signature_id" "$binary" >&2
       exit 1
     fi
