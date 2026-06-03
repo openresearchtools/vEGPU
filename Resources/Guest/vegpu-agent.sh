@@ -755,11 +755,6 @@ Section "ServerFlags"
     Option "SuspendTime" "0"
     Option "OffTime" "0"
 EndSection
-
-Section "Monitor"
-    Identifier "Virtual-1"
-    Option "DPMS" "false"
-EndSection
 EOS
 
   cat >/usr/local/libexec/vegpu/no-idle-session.sh <<'EOS'
