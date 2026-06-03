@@ -1485,6 +1485,7 @@ configure_virtio_xorg_display() {
       write_spice_only_xorg_display "$busid"
       ;;
   esac
+  write_no_idle_flags
 }
 
 restart_lightdm_for_display_config() {
