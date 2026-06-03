@@ -91,7 +91,15 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
 
     func reconnect() {
         displayReconnectAttempts = 0
-        reconnectAfterDisconnect()
+        pendingReconnectTask?.cancel()
+        status = "Waking guest display"
+        pendingReconnectTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.guestResolution.wakeDisplay()
+            guard !Task.isCancelled else { return }
+            self.pendingReconnectTask = nil
+            self.reconnectAfterDisconnect()
+        }
     }
 
     private func reconnectAfterDisconnect() {

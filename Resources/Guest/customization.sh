@@ -679,10 +679,22 @@ vegpu_customization_seed_panel() {
 vegpu_customization_disable_idle_locking() {
   /usr/bin/timeout 15s systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null 2>&1 || true
   /usr/bin/timeout 15s systemctl disable --now light-locker xfce4-screensaver xscreensaver >/dev/null 2>&1 || true
+  install -d /etc/systemd/logind.conf.d
+  cat >/etc/systemd/logind.conf.d/90-vegpu-no-sleep.conf <<'EOS'
+[Login]
+IdleAction=ignore
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
+EOS
+  /usr/bin/timeout 15s systemctl restart systemd-logind >/dev/null 2>&1 || true
   install -d /etc/X11/xorg.conf.d
   cat >/etc/X11/xorg.conf.d/90-vegpu-no-idle.conf <<'EOS'
 Section "ServerFlags"
     Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
     Option "BlankTime" "0"
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"
@@ -704,12 +716,30 @@ EOS
 }
 
 vegpu_customization_install_no_idle_autostart() {
+  install -d /usr/local/libexec/vegpu
+  cat >/usr/local/libexec/vegpu/no-idle-session.sh <<'EOS'
+#!/bin/sh
+set +e
+
+while :; do
+  xset s off -dpms s noblank >/dev/null 2>&1 || true
+  xset dpms force on >/dev/null 2>&1 || true
+  xfce4-screensaver-command --deactivate >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "" >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/presentation-mode -n -t bool -s true >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-ac -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-battery -n -t int -s 0 >/dev/null 2>&1 || true
+  xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-enabled -n -t bool -s false >/dev/null 2>&1 || true
+  sleep 60
+done
+EOS
+  chmod 0755 /usr/local/libexec/vegpu/no-idle-session.sh
   install -d -o "$HUMAN_USER" -g "$HUMAN_USER" "/home/$HUMAN_USER/.config/autostart"
   cat >"/home/$HUMAN_USER/.config/autostart/vegpu-no-idle.desktop" <<'EOS'
 [Desktop Entry]
 Type=Application
 Name=vEGPU No Idle Lock
-Exec=/bin/sh -lc 'xset s off -dpms s noblank >/dev/null 2>&1 || true; xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/presentation-mode -n -t bool -s true >/dev/null 2>&1 || true'
+Exec=/usr/local/libexec/vegpu/no-idle-session.sh
 OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 EOS
@@ -869,8 +899,13 @@ vegpu_customization_apply_boot_defaults() {
   vegpu_customization_apply_global_settings_now
 }
 
+vegpu_customization_disable_idle() {
+  vegpu_customization_install_no_idle_autostart
+  vegpu_customization_disable_idle_locking
+}
+
 vegpu_customization_usage() {
-  printf 'usage: %s {write-prefs|create-assets|install-global-defaults|apply-boot-defaults|apply-session-appearance|apply-primary-display}\n' "$0" >&2
+  printf 'usage: %s {write-prefs|create-assets|install-global-defaults|apply-boot-defaults|disable-idle|apply-session-appearance|apply-primary-display}\n' "$0" >&2
 }
 
 vegpu_customization_main() {
@@ -886,6 +921,9 @@ vegpu_customization_main() {
       ;;
     apply-boot-defaults)
       vegpu_customization_apply_boot_defaults
+      ;;
+    disable-idle)
+      vegpu_customization_disable_idle
       ;;
     apply-session-appearance)
       vegpu_customization_install_backdrop_fallbacks

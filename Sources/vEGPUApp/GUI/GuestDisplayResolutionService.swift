@@ -35,6 +35,26 @@ final class GuestDisplayResolutionService {
         pending = nil
     }
 
+    func wakeDisplay() async {
+        _ = try? await ssh.ssh(Self.wakeDisplayCommand(), timeout: 8)
+    }
+
+    private static func wakeDisplayCommand() -> String {
+        let script = """
+        set +e
+        xfce4-screensaver-command --deactivate >/dev/null 2>&1 || true
+        xset s off -dpms s noblank >/dev/null 2>&1 || true
+        xset dpms force on >/dev/null 2>&1 || true
+        xrandr --auto >/dev/null 2>&1 || true
+        xfconf-query -c xfce4-session -p /general/LockCommand -n -t string -s "" >/dev/null 2>&1 || true
+        xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/presentation-mode -n -t bool -s true >/dev/null 2>&1 || true
+        xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-ac -n -t int -s 0 >/dev/null 2>&1 || true
+        xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-battery -n -t int -s 0 >/dev/null 2>&1 || true
+        xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-enabled -n -t bool -s false >/dev/null 2>&1 || true
+        """
+        return "sudo -n loginctl unlock-sessions >/dev/null 2>&1 || true; sudo -n systemctl restart spice-vdagentd >/dev/null 2>&1 || true; sudo -n -u vegpu env DISPLAY=:0 XAUTHORITY=/home/vegpu/.Xauthority DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus timeout 4s bash -lc \(shellQuote(script))"
+    }
+
     private static func plasmaDisplayCommand(width: Int, height: Int) -> String {
         let script = """
         set -eu
