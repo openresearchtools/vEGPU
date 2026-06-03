@@ -69,16 +69,19 @@ struct RootView: View {
             model.setActiveTab(tab)
         }
         .onAppear {
-            syncExternalCapture(mode: model.runtimeLaunchMode, activeSessionID: displayControl.activeSessionID)
+            syncExternalCapture()
         }
         .onChange(of: model.runtimeLaunchMode) { _, mode in
             if mode != .gui, selectedTab.isGUIRuntimeSection {
                 selectedTab = .section(.runtime)
             }
-            syncExternalCapture(mode: mode, activeSessionID: displayControl.activeSessionID)
+            syncExternalCapture()
         }
-        .onChange(of: displayControl.activeSessionID) { _, activeSessionID in
-            syncExternalCapture(mode: model.runtimeLaunchMode, activeSessionID: activeSessionID)
+        .onChange(of: displayControl.activeSessionID) { _, _ in
+            syncExternalCapture()
+        }
+        .onChange(of: displayControl.externalInputCaptureRequested) { _, _ in
+            syncExternalCapture()
         }
         .onReceive(NotificationCenter.default.publisher(for: .vegpuReconnectDisplay)) { _ in
             model.spiceSession.reconnect()
@@ -105,18 +108,22 @@ struct RootView: View {
         parts += displayControl.sessions.enumerated().map { index, _ in
             "Option-Cmd-\(index + 2) External \(index + 1)"
         }
-        let prefix = displayControl.activeSessionID == nil ? "vEGPU" : "vEGPU - Captured"
+        let prefix = displayControl.externalInputCaptureRequested ? "vEGPU - Captured" : "vEGPU"
         return "\(prefix) - \(parts.joined(separator: " · "))"
     }
 
-    private func syncExternalCapture(mode: RuntimeLaunchMode, activeSessionID: String?) {
+    private func syncExternalCapture() {
         model.spiceSession.setDynamicResolutionEnabled(true)
-        guard mode == .gui, activeSessionID != nil else {
+        guard model.runtimeLaunchMode == .gui,
+              displayControl.activeSessionID != nil,
+              displayControl.externalInputCaptureRequested else {
             model.spiceSession.setExternalInputCapture(false)
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            if model.runtimeLaunchMode == .gui, displayControl.activeSessionID != nil {
+            if model.runtimeLaunchMode == .gui,
+               displayControl.activeSessionID != nil,
+               displayControl.externalInputCaptureRequested {
                 model.spiceSession.start()
                 model.spiceSession.setExternalInputCapture(true)
             }

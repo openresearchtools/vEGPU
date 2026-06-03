@@ -299,6 +299,7 @@ final class DisplayControlMenuModel: ObservableObject {
     @Published private(set) var gpus: [DisplayControlGPU] = []
     @Published private(set) var sessions: [DisplaySession] = []
     @Published private(set) var activeSessionID: String?
+    @Published private(set) var externalInputCaptureRequested = false
     @Published private(set) var mode: DisplayControlMode = .spice
     @Published private(set) var selectedGPU: DisplayControlGPU?
     @Published private(set) var busy = false
@@ -371,6 +372,7 @@ final class DisplayControlMenuModel: ObservableObject {
             try await self.service.enterSession(session)
             await MainActor.run {
                 self.activeSessionID = session.id
+                self.externalInputCaptureRequested = true
             }
         }
     }
@@ -383,6 +385,7 @@ final class DisplayControlMenuModel: ObservableObject {
             do {
                 try await self.service.releaseSession()
                 activeSessionID = nil
+                externalInputCaptureRequested = false
                 message = nil
                 NotificationCenter.default.post(name: .vegpuReconnectDisplay, object: self)
             } catch {
@@ -395,6 +398,12 @@ final class DisplayControlMenuModel: ObservableObject {
     func stopSession(_ session: DisplaySession) {
         perform(postReconnect: false) {
             try await self.service.stopSession(session)
+            await MainActor.run {
+                if self.activeSessionID == session.id {
+                    self.activeSessionID = nil
+                    self.externalInputCaptureRequested = false
+                }
+            }
         }
     }
 
@@ -578,6 +587,9 @@ final class DisplayControlMenuModel: ObservableObject {
     private func apply(sessionsPayload: DisplaySessionsPayload) {
         sessions = sessionsPayload.sessions.filter { $0.valid }
         activeSessionID = sessionsPayload.active == "macos" ? nil : sessionsPayload.active
+        if activeSessionID == nil {
+            externalInputCaptureRequested = false
+        }
         gpus = sessions.map(\.gpu)
     }
 

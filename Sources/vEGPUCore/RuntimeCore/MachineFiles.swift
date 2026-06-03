@@ -12,6 +12,7 @@ public struct MachineFiles: Sendable {
     public let memoryFile: URL
     public let stdoutLog: URL
     public let stderrLog: URL
+    public let qemuOwnerWatchdog: URL
     public let spiceSocket: URL
     public let audioHostPid: URL
     public let audioHostState: URL
@@ -30,6 +31,7 @@ public struct MachineFiles: Sendable {
         memoryFile = machineDir.appendingPathComponent("memory.bin")
         stdoutLog = machineDir.appendingPathComponent("qemu.stdout.log")
         stderrLog = machineDir.appendingPathComponent("qemu.stderr.log")
+        qemuOwnerWatchdog = machineDir.appendingPathComponent("qemu-owner-watchdog.sh")
         spiceSocket = machineDir.appendingPathComponent("display.spice")
         audioHostPid = machineDir.appendingPathComponent("audio-host.pid")
         audioHostState = machineDir.appendingPathComponent("audio-host.json")

@@ -380,7 +380,7 @@ public final class MachineService: @unchecked Sendable {
 
         progress.report(ProgressEvent(stage: "qemu", message: "Launching runtime through \(VfioApp.displayName)", detail: config.launchMode.label))
         try networkStore.write(network.state)
-        let child = try runner.spawnDetached(network.launchCommand, args, stdout: files.stdoutLog, stderr: files.stderrLog)
+        let child = try spawnAppOwnedQemu(network.launchCommand, args)
         try await waitForQmp(socket: files.qmp, timeout: 20, child: child)
         progress.report(ProgressEvent(stage: "qmp", message: "QEMU monitor is ready"))
         try await ssh.waitForSSH()
@@ -526,6 +526,58 @@ public final class MachineService: @unchecked Sendable {
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
         throw RuntimeError.message("Timed out waiting for QMP socket")
+    }
+
+    private func spawnAppOwnedQemu(_ executable: String, _ arguments: [String]) throws -> Process {
+        let script = """
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        parent="$1"
+        shift
+
+        "$@" &
+        child="$!"
+        watchdog=""
+
+        cleanup_child() {
+          if kill -0 "$child" >/dev/null 2>&1; then
+            kill -TERM "$child" >/dev/null 2>&1 || true
+            for _ in $(seq 1 30); do
+              kill -0 "$child" >/dev/null 2>&1 || return 0
+              sleep 0.1
+            done
+            kill -KILL "$child" >/dev/null 2>&1 || true
+          fi
+        }
+
+        trap cleanup_child HUP INT TERM
+
+        (
+          while kill -0 "$parent" >/dev/null 2>&1; do
+            sleep 1
+          done
+          cleanup_child
+        ) &
+        watchdog="$!"
+
+        set +e
+        wait "$child"
+        status="$?"
+        set -e
+        if [ -n "$watchdog" ]; then
+          kill "$watchdog" >/dev/null 2>&1 || true
+        fi
+        exit "$status"
+        """
+        try script.write(to: files.qemuOwnerWatchdog, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: files.qemuOwnerWatchdog.path)
+        return try runner.spawnDetached(
+            "/bin/bash",
+            [files.qemuOwnerWatchdog.path, String(getpid()), executable] + arguments,
+            stdout: files.stdoutLog,
+            stderr: files.stderrLog
+        )
     }
 
     private func requestQemuQuit() async throws {
