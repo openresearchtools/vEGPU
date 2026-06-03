@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 export DEBIAN_FRONTEND=noninteractive
 
 STATE_DIR=/var/lib/vegpu
-MARKER="$STATE_DIR/gui-ready"
+GUI_READY_MARKER="$STATE_DIR/gui-desktop.ready"
+APPEARANCE_MARKER="$STATE_DIR/gui-appearance.sha256"
 SHARE=/mnt/vegpu-share
-HUMAN_USER=vegpu
-XORG_CHANGED=0
+HUMAN_USER="${VEGPU_DISPLAY_USER:-vegpu}"
 CUSTOMIZATION_SCRIPT=/usr/local/libexec/vegpu/customization.sh
-SCALING_APP_DIR=/usr/local/libexec/vegpu/scaling-app
+DISPLAY_HELPER=/usr/local/sbin/vegpu-display-mode-helper
+DISPLAY_CONTROL=/usr/local/bin/vegpu-display-control
+
+log() {
+  printf '[gui-ensure] %s\n' "$*" >&2
+}
 
 apt_get() {
   local attempt output code
@@ -24,7 +30,7 @@ apt_get() {
       return 0
     fi
     if printf '%s\n' "$output" | grep -qiE 'Could not get lock|Unable to lock directory|Unable to acquire|is held by process|is another process using it|dpkg frontend lock'; then
-      printf '[gui-ensure] apt lock busy; waiting for current package operation (%s/120)\n' "$attempt" >&2
+      log "apt lock busy; waiting for current package operation ($attempt/120)"
       sleep 5
       continue
     fi
@@ -35,18 +41,36 @@ apt_get() {
   return "$code"
 }
 
-mkdir -p "$STATE_DIR"
+install_file_if_changed() {
+  local source="$1" destination="$2" mode="$3"
+  if [ -f "$destination" ] && cmp -s "$source" "$destination"; then
+    chmod "$mode" "$destination"
+    return 0
+  fi
+  install -D -m "$mode" "$source" "$destination"
+}
+
+write_root_file_if_changed() {
+  local destination="$1" mode="${2:-0644}" tmp
+  tmp="$(mktemp)"
+  cat >"$tmp"
+  install_file_if_changed "$tmp" "$destination" "$mode"
+  rm -f "$tmp"
+}
+
+script_dir() {
+  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P
+}
 
 install_customization_script() {
-  local script_dir source_path
+  local source_path
   install -d "$(dirname "$CUSTOMIZATION_SCRIPT")"
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  source_path="${VEGPU_CUSTOMIZATION_SOURCE:-$script_dir/customization.sh}"
+  source_path="${VEGPU_CUSTOMIZATION_SOURCE:-$(script_dir)/customization.sh}"
   if [ -f "$source_path" ]; then
     install -m 0755 "$source_path" "$CUSTOMIZATION_SCRIPT"
     return 0
   fi
-  if [ -f "$CUSTOMIZATION_SCRIPT" ]; then
+  if [ -x "$CUSTOMIZATION_SCRIPT" ]; then
     return 0
   fi
   printf 'Missing vEGPU GUI customization script: %s\n' "$source_path" >&2
@@ -54,58 +78,30 @@ install_customization_script() {
 }
 
 run_customization() {
+  [ -x "$CUSTOMIZATION_SCRIPT" ] || {
+    printf 'Missing vEGPU GUI customization script: %s\n' "$CUSTOMIZATION_SCRIPT" >&2
+    exit 1
+  }
   "$CUSTOMIZATION_SCRIPT" "$@"
 }
 
-install_scaling_app() {
-  local script_dir source_dir package dir candidate
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  source_dir="${VEGPU_SCALING_APP_SOURCE:-$script_dir/scaling-app}"
-  package=""
-  for dir in /var/lib/vegpu/packages "$source_dir/package" "$SCALING_APP_DIR/package"; do
-    [ -d "$dir" ] || continue
-    candidate="$(find "$dir" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' 2>/dev/null | sort | tail -n 1 || true)"
-    [ -n "$candidate" ] || continue
-    package="$candidate"
-  done
-  if [ -n "$package" ] && [ -f "$package" ]; then
-    if ! dpkg -i "$package" >/dev/null 2>&1; then
-      apt_get install -y -f >/dev/null 2>&1 || true
-      dpkg -i "$package" >/dev/null 2>&1 || true
-    fi
-    return 0
-  fi
-  if [ -f "$source_dir/install.sh" ]; then
-    rm -rf "$SCALING_APP_DIR"
-    install -d "$SCALING_APP_DIR"
-    cp -a "$source_dir"/. "$SCALING_APP_DIR"/
-  fi
-  if [ -x "$SCALING_APP_DIR/install.sh" ]; then
-    VEGPU_SCALING_SKIP_DEPS=1 "$SCALING_APP_DIR/install.sh" >/dev/null 2>&1 || true
-  fi
-}
-
-repair_share_access() {
-  usermod -aG dialout "$HUMAN_USER" 2>/dev/null || true
-  usermod -aG dialout vegpuctl 2>/dev/null || true
-  if /usr/bin/timeout 2s test -e "$SHARE" 2>/dev/null; then
-    share_gid="$(/usr/bin/timeout 2s stat -c '%g' "$SHARE" 2>/dev/null || true)"
-    share_group="$(getent group "$share_gid" 2>/dev/null | cut -d: -f1 || true)"
-    if [ -n "$share_group" ]; then
-      usermod -aG "$share_group" "$HUMAN_USER" 2>/dev/null || true
-      usermod -aG "$share_group" vegpuctl 2>/dev/null || true
-    fi
-  fi
+desktop_stack_ready() {
+  [ -f "$GUI_READY_MARKER" ] &&
+    command -v startxfce4 >/dev/null 2>&1 &&
+    command -v xfconf-query >/dev/null 2>&1 &&
+    command -v xfdesktop >/dev/null 2>&1 &&
+    command -v lightdm >/dev/null 2>&1 &&
+    command -v spice-vdagent >/dev/null 2>&1 &&
+    command -v thunar >/dev/null 2>&1 &&
+    python3 -c 'import gi' >/dev/null 2>&1
 }
 
 install_desktop_stack() {
-  if [ -f "$MARKER" ] &&
-     command -v startxfce4 >/dev/null 2>&1 &&
-     command -v spice-vdagent >/dev/null 2>&1 &&
-     command -v thunar >/dev/null 2>&1 &&
-     python3 -c 'import gi' >/dev/null 2>&1; then
+  if desktop_stack_ready; then
     return 0
   fi
+
+  log "installing XFCE desktop stack"
   apt_get update
   apt_get install -y \
     dbus-x11 \
@@ -143,20 +139,24 @@ install_desktop_stack() {
     xfwm4 \
     adwaita-icon-theme \
     greybird-gtk-theme
+
+  install -d "$STATE_DIR"
+  touch "$GUI_READY_MARKER"
 }
 
 configure_desktop_network() {
   command -v nmcli >/dev/null 2>&1 || return 0
 
   install -d /etc/NetworkManager/conf.d /etc/NetworkManager/system-connections
-  cat >/etc/NetworkManager/conf.d/90-vegpu-managed.conf <<'EOF'
+  write_root_file_if_changed /etc/NetworkManager/conf.d/90-vegpu-managed.conf <<'EOF'
 [ifupdown]
 managed=true
 
 [keyfile]
 unmanaged-devices=none
 EOF
-  cat >/etc/NetworkManager/system-connections/vegpu-vmnet.nmconnection <<'EOF'
+
+  write_root_file_if_changed /etc/NetworkManager/system-connections/vegpu-vmnet.nmconnection 0600 <<'EOF'
 [connection]
 id=vEGPU vmnet
 uuid=8a6021b7-6c4b-4fd5-9c28-2b09d0f5e100
@@ -178,48 +178,113 @@ may-fail=false
 [ipv6]
 method=disabled
 EOF
-  chmod 0600 /etc/NetworkManager/system-connections/vegpu-vmnet.nmconnection
+
   systemctl enable NetworkManager >/dev/null 2>&1 || true
-  systemctl restart NetworkManager >/dev/null 2>&1 || true
+  systemctl is-active --quiet NetworkManager >/dev/null 2>&1 || systemctl start NetworkManager >/dev/null 2>&1 || true
   nmcli connection reload >/dev/null 2>&1 || true
   nmcli device set enp0s3 managed yes >/dev/null 2>&1 || true
   nmcli connection up "vEGPU vmnet" ifname enp0s3 >/dev/null 2>&1 || true
 }
 
+repair_share_access() {
+  local share_gid share_group
+  usermod -aG dialout "$HUMAN_USER" 2>/dev/null || true
+  usermod -aG dialout vegpuctl 2>/dev/null || true
+  if /usr/bin/timeout 2s test -e "$SHARE" 2>/dev/null; then
+    share_gid="$(/usr/bin/timeout 2s stat -c '%g' "$SHARE" 2>/dev/null || true)"
+    share_group="$(getent group "$share_gid" 2>/dev/null | cut -d: -f1 || true)"
+    if [ -n "$share_group" ]; then
+      usermod -aG "$share_group" "$HUMAN_USER" 2>/dev/null || true
+      usermod -aG "$share_group" vegpuctl 2>/dev/null || true
+    fi
+  fi
+}
+
 repair_desktop_links() {
+  local home tmp
+  home="/home/$HUMAN_USER"
   install -d -o "$HUMAN_USER" -g "$HUMAN_USER" \
-    "/home/$HUMAN_USER/Desktop" \
-    "/home/$HUMAN_USER/.config/gtk-3.0" \
-    "/home/$HUMAN_USER/.local" \
-    "/home/$HUMAN_USER/.local/share" \
-    "/home/$HUMAN_USER/.local/share/gvfs-metadata" \
-    "/home/$HUMAN_USER/.local/share/applications"
+    "$home/Desktop" \
+    "$home/.config/gtk-3.0" \
+    "$home/.config/autostart" \
+    "$home/.local/share" \
+    "$home/.local/share/gvfs-metadata" \
+    "$home/.local/share/applications"
 
   rm -f /usr/local/bin/vegpu-open-mac-share \
-    "/home/$HUMAN_USER/Desktop/Mac Share.desktop" \
-    "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-  rm -rf "/home/$HUMAN_USER/Mac Share" "/home/$HUMAN_USER/Desktop/Mac Share"
+    "$home/Desktop/Mac Share.desktop" \
+    "$home/.local/share/applications/vegpu-mac-share.desktop"
+  rm -rf "$home/Mac Share" "$home/Desktop/Mac Share"
 
-  ln -sfn "$SHARE" "/home/$HUMAN_USER/Mac Share"
-  ln -sfn "$SHARE" "/home/$HUMAN_USER/Desktop/Mac Share"
-  chown -h "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Mac Share"
-  chown -h "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Desktop/Mac Share"
+  ln -sfn "$SHARE" "$home/Mac Share"
+  ln -sfn "$SHARE" "$home/Desktop/Mac Share"
+  chown -h "$HUMAN_USER:$HUMAN_USER" "$home/Mac Share" "$home/Desktop/Mac Share"
 
-  if [ -f "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks" ]; then
+  if [ -f "$home/.config/gtk-3.0/bookmarks" ]; then
     tmp="$(mktemp)"
-    awk -v raw="file://$SHARE Mac Share" '$0 != raw { print }' "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks" >"$tmp"
-    install -o "$HUMAN_USER" -g "$HUMAN_USER" -m 0644 "$tmp" "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks"
+    awk -v raw="file://$SHARE Mac Share" '$0 != raw { print }' "$home/.config/gtk-3.0/bookmarks" >"$tmp"
+    install -o "$HUMAN_USER" -g "$HUMAN_USER" -m 0644 "$tmp" "$home/.config/gtk-3.0/bookmarks"
     rm -f "$tmp"
   fi
 }
 
-install_display_control() {
-  install -d -o "$HUMAN_USER" -g "$HUMAN_USER" \
-    "/home/$HUMAN_USER/Desktop" \
-    "/home/$HUMAN_USER/.config/autostart" \
-    "/home/$HUMAN_USER/.local/share/applications"
+install_lightdm_autologin() {
+  install -d /etc/lightdm/lightdm.conf.d
+  write_root_file_if_changed /etc/lightdm/lightdm.conf.d/90-vegpu-autologin.conf <<EOF
+[Seat:*]
+autologin-user=$HUMAN_USER
+autologin-user-timeout=0
+user-session=xfce
+greeter-session=lightdm-gtk-greeter
+EOF
+}
 
-  cat >/usr/local/sbin/vegpu-display-mode-helper <<'EOS'
+install_spice_agent_autostart() {
+  local home
+  home="/home/$HUMAN_USER"
+  install -d -o "$HUMAN_USER" -g "$HUMAN_USER" "$home/.config/autostart"
+  cat >"$home/.config/autostart/spice-vdagent.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=SPICE Agent
+Exec=/usr/bin/spice-vdagent
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+EOF
+  chown "$HUMAN_USER:$HUMAN_USER" "$home/.config/autostart/spice-vdagent.desktop"
+}
+
+appearance_fingerprint() {
+  {
+    sha256sum /etc/vegpu/gui-prefs.conf 2>/dev/null || true
+    sha256sum "$CUSTOMIZATION_SCRIPT" 2>/dev/null || true
+    sha256sum /usr/share/vegpu/gui/vEGPU-logo-transparent.png 2>/dev/null || true
+  } | sha256sum | awk '{ print $1 }'
+}
+
+install_appearance_once() {
+  local fingerprint old
+  run_customization write-prefs
+  fingerprint="$(appearance_fingerprint)"
+  old="$(cat "$APPEARANCE_MARKER" 2>/dev/null || true)"
+  if [ "$fingerprint" = "$old" ]; then
+    return 0
+  fi
+
+  log "installing vEGPU XFCE appearance defaults"
+  run_customization install-system
+  run_customization disable-idle || true
+  run_customization apply-session || true
+  install -d "$STATE_DIR"
+  printf '%s\n' "$fingerprint" >"$APPEARANCE_MARKER"
+}
+
+install_display_control() {
+  local tmp
+  install -d /usr/local/sbin /usr/local/bin /etc/sudoers.d /etc/systemd/system
+
+  tmp="$(mktemp)"
+  cat >"$tmp" <<'HELPER_SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -230,6 +295,11 @@ NO_IDLE_CONF=/etc/X11/xorg.conf.d/90-vegpu-no-idle.conf
 CUSTOMIZATION_SCRIPT=/usr/local/libexec/vegpu/customization.sh
 SESSION_ROOT=/run/vegpu-display-sessions
 SESSION_STATE_ROOT=/var/lib/vegpu/display-sessions
+DISPLAY_USER="${VEGPU_DISPLAY_USER:-vegpu}"
+
+json_value() {
+  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
+}
 
 run_customization() {
   [ -x "$CUSTOMIZATION_SCRIPT" ] || {
@@ -239,21 +309,36 @@ run_customization() {
   "$CUSTOMIZATION_SCRIPT" "$@"
 }
 
+write_root_file_if_changed() {
+  local destination="$1" mode="${2:-0644}" tmp
+  tmp="$(mktemp)"
+  cat >"$tmp"
+  if ! [ -f "$destination" ] || ! cmp -s "$tmp" "$destination"; then
+    install -D -m "$mode" "$tmp" "$destination"
+  fi
+  rm -f "$tmp"
+}
+
 normalize_bdf() {
   local raw="$1" domain bus slot func
   raw="${raw#pci:}"
-  IFS=':.' read -r domain bus slot func <<EOF
+  raw="${raw,,}"
+  IFS=':.' read -r domain bus slot func <<BDF_EOF
 $raw
-EOF
+BDF_EOF
+  domain="${domain:-0000}"
+  bus="${bus:-00}"
+  slot="${slot:-00}"
+  func="${func:-0}"
   domain="${domain: -4}"
   printf '%04x:%02x:%02x.%d\n' "$((16#$domain))" "$((16#$bus))" "$((16#$slot))" "$((10#$func))"
 }
 
 xorg_bus_id_from_bdf() {
   local bdf="$1" domain bus slot func
-  IFS=':.' read -r domain bus slot func <<EOF
+  IFS=':.' read -r domain bus slot func <<BDF_EOF
 $bdf
-EOF
+BDF_EOF
   printf 'PCI:%d:%d:%d\n' "$((16#$bus))" "$((16#$slot))" "$((10#$func))"
 }
 
@@ -289,27 +374,27 @@ gpu_valid_for_bdf() {
   [ "$(cat "/sys/bus/pci/devices/$bdf/vendor" 2>/dev/null || true)" = "0x10de" ]
 }
 
+gpu_rows() {
+  nvidia-smi --query-gpu=index,name,pci.bus_id --format=csv,noheader,nounits 2>/dev/null |
+    awk -F', *' 'NF >= 3 { printf "%s\t%s\t%s\n", $1, $2, $3 }'
+}
+
 write_no_idle_flags() {
   install -d /etc/X11/xorg.conf.d
-  cat >"$NO_IDLE_CONF" <<'CONF'
+  write_root_file_if_changed "$NO_IDLE_CONF" <<'CONF'
 Section "ServerFlags"
     Option "BlankTime" "0"
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"
     Option "OffTime" "0"
 EndSection
-
-Section "Monitor"
-    Identifier "Virtual-1"
-    Option "DPMS" "false"
-EndSection
 CONF
 }
 
-write_spice_only_xorg() {
+write_spice_xorg() {
   local virtio_busid="$1"
   install -d /etc/X11/xorg.conf.d "$MODE_DIR"
-  cat >"$XORG_CONF" <<CONF
+  write_root_file_if_changed "$XORG_CONF" <<CONF
 Section "ServerFlags"
     Option "AutoAddGPU" "false"
     Option "AutoBindGPU" "false"
@@ -335,10 +420,10 @@ EndSection
 CONF
 }
 
-write_external_primary_xorg() {
+write_external_xorg() {
   local nvidia_busid="$1"
   install -d /etc/X11/xorg.conf.d "$MODE_DIR"
-  cat >"$XORG_CONF" <<CONF
+  write_root_file_if_changed "$XORG_CONF" <<CONF
 Section "ServerFlags"
     Option "AutoAddGPU" "false"
     Option "AutoBindGPU" "false"
@@ -364,54 +449,53 @@ EndSection
 CONF
 }
 
-restart_lightdm_for_mode() {
-  local mode="$1"
-  /usr/bin/timeout 20s systemctl stop lightdm || true
-  [ -n "$mode" ] || true
-  /usr/bin/timeout 20s systemctl start lightdm || true
-}
-
-schedule_primary_apply_after_restart() {
-  local user uid runuser_bin display_args=()
-  command -v systemd-run >/dev/null 2>&1 || return 0
-  user="${VEGPU_DISPLAY_USER:-vegpu}"
-  uid="$(id -u "$user" 2>/dev/null || true)"
-  [ -n "$uid" ] || return 0
-  if [ -n "${VEGPU_PRIMARY_DISPLAY:-}" ]; then
-    display_args=(DISPLAY="$VEGPU_PRIMARY_DISPLAY")
-  fi
-  runuser_bin="$(command -v runuser || printf '%s\n' /usr/sbin/runuser)"
-  systemctl stop vegpu-display-primary-apply.service >/dev/null 2>&1 || true
-  systemctl reset-failed vegpu-display-primary-apply.service >/dev/null 2>&1 || true
-  systemd-run --unit=vegpu-display-primary-apply --collect --on-active=8s \
-    "$runuser_bin" -u "$user" -- \
-      /usr/bin/env "${display_args[@]}" XAUTHORITY="/home/$user/.Xauthority" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" VEGPU_DISPLAY_QUIET=1 \
-      /usr/local/bin/vegpu-display-control --apply-primary-display >/dev/null 2>&1 || true
-}
-
 write_mode_file() {
   install -d "$MODE_DIR"
   cat >"$MODE_FILE"
   chmod 0644 "$MODE_FILE"
 }
 
+mode_value() {
+  local key="$1"
+  [ -f "$MODE_FILE" ] || return 0
+  awk -F= -v key="$key" '$1 == key { print substr($0, index($0, "=") + 1); exit }' "$MODE_FILE"
+}
+
 current_display_mode() {
-  if [ -f "$MODE_FILE" ]; then
-    awk -F= '$1 == "VEGPU_DISPLAY_MODE" { print substr($0, index($0, "=") + 1); exit }' "$MODE_FILE" 2>/dev/null || true
+  mode_value VEGPU_DISPLAY_MODE
+}
+
+configure_spice_without_restart() {
+  local virtio_bdf
+  virtio_bdf="$(detect_virtio_gpu_bdf)"
+  write_spice_xorg "$(xorg_bus_id_from_bdf "$virtio_bdf")"
+  write_no_idle_flags
+}
+
+configure_external_without_restart() {
+  local nvidia_bdf="$1"
+  validate_nvidia_bdf "$nvidia_bdf"
+  write_external_xorg "$(xorg_bus_id_from_bdf "$nvidia_bdf")"
+  write_no_idle_flags
+}
+
+configure_current_without_restart() {
+  local mode nvidia_bdf
+  mode="$(current_display_mode)"
+  nvidia_bdf="$(mode_value VEGPU_NVIDIA_BDF)"
+  if [ "$mode" = "external-primary" ] && [ -n "$nvidia_bdf" ] && gpu_valid_for_bdf "$nvidia_bdf"; then
+    configure_external_without_restart "$nvidia_bdf"
+  else
+    configure_spice_without_restart
   fi
 }
 
-json_value() {
-  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
-}
-
-gpu_rows() {
-  nvidia-smi --query-gpu=index,name,pci.bus_id --format=csv,noheader 2>/dev/null |
-    awk -F', *' 'NF >= 3 { printf "%s\t%s\t%s\n", $1, $2, $3 }'
+restart_lightdm() {
+  /usr/bin/timeout 20s systemctl restart lightdm >/dev/null 2>&1 || true
 }
 
 session_id_for_bdf() {
-  printf 'gpu-%s\n' "$(printf '%s' "$1" | tr '[:.]' '--')"
+  printf 'gpu-%s\n' "$(printf '%s' "$1" | sed 's/[:.]/-/g')"
 }
 
 session_dir_for_id() {
@@ -462,9 +546,7 @@ session_name_for_bdf() {
 
 session_display_for_index() {
   local idx="${1:-0}"
-  case "$idx" in
-    ''|*[!0-9]*) idx=0 ;;
-  esac
+  case "$idx" in ''|*[!0-9]*) idx=0 ;; esac
   printf ':%d\n' "$((10 + idx))"
 }
 
@@ -484,9 +566,7 @@ session_xorg_running() {
 session_clear_stale_display_lock() {
   local display="$1" number pid
   number="${display#:}"
-  case "$number" in
-    ''|*[!0-9]*) return 0 ;;
-  esac
+  case "$number" in ''|*[!0-9]*) return 0 ;; esac
   if [ -f "/tmp/.X${number}-lock" ]; then
     pid="$(tr -d ' ' <"/tmp/.X${number}-lock" 2>/dev/null || true)"
     if [ -n "$pid" ] && kill -0 "$pid" >/dev/null 2>&1; then
@@ -497,28 +577,26 @@ session_clear_stale_display_lock() {
 }
 
 session_run_user() {
-  local display="$1" xauthority="$2" user uid bus
+  local display="$1" xauthority="$2" uid bus
   shift 2
-  user="${VEGPU_DISPLAY_USER:-vegpu}"
-  uid="$(id -u "$user" 2>/dev/null || true)"
+  uid="$(id -u "$DISPLAY_USER" 2>/dev/null || true)"
   bus="/run/user/$uid/bus"
-  runuser -u "$user" -- env \
+  runuser -u "$DISPLAY_USER" -- env \
     DISPLAY="$display" \
     XAUTHORITY="$xauthority" \
-    HOME="/home/$user" \
-    USER="$user" \
-    LOGNAME="$user" \
+    HOME="/home/$DISPLAY_USER" \
+    USER="$DISPLAY_USER" \
+    LOGNAME="$DISPLAY_USER" \
     DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$bus}" \
     "$@"
 }
 
 primary_session_env() {
-  local user target_xauthority pid envlines display xauthority dbus
-  user="${VEGPU_DISPLAY_USER:-vegpu}"
-  target_xauthority="/home/$user/.Xauthority"
-  for pid in $(pgrep -u "$user" xfce4-session 2>/dev/null || true) \
-             $(pgrep -u "$user" xfce4-panel 2>/dev/null || true) \
-             $(pgrep -u "$user" xfdesktop 2>/dev/null || true); do
+  local target_xauthority pid envlines display xauthority dbus
+  target_xauthority="/home/$DISPLAY_USER/.Xauthority"
+  for pid in $(pgrep -u "$DISPLAY_USER" xfce4-session 2>/dev/null || true) \
+             $(pgrep -u "$DISPLAY_USER" xfce4-panel 2>/dev/null || true) \
+             $(pgrep -u "$DISPLAY_USER" xfdesktop 2>/dev/null || true); do
     [ -r "/proc/$pid/environ" ] || continue
     envlines="$(tr '\0' '\n' <"/proc/$pid/environ")"
     display="$(printf '%s\n' "$envlines" | awk -F= '$1 == "DISPLAY" { print substr($0, index($0, "=") + 1); exit }')"
@@ -531,90 +609,6 @@ primary_session_env() {
     return 0
   done
   return 1
-}
-
-session_route_primary_input() {
-  local role="$1" display xauthority dbus
-  IFS=$'\t' read -r display xauthority dbus < <(primary_session_env || true)
-  [ -n "${display:-}" ] && [ -n "${xauthority:-}" ] || return 0
-  session_route_input_for_display "$display" "$xauthority" "$role" noverify
-}
-
-write_session_xorg_config() {
-  local path="$1" busid="$2"
-  cat >"$path" <<CONF
-Section "ServerFlags"
-    Option "AutoAddGPU" "false"
-    Option "AutoBindGPU" "false"
-    Option "BlankTime" "0"
-    Option "StandbyTime" "0"
-    Option "SuspendTime" "0"
-    Option "OffTime" "0"
-EndSection
-
-Section "Device"
-    Identifier "vEGPU Native NVIDIA"
-    Driver "nvidia"
-    BusID "$busid"
-    Option "AllowEmptyInitialConfiguration" "true"
-    Option "PrimaryGPU" "true"
-EndSection
-
-Section "Screen"
-    Identifier "vEGPU Native NVIDIA Screen"
-    Device "vEGPU Native NVIDIA"
-EndSection
-
-Section "ServerLayout"
-    Identifier "vEGPU Native NVIDIA Layout"
-    Screen 0 "vEGPU Native NVIDIA Screen" 0 0
-EndSection
-CONF
-}
-
-session_wait_for_xorg() {
-  local display="$1" xauthority="$2" i
-  for i in $(seq 1 80); do
-    if DISPLAY="$display" XAUTHORITY="$xauthority" xrandr --query >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 0.25
-  done
-  return 1
-}
-
-session_configure_outputs() {
-  local display="$1" xauthority="$2" outputs output
-  outputs="$(session_run_user "$display" "$xauthority" xrandr --query 2>/dev/null | awk '$2 == "connected" { print $1 }' || true)"
-  [ -n "$outputs" ] || return 0
-  while IFS= read -r output; do
-    [ -n "$output" ] || continue
-    session_run_user "$display" "$xauthority" xrandr --output "$output" --auto >/dev/null 2>&1 || true
-  done <<EOF
-$outputs
-EOF
-}
-
-session_outputs_json_for_display() {
-  local display="$1" xauthority="$2" raw
-  raw="$(session_run_user "$display" "$xauthority" xrandr --query 2>/dev/null || true)"
-  printf '%s' "$raw" | python3 -c '
-import json, re, sys
-outputs = []
-for line in sys.stdin.read().splitlines():
-    m = re.match(r"^(\S+)\s+(connected|disconnected)(?:\s+primary)?(?:\s+([0-9]+x[0-9]+)\+([0-9]+)\+([0-9]+))?", line)
-    if not m:
-        continue
-    outputs.append({
-        "name": m.group(1),
-        "connected": m.group(2) == "connected",
-        "primary": " primary " in f" {line} ",
-        "mode": m.group(3) or "",
-        "x": int(m.group(4) or 0),
-        "y": int(m.group(5) or 0)
-    })
-print(json.dumps(outputs))
-'
 }
 
 session_xinput_ids_by_name() {
@@ -647,13 +641,11 @@ session_xinput_device_attached() {
   local display="$1" xauthority="$2" id="$3"
   DISPLAY="$display" XAUTHORITY="$xauthority" xinput --list --short 2>/dev/null |
     awk -v needle="id=$id" '
-    index($0, needle) {
-      found = 1
-      attached = index($0, "floating slave") ? 0 : index($0, "[slave") ? 1 : 0
-    }
-    END {
-      exit(found && attached ? 0 : 1)
-    }
+      index($0, needle) {
+        found = 1
+        attached = index($0, "floating slave") ? 0 : index($0, "[slave") ? 1 : 0
+      }
+      END { exit(found && attached ? 0 : 1) }
     '
 }
 
@@ -673,9 +665,9 @@ session_route_named_input() {
         DISPLAY="$display" XAUTHORITY="$xauthority" xinput float "$id" >/dev/null 2>&1 || true
         ;;
     esac
-  done <<EOF
+  done <<EOF_IDS
 $ids
-EOF
+EOF_IDS
 }
 
 session_verify_named_input_active() {
@@ -692,9 +684,9 @@ session_verify_named_input_active() {
       printf 'input device is not attached on %s: %s id=%s\n' "$display" "$name" "$id" >&2
       return 1
     fi
-  done <<EOF
+  done <<EOF_IDS
 $ids
-EOF
+EOF_IDS
   if [ "$found" -eq 0 ]; then
     printf 'input device is missing on %s: %s\n' "$display" "$name" >&2
     return 1
@@ -742,6 +734,13 @@ session_route_input_for_display() {
   esac
 }
 
+session_route_primary_input() {
+  local role="$1" display xauthority dbus
+  IFS=$'\t' read -r display xauthority dbus < <(primary_session_env || true)
+  [ -n "${display:-}" ] && [ -n "${xauthority:-}" ] || return 0
+  session_route_input_for_display "$display" "$xauthority" "$role" noverify
+}
+
 session_route_input() {
   local id="$1" role="$2" verify="${3:-noverify}" display xauthority
   session_load_env "$id" || return 0
@@ -751,8 +750,73 @@ session_route_input() {
   session_route_input_for_display "$display" "$xauthority" "$role" "$verify"
 }
 
+write_session_xorg_config() {
+  local path="$1" busid="$2"
+  cat >"$path" <<CONF
+Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
+    Option "BlankTime" "0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
+EndSection
+
+Section "Device"
+    Identifier "vEGPU Native NVIDIA"
+    Driver "nvidia"
+    BusID "$busid"
+    Option "AllowEmptyInitialConfiguration" "true"
+    Option "PrimaryGPU" "true"
+EndSection
+
+Section "Screen"
+    Identifier "vEGPU Native NVIDIA Screen"
+    Device "vEGPU Native NVIDIA"
+EndSection
+
+Section "ServerLayout"
+    Identifier "vEGPU Native NVIDIA Layout"
+    Screen 0 "vEGPU Native NVIDIA Screen" 0 0
+EndSection
+CONF
+}
+
+session_wait_for_xorg() {
+  local display="$1" xauthority="$2" i
+  for i in $(seq 1 80); do
+    if DISPLAY="$display" XAUTHORITY="$xauthority" xrandr --query >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+session_outputs_json_for_display() {
+  local display="$1" xauthority="$2" raw
+  raw="$(session_run_user "$display" "$xauthority" xrandr --query 2>/dev/null || true)"
+  printf '%s' "$raw" | python3 -c '
+import json, re, sys
+outputs = []
+for line in sys.stdin.read().splitlines():
+    m = re.match(r"^(\S+)\s+(connected|disconnected)(?:\s+primary)?(?:\s+([0-9]+x[0-9]+)\+([0-9]+)\+([0-9]+))?", line)
+    if not m:
+        continue
+    outputs.append({
+        "name": m.group(1),
+        "connected": m.group(2) == "connected",
+        "primary": " primary " in f" {line} ",
+        "mode": m.group(3) or "",
+        "x": int(m.group(4) or 0),
+        "y": int(m.group(5) or 0),
+    })
+print(json.dumps(outputs))
+'
+}
+
 session_start() {
-  local bdf idx name id display dir state_dir xauthority xorg_log desktop_log busid xorg_bin user uid
+  local bdf idx name id display dir state_dir xauthority xorg_log desktop_log busid xorg_bin uid
   bdf="$(normalize_bdf "${1:?missing NVIDIA PCI bus id}")"
   validate_nvidia_bdf "$bdf"
   idx="${2:-$(session_index_for_bdf "$bdf" || true)}"
@@ -766,14 +830,13 @@ session_start() {
   xorg_log="$dir/xorg.log"
   desktop_log="$dir/desktop.log"
   busid="$(xorg_bus_id_from_bdf "$bdf")"
-  user="${VEGPU_DISPLAY_USER:-vegpu}"
-  uid="$(id -u "$user" 2>/dev/null || true)"
+  uid="$(id -u "$DISPLAY_USER" 2>/dev/null || true)"
 
   install -d -m 0755 "$SESSION_ROOT" "$SESSION_STATE_ROOT" "$dir" "$state_dir" "$dir/xorg.conf.d"
   write_session_xorg_config "$dir/xorg.conf" "$busid"
   if ! [ -f "$xauthority" ]; then
     xauth -f "$xauthority" add "$display" . "$(mcookie)" >/dev/null 2>&1 || true
-    chown "$user:$user" "$xauthority" >/dev/null 2>&1 || true
+    chown "$DISPLAY_USER:$DISPLAY_USER" "$xauthority" >/dev/null 2>&1 || true
   fi
 
   if ! session_xorg_running "$id"; then
@@ -796,20 +859,23 @@ DISPLAY_NAME=$display
 XAUTHORITY_FILE=$xauthority
 CONF
 
-  # Let NVIDIA/Xorg choose the initial connected-output layout. XFCE can manage
-  # later monitor changes inside this session without vEGPU rewriting positions.
   if ! session_pid_alive "$dir/desktop.pid"; then
-    runuser -u "$user" -- env \
+    runuser -u "$DISPLAY_USER" -- env \
       DISPLAY="$display" \
       XAUTHORITY="$xauthority" \
-      HOME="/home/$user" \
-      USER="$user" \
-      LOGNAME="$user" \
+      HOME="/home/$DISPLAY_USER" \
+      USER="$DISPLAY_USER" \
+      LOGNAME="$DISPLAY_USER" \
       XDG_SESSION_TYPE=x11 \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
       dbus-run-session -- sh -lc 'xfce4-session' >"$desktop_log" 2>&1 &
     printf '%s\n' "$!" >"$dir/desktop.pid"
   fi
   session_route_input "$id" off
+  (
+    sleep 2
+    session_run_user "$display" "$xauthority" "$CUSTOMIZATION_SCRIPT" apply-session >/dev/null 2>&1 || true
+  ) &
 }
 
 session_stop() {
@@ -909,53 +975,41 @@ sessions_json() {
   printf ']}\n'
 }
 
-cmd="${1:-status}"
-case "$cmd" in
+case "${1:-status}" in
   install-global-defaults)
-    run_customization install-global-defaults
-    ;;
-  spice)
-    virtio_bdf="$(detect_virtio_gpu_bdf)"
-    write_spice_only_xorg "$(xorg_bus_id_from_bdf "$virtio_bdf")"
-    write_no_idle_flags
-    write_mode_file <<CONF
-VEGPU_DISPLAY_MODE=spice
-CONF
-    restart_lightdm_for_mode spice
+    run_customization install-system
     ;;
   boot-spice)
-    virtio_bdf="$(detect_virtio_gpu_bdf)"
-    write_spice_only_xorg "$(xorg_bus_id_from_bdf "$virtio_bdf")"
-    write_no_idle_flags
-    run_customization install-global-defaults
+    configure_spice_without_restart
     write_mode_file <<CONF
 VEGPU_DISPLAY_MODE=spice
 CONF
+    ;;
+  configure-current)
+    configure_current_without_restart
+    ;;
+  spice)
+    configure_spice_without_restart
+    write_mode_file <<CONF
+VEGPU_DISPLAY_MODE=spice
+CONF
+    session_release || true
+    restart_lightdm
     ;;
   external-primary)
     nvidia_bdf="$(normalize_bdf "${2:?missing NVIDIA PCI bus id}")"
     nvidia_index="${3:-}"
-    validate_nvidia_bdf "$nvidia_bdf"
-    write_external_primary_xorg "$(xorg_bus_id_from_bdf "$nvidia_bdf")"
-    write_no_idle_flags
+    configure_external_without_restart "$nvidia_bdf"
     write_mode_file <<CONF
 VEGPU_DISPLAY_MODE=external-primary
 VEGPU_NVIDIA_BDF=$nvidia_bdf
 VEGPU_NVIDIA_INDEX=$nvidia_index
 CONF
-    schedule_primary_apply_after_restart
-    restart_lightdm_for_mode external-primary
+    restart_lightdm
     ;;
   reload)
-    case "$(current_display_mode)" in
-      external-primary)
-        schedule_primary_apply_after_restart
-        restart_lightdm_for_mode external-primary
-        ;;
-      *)
-        restart_lightdm_for_mode spice
-        ;;
-    esac
+    configure_current_without_restart
+    restart_lightdm
     ;;
   status)
     if [ -f "$MODE_FILE" ]; then
@@ -987,34 +1041,25 @@ CONF
     session_outputs_json "${2:?missing session id}"
     ;;
   *)
-    printf 'usage: %s {install-global-defaults|spice|boot-spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>}\n' "$0" >&2
+    printf 'usage: %s {install-global-defaults|boot-spice|configure-current|spice|external-primary <pci-bdf> [index]|reload|status|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>}\n' "$0" >&2
     exit 2
     ;;
 esac
-EOS
-  chmod 0755 /usr/local/sbin/vegpu-display-mode-helper
+HELPER_SCRIPT
+  install_file_if_changed "$tmp" "$DISPLAY_HELPER" 0755
+  rm -f "$tmp"
 
-  cat >/etc/systemd/system/vegpu-display-boot-reset.service <<'EOS'
-[Unit]
-Description=Reset vEGPU display mode to SPICE before the graphical login
-After=local-fs.target
-Before=display-manager.service lightdm.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/vegpu-display-mode-helper boot-spice
-
-[Install]
-WantedBy=multi-user.target
-EOS
-  systemctl enable vegpu-display-boot-reset.service >/dev/null 2>&1 || true
-
-cat >/usr/local/bin/vegpu-display-control <<'EOS'
+  tmp="$(mktemp)"
+  cat >"$tmp" <<'CONTROL_SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
 
 MODE_FILE=/etc/vegpu/display-mode.conf
 CUSTOMIZATION_SCRIPT=/usr/local/libexec/vegpu/customization.sh
+
+json_value() {
+  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
+}
 
 discover_session_env() {
   local target_xauthority pid envlines display xauthority dbus
@@ -1044,7 +1089,6 @@ session_env() {
   if [ -z "${DISPLAY:-}" ]; then
     discover_session_env || return 1
   fi
-  [ -n "${DISPLAY:-}" ] || return 1
   uid="$(id -u)"
   bus="/run/user/$uid/bus"
   export DISPLAY
@@ -1064,20 +1108,20 @@ normalize_bdf() {
   local raw="$1" domain bus slot func
   raw="${raw#pci:}"
   raw="${raw,,}"
-  IFS=':.' read -r domain bus slot func <<EOF
+  IFS=':.' read -r domain bus slot func <<BDF_EOF
 $raw
-EOF
+BDF_EOF
+  domain="${domain:-0000}"
+  bus="${bus:-00}"
+  slot="${slot:-00}"
+  func="${func:-0}"
   domain="${domain: -4}"
   printf '%04x:%02x:%02x.%d\n' "$((16#$domain))" "$((16#$bus))" "$((16#$slot))" "$((10#$func))"
 }
 
 gpu_rows() {
-  nvidia-smi --query-gpu=index,name,pci.bus_id --format=csv,noheader 2>/dev/null |
+  nvidia-smi --query-gpu=index,name,pci.bus_id --format=csv,noheader,nounits 2>/dev/null |
     awk -F', *' 'NF >= 3 { printf "%s\t%s\t%s\n", $1, $2, $3 }'
-}
-
-json_value() {
-  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
 }
 
 gpu_valid_for_bdf() {
@@ -1093,9 +1137,7 @@ list_gpus_json() {
     [ -n "${raw_bdf:-}" ] || continue
     bdf="$(normalize_bdf "$raw_bdf" 2>/dev/null || printf '%s' "$raw_bdf")"
     valid=false
-    if gpu_valid_for_bdf "$bdf"; then
-      valid=true
-    fi
+    gpu_valid_for_bdf "$bdf" && valid=true
     [ "$first" -eq 1 ] || printf ','
     first=0
     printf '{"index":%s,"name":%s,"bdf":%s,"valid":%s}' \
@@ -1108,8 +1150,7 @@ list_gpus_json() {
 }
 
 selected_gpu_from_mode_json() {
-  local selected_bdf="$1" selected_index="$2"
-  local idx name raw_bdf bdf
+  local selected_bdf="$1" selected_index="$2" idx name raw_bdf bdf
   [ -n "$selected_bdf" ] || {
     printf 'null'
     return 0
@@ -1189,296 +1230,150 @@ session_outputs() {
   sudo -n /usr/local/sbin/vegpu-display-mode-helper session-outputs "${1:?missing session id}"
 }
 
-run_customization() {
+apply_display() {
   [ -x "$CUSTOMIZATION_SCRIPT" ] || {
     printf 'Missing vEGPU GUI customization script: %s\n' "$CUSTOMIZATION_SCRIPT" >&2
     return 1
   }
-  "$CUSTOMIZATION_SCRIPT" "$@"
-}
-
-main() {
   session_env
-  case "${1:-}" in
-    --apply-primary-display)
-      run_customization apply-primary-display
-      return 0
-      ;;
-    status)
-      if [ "${2:-}" = "--json" ]; then
-        status_json
-      else
-        sudo -n /usr/local/sbin/vegpu-display-mode-helper status
-      fi
-      return 0
-      ;;
-    list-gpus)
-      if [ "${2:-}" = "--json" ]; then
-        list_gpus_json
-      else
-        printf 'usage: %s list-gpus --json\n' "$0" >&2
-        return 2
-      fi
-      return 0
-      ;;
-    external-primary)
-      switch_external_primary "${2:?missing NVIDIA PCI bus id}" "${3:-}"
-      return 0
-      ;;
-    spice)
-      switch_spice
-      return 0
-      ;;
-    reload)
-      reload_display
-      return 0
-      ;;
-    sessions)
-      if [ "${2:-}" = "--json" ]; then
-        sessions_json
-      else
-        printf 'usage: %s sessions --json\n' "$0" >&2
-        return 2
-      fi
-      return 0
-      ;;
-    session-start)
-      session_start "${2:?missing NVIDIA PCI bus id}" "${3:-}"
-      return 0
-      ;;
-    session-enter|session-activate)
-      session_enter "${2:?missing session id}"
-      return 0
-      ;;
-    session-release)
-      session_release
-      return 0
-      ;;
-    session-stop)
-      session_stop "${2:?missing session id}"
-      return 0
-      ;;
-    session-outputs)
-      session_outputs "${2:?missing session id}"
-      return 0
-      ;;
-  esac
+  "$CUSTOMIZATION_SCRIPT" apply-display
 }
 
-main "$@"
-EOS
-  chmod 0755 /usr/local/bin/vegpu-display-control
+case "${1:-status}" in
+  --apply-primary-display|apply-display)
+    apply_display
+    ;;
+  status)
+    if [ "${2:-}" = "--json" ]; then
+      status_json
+    else
+      sudo -n /usr/local/sbin/vegpu-display-mode-helper status
+    fi
+    ;;
+  list-gpus)
+    if [ "${2:-}" = "--json" ]; then
+      list_gpus_json
+    else
+      printf 'usage: %s list-gpus --json\n' "$0" >&2
+      exit 2
+    fi
+    ;;
+  external-primary)
+    switch_external_primary "${2:?missing NVIDIA PCI bus id}" "${3:-}"
+    ;;
+  spice)
+    switch_spice
+    ;;
+  reload)
+    reload_display
+    ;;
+  sessions)
+    if [ "${2:-}" = "--json" ]; then
+      sessions_json
+    else
+      printf 'usage: %s sessions --json\n' "$0" >&2
+      exit 2
+    fi
+    ;;
+  session-start)
+    session_start "${2:?missing NVIDIA PCI bus id}" "${3:-}"
+    ;;
+  session-enter|session-activate)
+    session_enter "${2:?missing session id}"
+    ;;
+  session-release)
+    session_release
+    ;;
+  session-stop)
+    session_stop "${2:?missing session id}"
+    ;;
+  session-outputs)
+    session_outputs "${2:?missing session id}"
+    ;;
+  *)
+    printf 'usage: %s {status [--json]|list-gpus --json|external-primary <pci-bdf> [index]|spice|reload|sessions --json|session-start <bdf> [index]|session-enter <id>|session-release|session-stop <id>|session-outputs <id>|--apply-primary-display}\n' "$0" >&2
+    exit 2
+    ;;
+esac
+CONTROL_SCRIPT
+  install_file_if_changed "$tmp" "$DISPLAY_CONTROL" 0755
+  rm -f "$tmp"
 
-  cat >/etc/sudoers.d/90-vegpu-display-control <<'EOS'
-vegpu ALL=(root) NOPASSWD: /usr/local/sbin/vegpu-display-mode-helper *
-EOS
+  printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/vegpu-display-mode-helper *\n' "$HUMAN_USER" >/etc/sudoers.d/90-vegpu-display-control
   chmod 0440 /etc/sudoers.d/90-vegpu-display-control
   visudo -cf /etc/sudoers.d/90-vegpu-display-control >/dev/null 2>&1 || rm -f /etc/sudoers.d/90-vegpu-display-control
 
-  find "/home/$HUMAN_USER/.config/autostart" -maxdepth 1 -type f -name 'vegpu-display-*.desktop' -delete
-  cat >"/home/$HUMAN_USER/.config/autostart/vegpu-display-apply.desktop" <<'EOS'
-[Desktop Entry]
-Type=Application
-Name=vEGPU Display Apply
-Exec=/bin/sh -lc 'sleep 2; /usr/local/bin/vegpu-display-control --apply-primary-display'
-OnlyShowIn=XFCE;
-X-GNOME-Autostart-enabled=true
-EOS
-  chown "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/.config/autostart/vegpu-display-apply.desktop"
+  cat >/etc/systemd/system/vegpu-display-boot-reset.service <<'EOF'
+[Unit]
+Description=Reset vEGPU display mode to SPICE before the graphical login
+After=local-fs.target
+Before=display-manager.service lightdm.service
 
-}
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vegpu-display-mode-helper boot-spice
 
-repair_spice_agent_session() {
-  install -d -o "$HUMAN_USER" -g "$HUMAN_USER" "/home/$HUMAN_USER/.config/autostart"
-  cat >"/home/$HUMAN_USER/.config/autostart/spice-vdagent.desktop" <<'EOS'
-[Desktop Entry]
-Type=Application
-Name=SPICE Agent
-Exec=/usr/bin/spice-vdagent
-OnlyShowIn=XFCE;
-X-GNOME-Autostart-enabled=true
-EOS
-  chown "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/.config/autostart/spice-vdagent.desktop"
-}
-
-write_root_file_if_changed() {
-  local path="$1"
-  local tmp
-  tmp="$(mktemp)"
-  cat >"$tmp"
-  if ! [ -f "$path" ] || ! cmp -s "$tmp" "$path"; then
-    install -D -m 0644 "$tmp" "$path"
-    XORG_CHANGED=1
-  fi
-  rm -f "$tmp"
-}
-
-detect_virtio_gpu_bdf() {
-  local card vendor driver
-  for card in /sys/class/drm/card*; do
-    [ -e "$card/device/vendor" ] || continue
-    vendor="$(cat "$card/device/vendor" 2>/dev/null || true)"
-    driver="$(basename "$(readlink -f "$card/device/driver" 2>/dev/null)" 2>/dev/null || true)"
-    if [ "$vendor" = "0x1af4" ] || [ "$driver" = "virtio-pci" ] || [ "$driver" = "virtio_gpu" ]; then
-      basename "$(readlink -f "$card/device")"
-      return 0
-    fi
-  done
-  printf '%s\n' "0000:00:06.0"
-}
-
-xorg_bus_id_from_bdf() {
-  local bdf="$1"
-  local domain bus slot func
-  IFS=':.' read -r domain bus slot func <<EOF
-$bdf
+[Install]
+WantedBy=multi-user.target
 EOF
-  bus=$((16#$bus))
-  slot=$((16#$slot))
-  func=$((10#$func))
-  printf 'PCI:%d:%d:%d\n' "$bus" "$slot" "$func"
+  systemctl enable vegpu-display-boot-reset.service >/dev/null 2>&1 || true
+
+  find "/home/$HUMAN_USER/.config/autostart" -maxdepth 1 -type f -name 'vegpu-display-*.desktop' -delete 2>/dev/null || true
 }
 
-display_mode_value() {
-  local key="$1"
-  [ -f /etc/vegpu/display-mode.conf ] || return 0
-  awk -F= -v key="$key" '$1 == key { print substr($0, index($0, "=") + 1); exit }' /etc/vegpu/display-mode.conf
+configure_launch_display() {
+  if [ "${VEGPU_FORCE_SPICE_ON_LAUNCH:-0}" = "1" ]; then
+    case "$("$DISPLAY_HELPER" status 2>/dev/null | awk -F= '$1 == "VEGPU_DISPLAY_MODE" { print $2; exit }')" in
+      external-primary)
+        "$DISPLAY_HELPER" configure-current
+        return 0
+        ;;
+    esac
+    "$DISPLAY_HELPER" boot-spice
+    return 0
+  fi
+  "$DISPLAY_HELPER" configure-current
 }
 
-force_spice_mode_on_launch() {
-  [ "${VEGPU_FORCE_SPICE_ON_LAUNCH:-0}" = "1" ] || return 0
-  case "$(display_mode_value VEGPU_DISPLAY_MODE)" in
-    external-primary) return 0 ;;
-  esac
-  install -d /etc/vegpu
-  cat >/etc/vegpu/display-mode.conf <<'CONF'
-VEGPU_DISPLAY_MODE=spice
-CONF
+enable_runtime_services() {
+  systemctl enable ssh qemu-guest-agent lightdm >/dev/null 2>&1 || true
+  systemctl enable spice-vdagentd >/dev/null 2>&1 || systemctl enable spice-vdagent >/dev/null 2>&1 || true
+  systemctl is-active --quiet ssh >/dev/null 2>&1 || systemctl start ssh >/dev/null 2>&1 || true
+  systemctl is-active --quiet qemu-guest-agent >/dev/null 2>&1 || systemctl start qemu-guest-agent >/dev/null 2>&1 || true
+  systemctl is-active --quiet lightdm >/dev/null 2>&1 || systemctl start lightdm >/dev/null 2>&1 || true
+  systemctl is-active --quiet spice-vdagentd >/dev/null 2>&1 || systemctl start spice-vdagentd >/dev/null 2>&1 || true
 }
 
-write_spice_only_xorg_display() {
-  local busid="$1"
-  write_root_file_if_changed /etc/X11/xorg.conf.d/20-vegpu-virtio-display.conf <<EOS
-Section "ServerFlags"
-    Option "AutoAddGPU" "false"
-    Option "AutoBindGPU" "false"
-EndSection
-
-Section "Device"
-    Identifier "vEGPU Virtio Display"
-    Driver "modesetting"
-    BusID "$busid"
-    Option "PrimaryGPU" "true"
-    Option "DRI" "3"
-EndSection
-
-Section "Screen"
-    Identifier "vEGPU Screen"
-    Device "vEGPU Virtio Display"
-EndSection
-
-Section "ServerLayout"
-    Identifier "vEGPU Layout"
-    Screen "vEGPU Screen"
-EndSection
-EOS
-}
-
-write_external_primary_xorg_display() {
-  local nvidia_busid="$1"
-  write_root_file_if_changed /etc/X11/xorg.conf.d/20-vegpu-virtio-display.conf <<EOS
-Section "ServerFlags"
-    Option "AutoAddGPU" "false"
-    Option "AutoBindGPU" "false"
-EndSection
-
-Section "Device"
-    Identifier "vEGPU External NVIDIA"
-    Driver "nvidia"
-    BusID "$nvidia_busid"
-    Option "AllowEmptyInitialConfiguration" "true"
-    Option "PrimaryGPU" "true"
-EndSection
-
-Section "Screen"
-    Identifier "vEGPU External Screen"
-    Device "vEGPU External NVIDIA"
-EndSection
-
-Section "ServerLayout"
-    Identifier "vEGPU Layout"
-    Screen "vEGPU External Screen"
-EndSection
-EOS
-}
-
-configure_virtio_xorg_display() {
-  local bdf busid mode nvidia_bdf nvidia_busid
-  install -d /etc/X11/xorg.conf.d
-  bdf="$(detect_virtio_gpu_bdf)"
-  busid="$(xorg_bus_id_from_bdf "$bdf")"
-  mode="$(display_mode_value VEGPU_DISPLAY_MODE)"
-  nvidia_bdf="$(display_mode_value VEGPU_NVIDIA_BDF)"
-  case "$mode" in
-    external-primary)
-      if [ -n "$nvidia_bdf" ]; then
-        nvidia_busid="$(xorg_bus_id_from_bdf "$nvidia_bdf")"
-        write_external_primary_xorg_display "$nvidia_busid"
-      else
-        write_spice_only_xorg_display "$busid"
-      fi
-      ;;
-    *)
-      write_spice_only_xorg_display "$busid"
-      ;;
-  esac
-}
-
-restart_lightdm_for_display_config() {
-  /usr/bin/timeout 20s systemctl restart lightdm || true
-}
-
-if [ "${1:-}" = "--install-display-control-only" ]; then
+install_display_control_only() {
   install_customization_script
   run_customization write-prefs
   install_display_control
-  exit 0
-fi
+}
 
-install_desktop_stack
-configure_desktop_network
-force_spice_mode_on_launch
-configure_virtio_xorg_display
-repair_share_access
+install_full_gui() {
+  install -d "$STATE_DIR"
+  install_desktop_stack
+  configure_desktop_network
+  repair_share_access
+  repair_desktop_links
+  install_lightdm_autologin
+  install_spice_agent_autostart
+  install_customization_script
+  install_appearance_once
+  install_display_control
+  configure_launch_display
+  enable_runtime_services
+}
 
-install -d /etc/lightdm/lightdm.conf.d
-cat >/etc/lightdm/lightdm.conf.d/90-vegpu-autologin.conf <<'EOS'
-[Seat:*]
-autologin-user=vegpu
-autologin-user-timeout=0
-user-session=xfce
-greeter-session=lightdm-gtk-greeter
-EOS
-
-install -d -o vegpu -g vegpu \
-  /home/vegpu/.config/xfce4/xfconf/xfce-perchannel-xml \
-  /home/vegpu/.config/autostart
-
-chown -R vegpu:vegpu /home/vegpu/.config
-usermod -aG video,render,input,dialout vegpu || true
-usermod -aG dialout vegpuctl || true
-repair_desktop_links
-install_customization_script
-install_scaling_app
-run_customization write-prefs
-install_display_control
-repair_spice_agent_session
-run_customization apply-boot-defaults
-
-/usr/bin/timeout 20s systemctl enable ssh qemu-guest-agent lightdm || true
-/usr/bin/timeout 20s systemctl enable spice-vdagent || true
-/usr/bin/timeout 20s systemctl restart qemu-guest-agent || true
-/usr/bin/timeout 20s systemctl restart spice-vdagentd || true
-restart_lightdm_for_display_config
-
-touch "$MARKER"
+case "${1:-}" in
+  --install-display-control-only)
+    install_display_control_only
+    ;;
+  ""|--install)
+    install_full_gui
+    ;;
+  *)
+    printf 'usage: %s [--install|--install-display-control-only]\n' "$0" >&2
+    exit 2
+    ;;
+esac

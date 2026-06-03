@@ -671,7 +671,7 @@ EOF
 }
 
 usage() {
-  printf 'usage: %s {write-prefs|install-system|install-global-defaults|apply-boot-defaults|apply-session|apply-session-appearance|apply-display|apply-primary-display|disable-idle|create-assets}\n' "$0" >&2
+  printf 'usage: %s {write-prefs|install-system|install-global-defaults|apply-session|apply-display|apply-primary-display|disable-idle|create-assets}\n' "$0" >&2
 }
 
 main() {
@@ -685,12 +685,7 @@ main() {
     install-system|install-global-defaults)
       install_system
       ;;
-    apply-boot-defaults)
-      install_system
-      disable_idle
-      apply_session || true
-      ;;
-    apply-session|apply-session-appearance)
+    apply-session)
       apply_session
       ;;
     apply-display|apply-primary-display)
