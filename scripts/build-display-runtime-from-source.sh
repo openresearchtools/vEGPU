@@ -235,6 +235,7 @@ download_display_sources() {
   download "$SPICE_CLIENT_SRC"
   ensure_git_checkout "$WEBKIT_REPO" "$WEBKIT_COMMIT" "$WEBKIT_SUBDIRS"
   patch_angle_for_xcode26
+  ensure_git_checkout "$EPOXY_REPO" "$EPOXY_COMMIT" ""
   ensure_git_checkout "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
 }
 
@@ -256,6 +257,7 @@ ensure_git_checkout() {
 
 ensure_display_git_sources() {
   mkdir -p "$BUILD_DIR"
+  ensure_git_checkout "$EPOXY_REPO" "$EPOXY_COMMIT" ""
   ensure_git_checkout "$LIBUCONTEXT_REPO" "$LIBUCONTEXT_COMMIT" ""
 }
 
@@ -336,11 +338,11 @@ build_angle() {
       NORMAL_UMBRELLA_FRAMEWORKS_DIR="" \
       CODE_SIGNING_ALLOWED=NO \
       COMPILER_INDEX_STORE_ENABLE=NO \
-      OTHER_CFLAGS='$(inherited) -Wno-nontrivial-memcall -Wno-unnecessary-virtual-specifier' \
-      OTHER_CPLUSPLUSFLAGS='$(inherited) -Wno-nontrivial-memcall -Wno-unnecessary-virtual-specifier' \
       IPHONEOS_DEPLOYMENT_TARGET="14.0" \
       MACOSX_DEPLOYMENT_TARGET="11.0" \
-      XROS_DEPLOYMENT_TARGET="1.0"
+      XROS_DEPLOYMENT_TARGET="1.0" \
+      WK_HAS_VERSIONED_SDK_ADDITIONS=NO \
+      'WARNING_CFLAGS=$(inherited) -Wno-unnecessary-virtual-specifier -Wno-nontrivial-memcall'
   rsync -a "ANGLE.xcarchive/Products/usr/local/lib/" "$PREFIX/lib"
   rsync -a "include/" "$PREFIX/include"
   cd "$pwd"
@@ -381,6 +383,8 @@ build_display_frameworks() {
   meson_build "$GST_SRC" -Dtests=disabled -Ddefault_library=both -Dregistry=false
   meson_build "$GST_BASE_SRC" -Dtests=disabled -Ddefault_library=both -Dgl=disabled
   meson_build "$GST_GOOD_SRC" -Dtests=disabled -Ddefault_library=both
+  build_angle
+  meson_build "$EPOXY_REPO" -Dtests=false -Dglx=no -Degl=yes -Ddefault_library=static
   meson_build "$SPICE_PROTOCOL_SRC"
   build "$USB_SRC"
   meson_build "$USBREDIR_SRC"
@@ -389,8 +393,7 @@ build_display_frameworks() {
   build "$XML2_SRC" --enable-shared=no --without-python
   meson_build "$SOUP_SRC" -Dsysprof=disabled -Dtls_check=false -Dintrospection=disabled
   meson_build "$PHODAV_SRC"
-  meson_build "$SPICE_CLIENT_SRC" -Dcoroutine=libucontext
-  build_angle
+  meson_build "$SPICE_CLIENT_SRC" -Dcoroutine=libucontext -Degl=enabled
   fixup_all
   remove_shared_gst_plugins || true
 }
@@ -419,6 +422,11 @@ if [ ! -d "$FRAMEWORKS_OUT/spice-client-glib-2.0.8.framework" ]; then
 fi
 if [ ! -d "$FRAMEWORKS_OUT/EGL.framework" ] || [ ! -d "$FRAMEWORKS_OUT/GLESv2.framework" ]; then
   printf 'Source build did not produce ANGLE EGL/GLESv2 frameworks in %s\n' "$FRAMEWORKS_OUT" >&2
+  exit 1
+fi
+if ! strings "$FRAMEWORKS_OUT/spice-client-glib-2.0.8.framework/Versions/A/spice-client-glib-2.0.8" |
+  grep -Fq 'SPICE_DISABLE_GL_SCANOUT'; then
+  printf 'Source-built spice-client-glib is missing HAVE_EGL scanout support.\n' >&2
   exit 1
 fi
 
@@ -483,6 +491,10 @@ if [ ! -f "$SOURCE_STAGE/git-sources/libucontext.git/libucontext-source.tar.gz" 
   printf 'Display runtime source bundle is missing the libucontext source snapshot.\n' >&2
   exit 1
 fi
+if [ ! -f "$SOURCE_STAGE/git-sources/libepoxy.git/libepoxy-source.tar.gz" ]; then
+  printf 'Display runtime source bundle is missing the libepoxy source snapshot.\n' >&2
+  exit 1
+fi
 if [ ! -f "$SOURCE_STAGE/utm-patches/sources" ]; then
   printf 'Display runtime source bundle is missing UTM dependency source records.\n' >&2
   exit 1
@@ -503,8 +515,10 @@ This archive accompanies the app-side display frameworks copied into:
 It records the pinned UTM dependency recipe, UTM dependency patches/sources
 file, downloaded upstream source archives, and git source bundles used to
 produce the SPICE, GLib, GStreamer, libsoup, USB, ANGLE, and related app-side
-frameworks. ANGLE is carried through UTM's pinned WebKit fork; its corresponding
-source snapshot is included as:
+frameworks. ANGLE is carried through UTM's pinned WebKit fork. libepoxy is
+built from UTM's pinned source as the EGL header/static dependency that lets
+spice-gtk compile its GL scanout session path. The corresponding ANGLE source
+snapshot is included as:
 
   git-sources/WebKit.git/WebKit-source.tar.gz
   git-sources/WebKit.git/HEAD

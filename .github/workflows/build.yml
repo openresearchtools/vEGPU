@@ -165,20 +165,6 @@ jobs:
               ;;
           esac
 
-      - name: Resolve latest display runtime artifact run
-        if: ${{ env.DISPLAY_MODE == 'app-run' && env.DISPLAY_ARTIFACT_RUN_ID == '' }}
-        run: |
-          pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
-          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
-          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" \
-            vEGPU-display-frameworks-macos26-arm64 \
-            vEGPU-display-runtime-source-macos26-arm64)"
-          test -n "$run_id"
-          echo "DISPLAY_ARTIFACT_RUN_ID=$run_id" >> "$GITHUB_ENV"
-          echo "Resolved display runtime artifacts from vEGPU run $run_id"
-        env:
-          GH_TOKEN: ${{ github.token }}
-
       - name: Require display runtime artifact run
         if: ${{ env.DISPLAY_MODE == 'app-run' }}
         run: |
@@ -323,7 +309,10 @@ jobs:
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/HEAD'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/REMOTE'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/libucontext.git/libucontext-source.tar.gz'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/libepoxy.git/libepoxy-source.tar.gz'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/vegpu-utm-patches/0001-openresearchtools-vegpu-cocoaspice-package.patch'
+          strings "$FRAMEWORKS/spice-client-glib-2.0.8.framework/Versions/A/spice-client-glib-2.0.8" |
+            grep -F 'SPICE_DISABLE_GL_SCANOUT'
 
       - name: Upload display frameworks
         if: ${{ env.DISPLAY_MODE == 'build' }}
@@ -575,20 +564,6 @@ jobs:
             ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
             ${{ runner.temp }}/vegpu-artifacts/legal/generated
           key: ${{ env.MACOS_ARTIFACT_ABI }}-vegpu-app-v3-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
-
-      - name: Resolve display runtime artifact run for app build
-        if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' && env.DISPLAY_ARTIFACT_RUN_ID == '' }}
-        run: |
-          pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
-          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
-          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" \
-            vEGPU-display-frameworks-macos26-arm64 \
-            vEGPU-display-runtime-source-macos26-arm64)"
-          test -n "$run_id"
-          echo "DISPLAY_ARTIFACT_RUN_ID=$run_id" >> "$GITHUB_ENV"
-          echo "Resolved display runtime artifacts from vEGPU run $run_id"
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Download display runtime artifacts from prior vEGPU workflow run
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' }}
