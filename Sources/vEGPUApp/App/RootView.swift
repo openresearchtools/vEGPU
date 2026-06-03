@@ -84,13 +84,8 @@ struct RootView: View {
     }
 
     private var windowTitle: String {
-        guard selectedTab == .section(.gui), !displayControl.sessions.isEmpty else { return "vEGPU" }
-        var parts = ["Option-Cmd-1 Release"]
-        parts += displayControl.sessions.enumerated().map { index, _ in
-            "Option-Cmd-\(index + 2) External \(index + 1)"
-        }
-        let prefix = displayControl.activeSessionID == nil ? "vEGPU" : "vEGPU - Captured"
-        return "\(prefix) - \(parts.joined(separator: " · "))"
+        guard selectedTab == .section(.gui), displayControl.activeSessionID != nil else { return "vEGPU" }
+        return "vEGPU - External Display"
     }
 }
 

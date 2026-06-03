@@ -57,15 +57,9 @@ struct GUIDisplayTabView: View {
             }
             .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
         } else {
-            InternalDisplayUnavailableView(
-                status: session.status,
-                message: displayControl.message,
-                busy: displayControl.busy,
-                reconnect: { session.reconnect() },
-                switchToSpice: { displayControl.releaseSession() },
-                reload: { displayControl.refresh() }
-            )
-            .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
+            Color.black
+                .ignoresSafeArea()
+                .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
         }
     }
 
@@ -160,51 +154,6 @@ private struct ExternalSessionShortcutMonitor: NSViewRepresentable {
             }
             return consume ? nil : event
         }
-    }
-}
-
-private struct InternalDisplayUnavailableView: View {
-    let status: String
-    let message: String?
-    let busy: Bool
-    let reconnect: () -> Void
-    let switchToSpice: () -> Void
-    let reload: () -> Void
-
-    var body: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .controlSize(.small)
-            Text(status)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            if let message = message?.friendlyDisplayLine, !message.isEmpty {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            HStack(spacing: 8) {
-                Button(action: reconnect) {
-                    Label("Reconnect", systemImage: "cable.connector")
-                }
-                Button(action: reload) {
-                    Label("Reload", systemImage: "arrow.clockwise")
-                }
-                .disabled(busy)
-                Button(action: switchToSpice) {
-                    Label("Switch to vEGPU GUI", systemImage: "display")
-                }
-                .disabled(busy)
-            }
-            .controlSize(.small)
-            .buttonStyle(.bordered)
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.96))
     }
 }
 

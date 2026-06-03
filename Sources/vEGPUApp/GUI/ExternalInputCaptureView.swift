@@ -73,7 +73,7 @@ final class ExternalInputCaptureNSView: NSView {
         if previousWindowTitle == nil {
             previousWindowTitle = window.title
         }
-        window.title = "vEGPU - External Mouse Captured - Option-Cmd-1 Releases"
+        window.title = "vEGPU - External Display"
     }
 
     private func restoreWindowTitle() {

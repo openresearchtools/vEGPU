@@ -138,7 +138,6 @@ final class DisplayControlService: @unchecked Sendable {
     }
 
     func status() async throws -> DisplayControlStatus {
-        try? await prepareDisplayHelper()
         let output = try await ssh.ssh("/usr/local/bin/vegpu-display-control status --json", timeout: 10)
         let payload = try JSONDecoder().decode(DisplayControlStatusPayload.self, from: Data(output.utf8))
         return DisplayControlStatus(
@@ -151,7 +150,6 @@ final class DisplayControlService: @unchecked Sendable {
 
     func listGPUs() async throws -> [DisplayControlGPU] {
         do {
-            try await prepareDisplayHelper()
             let output = try await ssh.ssh("/usr/local/bin/vegpu-display-control list-gpus --json", timeout: 10)
             let payload = try JSONDecoder().decode(DisplayControlGPUListPayload.self, from: Data(output.utf8))
             return payload.gpus.filter(\.valid)
@@ -161,19 +159,16 @@ final class DisplayControlService: @unchecked Sendable {
     }
 
     func sessions() async throws -> DisplaySessionsPayload {
-        try await prepareDisplayHelper()
         let output = try await ssh.ssh("/usr/local/bin/vegpu-display-control sessions --json", timeout: 15)
         return try JSONDecoder().decode(DisplaySessionsPayload.self, from: Data(output.utf8))
     }
 
     func startSession(_ session: DisplaySession) async throws {
-        try await prepareDisplayHelper(force: true)
         let command = "/usr/local/bin/vegpu-display-control session-start \(shellQuote(session.bdf)) \(shellQuote(session.index))"
         _ = try await ssh.ssh(command, timeout: 45)
     }
 
     func enterSession(_ session: DisplaySession) async throws {
-        try await prepareDisplayHelper()
         if !session.running {
             try await startSession(session)
         }
@@ -182,41 +177,34 @@ final class DisplayControlService: @unchecked Sendable {
     }
 
     func releaseSession() async throws {
-        try await prepareDisplayHelper()
         _ = try await ssh.ssh("/usr/local/bin/vegpu-display-control session-release", timeout: 20)
     }
 
     func stopSession(_ session: DisplaySession) async throws {
-        try await prepareDisplayHelper(force: true)
         let command = "/usr/local/bin/vegpu-display-control session-stop \(shellQuote(session.id))"
         _ = try await ssh.ssh(command, timeout: 30)
     }
 
     func refreshOutputs(_ session: DisplaySession) async throws {
-        try await prepareDisplayHelper()
         let command = "/usr/local/bin/vegpu-display-control session-outputs \(shellQuote(session.id))"
         _ = try await ssh.ssh(command, timeout: 15)
     }
 
     func reloadSession(_ session: DisplaySession) async throws {
-        try await prepareDisplayHelper()
         let command = "/usr/local/bin/vegpu-display-control session-reload \(shellQuote(session.id))"
         _ = try await ssh.ssh(command, timeout: 30)
     }
 
     func switchToExternalPrimary(gpu: DisplayControlGPU) async throws {
-        try await prepareDisplayHelper(force: true)
         let command = "/usr/local/bin/vegpu-display-control external-primary \(shellQuote(gpu.bdf)) \(shellQuote(gpu.index))"
         _ = try await ssh.ssh(command, timeout: 45)
     }
 
     func switchToSpice() async throws {
-        try await prepareDisplayHelper(force: true)
         _ = try await ssh.ssh("/usr/local/bin/vegpu-display-control spice", timeout: 45)
     }
 
     func reload() async throws {
-        try await prepareDisplayHelper(force: true)
         _ = try await ssh.ssh("/usr/local/bin/vegpu-display-control reload", timeout: 45)
     }
 
@@ -442,7 +430,12 @@ final class DisplayControlMenuModel: ObservableObject {
 
     func enterOrderedSession(number: Int) {
         guard number > 0, sessions.indices.contains(number - 1) else { return }
-        enterSession(sessions[number - 1])
+        let session = sessions[number - 1]
+        if session.running {
+            enterSession(session)
+        } else {
+            startSession(session)
+        }
     }
 
     func reload() {
