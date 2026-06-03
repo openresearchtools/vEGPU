@@ -957,6 +957,9 @@ jobs:
           import xml.etree.ElementTree as ET
 
           root = ET.parse(sys.argv[1]).getroot()
+          install_check = root.find("installation-check")
+          if install_check is None or install_check.attrib.get("script") != "sipDisabled()":
+              raise SystemExit("missing SIP installation check")
           choices = {choice.attrib.get("id"): choice for choice in root.findall("choice")}
           machine = choices.get("com.vegpu.install.machine")
           if machine is None:
@@ -967,11 +970,20 @@ jobs:
           for line in root.findall("./choices-outline/line"):
               if line.attrib.get("choice") == "com.vegpu.install.driver":
                   raise SystemExit("DriverKit choice must not appear separately in the installer outline")
+          pkg_refs = {ref.attrib.get("id"): ref for ref in root.findall("pkg-ref")}
+          expected_conclusions = {
+              "com.vegpu.pkg.app": "none",
+              "com.vegpu.pkg.machine": "RecommendRestart",
+              "com.vegpu.pkg.driver": "RecommendRestart",
+          }
+          for pkg_id, conclusion in expected_conclusions.items():
+              ref = pkg_refs.get(pkg_id)
+              if ref is None:
+                  raise SystemExit(f"missing {pkg_id}")
+              if ref.attrib.get("onConclusion") != conclusion:
+                  raise SystemExit(f"{pkg_id} must use onConclusion={conclusion}")
           PY
-          grep -F 'SIP disabled' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -F '<pkg-ref id="com.vegpu.pkg.app" version="' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution" | grep -F 'onConclusion="none"'
-          grep -F '<pkg-ref id="com.vegpu.pkg.machine" version="' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution" | grep -F 'onConclusion="RecommendRestart"'
-          grep -F '<pkg-ref id="com.vegpu.pkg.driver" version="' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution" | grep -F 'onConclusion="RecommendRestart"'
+          grep -F 'System Integrity Protection must be disabled' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources/WELCOME.html"
           grep -F 'Finished.' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources/CONCLUSION.txt"
           grep -F 'or quit Installer and reboot later' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Resources/CONCLUSION.txt"
           if grep -F 'Selected by default when Machine is missing, older, or the same version with no installed DriverKit extension' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"; then
