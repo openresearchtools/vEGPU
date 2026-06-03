@@ -693,6 +693,8 @@ jobs:
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-LICENSE.txt"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-SOURCE.md"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-IMPORT.txt"
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
           otool -D "$APP/Contents/Frameworks/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
           otool -D "$APP/Contents/Frameworks/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"

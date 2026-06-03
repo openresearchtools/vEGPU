@@ -88,11 +88,40 @@ if swift_scratch:
     swift_checkout_roots.update(path for path in Path(swift_scratch).glob("**/checkouts/*") if path.is_dir())
 for pattern in (".build/**/checkouts/*",):
     swift_checkout_roots.update(path for path in root.glob(pattern) if path.is_dir())
+swift_license_counts_by_checkout: dict[str, int] = {}
 for checkout in sorted(swift_checkout_roots):
-    swift_license_count += copy_notice_files(
+    copied = copy_notice_files(
         checkout,
         out / "licenses" / "swiftpm" / safe_name(checkout.name),
     )
+    swift_license_count += copied
+    swift_license_counts_by_checkout[checkout.name.lower()] = copied
+
+if require_full_source:
+    package_resolved = root / "Package.resolved"
+    if package_resolved.exists():
+        try:
+            resolved = json.loads(package_resolved.read_text())
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Package.resolved is not valid JSON: {exc}") from exc
+        pins = resolved.get("pins", [])
+        missing_swift_licenses: list[str] = []
+        for pin in pins:
+            if pin.get("kind") != "remoteSourceControl":
+                continue
+            identity = str(pin.get("identity") or "").lower()
+            location_name = Path(str(pin.get("location") or "").removesuffix(".git")).name.lower()
+            candidates = {identity, location_name}
+            copied = sum(swift_license_counts_by_checkout.get(name, 0) for name in candidates)
+            if copied == 0:
+                missing_swift_licenses.append(identity or location_name or "<unknown>")
+        if missing_swift_licenses:
+            joined = ", ".join(sorted(set(missing_swift_licenses)))
+            raise SystemExit(
+                "Missing SwiftPM license/notice files for pinned packages: "
+                f"{joined}. Build vEGPU.app after SwiftPM dependencies have been resolved, "
+                "and pass SWIFT_BUILD_SCRATCH_PATH to the legal bundle builder."
+            )
 
 go_license_count = 0
 for gomod in sorted((root / "ai").glob("*/go.mod")):
