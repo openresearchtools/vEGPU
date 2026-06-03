@@ -424,7 +424,7 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
 HTML
 
 cat > "$RESOURCES/CONCLUSION.txt" <<'TEXT'
-Installation finished.
+Finished.
 
 If DriverKit extension refresh/activation was selected, the installer attempted
 to deactivate the old macOS DriverKit extension and submit the new driver
@@ -434,10 +434,10 @@ require approval in System Settings.
 Driver install log:
 /var/log/vegpu-driver-install.log
 
-You can close this installer and restart macOS later. Restart before launching
-vEGPU with eGPUs attached. If the driver still shows as pending after approval,
-open vEGPU.app and use Runtime > Install Driver to retry the same vEGPU Machine
-helper path.
+If the Machine and DriverKit choice was selected, choose Restart to reboot now,
+or quit Installer and reboot later. Restart before launching vEGPU with eGPUs
+attached. If the driver still shows as pending after approval, open vEGPU.app
+and use Runtime > Install Driver to retry the same vEGPU Machine helper path.
 
 Use each app's Help menu to open licenses, notices, and bundled source archives.
 TEXT
@@ -779,8 +779,8 @@ function driverNeedsRefresh() {
     <pkg-ref id="com.vegpu.pkg.driver"/>
   </choice>
   <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>
-  <pkg-ref id="com.vegpu.pkg.machine" version="$VERSION" onConclusion="none">vEGPU-machine.pkg</pkg-ref>
-  <pkg-ref id="com.vegpu.pkg.driver" version="$VERSION" onConclusion="none">vEGPU-driver.pkg</pkg-ref>
+  <pkg-ref id="com.vegpu.pkg.machine" version="$VERSION" onConclusion="RecommendRestart">vEGPU-machine.pkg</pkg-ref>
+  <pkg-ref id="com.vegpu.pkg.driver" version="$VERSION" onConclusion="RecommendRestart">vEGPU-driver.pkg</pkg-ref>
 </installer-gui-script>
 XML
 else
