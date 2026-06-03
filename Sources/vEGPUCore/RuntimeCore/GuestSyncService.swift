@@ -183,8 +183,7 @@ public final class GuestSyncService: @unchecked Sendable {
         return status["driverInstalled"] as? String == "yes" &&
             status["moduleLoaded"] as? String == "yes" &&
             status["driverReady"] as? String == "yes" &&
-            status["passthroughReady"] as? String == "yes" &&
-            status["dmaDevicePresent"] as? String == "yes"
+            status["kernelMatchesManifest"] as? String != "no"
     }
 
     private func guestSyncFingerprint(manifest: RuntimeManifest) throws -> String {

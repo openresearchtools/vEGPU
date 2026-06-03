@@ -246,9 +246,30 @@ update_agent() {
   install -m 0755 "$source" /usr/local/libexec/vegpu/vegpu-agent
 }
 
+manifest_expected_kernel() {
+  [ -f "$MANIFEST_FILE" ] || { printf 'unknown\n'; return 0; }
+  jq -r '.kernel.version // "unknown"' "$MANIFEST_FILE" 2>/dev/null || printf 'unknown\n'
+}
+
 apply_kernel_pin() {
-  remove_kernel_pin
-  touch "$STATE_DIR/kernel-updates-enabled"
+  local expected
+  rm -f "$PIN_FILE"
+  expected="$(manifest_expected_kernel)"
+  if [ -z "$expected" ] || [ "$expected" = "unknown" ]; then
+    log "no manifest kernel available; leaving kernel package policy unchanged"
+    return 0
+  fi
+  install -d "$(dirname "$PIN_FILE")"
+  cat >"$PIN_FILE" <<EOS
+Package: linux-image-arm64 linux-headers-arm64
+Pin: version *
+Pin-Priority: -1
+
+Package: linux-image-$expected linux-headers-$expected
+Pin: version *
+Pin-Priority: 1001
+EOS
+  apt-mark hold linux-image-arm64 linux-headers-arm64 >/dev/null 2>&1 || true
 }
 
 remove_kernel_pin() {
@@ -259,11 +280,14 @@ remove_kernel_pin() {
 
 install_dkms_prereqs() {
   export DEBIAN_FRONTEND=noninteractive
+  local running_kernel
+  running_kernel="$(uname -r)"
   if [ ! -d "/lib/modules/$(uname -r)/build" ]; then
     apt_get update
-    apt_get install -y "linux-headers-$(uname -r)" || true
+    apt_get install -y "linux-headers-$running_kernel" ||
+      { install_manifest_packages '.kernel.packages' || true; apt_get install -y "linux-headers-$running_kernel" || true; }
   fi
-  apt_get install -y dkms build-essential kmod linux-headers-arm64 || true
+  apt_get install -y dkms build-essential kmod
 }
 
 setup_dkms_autorebuild() {
@@ -716,6 +740,68 @@ install_manifest_packages() {
   fi
 }
 
+kernel_package_tokens() {
+  local kernel="$1"
+  local token alt
+  token="${kernel/+/-}"
+  printf '%s\n' "$token"
+  alt="$(printf '%s\n' "$kernel" | sed -E 's/\+deb([0-9]+)\.[0-9]+-/+deb\1-/')"
+  alt="${alt/+/-}"
+  if [ "$alt" != "$token" ]; then
+    printf '%s\n' "$alt"
+  fi
+}
+
+is_driver_module_package() {
+  local file="$1"
+  local package
+  package="$(dpkg-deb -f "$file" Package 2>/dev/null || basename "$file")"
+  case "$package" in
+    apple-dma-modules-*|vegpu-guest-dma-modules-*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+driver_module_package_matches_kernel() {
+  local file="$1"
+  local kernel="$2"
+  local package token
+  package="$(dpkg-deb -f "$file" Package 2>/dev/null || basename "$file")"
+  while IFS= read -r token; do
+    [ -n "$token" ] || continue
+    case "$package $file" in
+      *"$token"*) return 0 ;;
+    esac
+  done < <(kernel_package_tokens "$kernel")
+  return 1
+}
+
+install_driver_prebuilt_for_kernel() {
+  local kernel="$1"
+  local manifest
+  manifest="$(manifest_path)"
+  [ -f "$manifest" ] || return 1
+  mapfile -t rows < <(jq -r '.driver.prebuiltPackages[]? | if type == "string" then [. , ""] else [.path, (.sha512 // "")] end | @tsv' "$manifest")
+  [ "${#rows[@]}" -gt 0 ] || return 1
+  local files=()
+  for row in "${rows[@]}"; do
+    local rel expected file
+    rel="$(printf '%s' "$row" | cut -f1)"
+    expected="$(printf '%s' "$row" | cut -f2)"
+    file="$STATE_DIR/$rel"
+    verify_package "$file" "$expected"
+    if is_driver_module_package "$file" && ! driver_module_package_matches_kernel "$file" "$kernel"; then
+      log "skipping prebuilt driver package for another kernel: $(basename "$file")"
+      continue
+    fi
+    files+=("$file")
+  done
+  [ "${#files[@]}" -gt 0 ] || return 1
+  repair_dpkg_state || true
+  dpkg_install "${files[@]}" || apt_get -f install -y
+  repair_dpkg_state || true
+}
+
 disable_idle() {
   local human_user=vegpu
   local home=/home/vegpu
@@ -825,15 +911,17 @@ install_driver() {
     log "manifest has no guest DMA driver packages"
     return 1
   fi
-  install_manifest_packages '.driver.prebuiltPackages'
-  ensure_driver_persistence
-  depmod -a || true
-  if modprobe apple_dma 2>/dev/null || modprobe vegpu_guest_dma 2>/dev/null; then
+  if install_driver_prebuilt_for_kernel "$(uname -r)"; then
     ensure_driver_persistence
-    return 0
+    depmod -a || true
+    if modprobe apple_dma 2>/dev/null || modprobe vegpu_guest_dma 2>/dev/null; then
+      ensure_driver_persistence
+      return 0
+    fi
+  else
+    log "no prebuilt guest DMA driver package matched kernel $(uname -r); falling back to DKMS"
   fi
 
-  remove_kernel_pin
   install_dkms_prereqs
   install_manifest_packages '.driver.dkmsPackages'
   dkms autoinstall || true
@@ -860,7 +948,6 @@ dkms_refresh() {
     log "manifest has no guest DMA driver packages"
     return 0
   fi
-  remove_kernel_pin
   install_dkms_prereqs
   install_manifest_packages '.driver.dkmsPackages'
   dkms autoinstall -k "$(uname -r)" || dkms autoinstall || true
@@ -1101,7 +1188,7 @@ status_json() {
   done
   bound_devices="$(printf '%s' "$bound_devices" | xargs 2>/dev/null || true)"
   driver_error="$(dmesg 2>/dev/null | grep -iE 'apple_dma .*managed PCI device .*not found|apple_dma .*unsupported version|apple_dma .*max_entries=0|apple_dma .*failed|apple_dma .*fatal' | tail -1 || true)"
-  if [ "$module_loaded" = "yes" ]; then driver_ready="yes"; fi
+  if [ "$module_loaded" = "yes" ] && [ "$kernel_match" != "no" ]; then driver_ready="yes"; fi
   if [ "$module_loaded" = "yes" ] && [ "$bound_count" -gt 0 ]; then passthrough_ready="yes"; fi
   jq -n     --arg user vegpu     --arg kernel "$(uname -r)"     --arg manifest "$manifest_id"     --arg expectedKernel "$expected_kernel"     --arg kernelMatchesManifest "$kernel_match"     --arg driver "$(dkms status 2>/dev/null | tr '\n' ';' || true)"     --arg driverInstalled "$driver_installed"     --arg driverPersistent "$driver_persistent"     --arg moduleLoaded "$module_loaded"     --arg driverLoaded "$module_loaded"     --arg driverReady "$driver_ready"     --arg passthroughReady "$passthrough_ready"     --arg dmaDevicePresent "$dma_device_present"     --arg boundDevices "$bound_devices"     --arg driverError "$driver_error"     --argjson boundDeviceCount "$bound_count"     --arg reboot "$([ -f "$STATE_DIR/reboot-required" ] && printf yes || printf no)"     '{user:$user,kernel:$kernel,manifest:$manifest,expectedKernel:$expectedKernel,kernelMatchesManifest:$kernelMatchesManifest,dkms:$driver,driverInstalled:$driverInstalled,driverPersistent:$driverPersistent,moduleLoaded:$moduleLoaded,driverLoaded:$driverLoaded,driverReady:$driverReady,passthroughReady:$passthroughReady,dmaDevicePresent:$dmaDevicePresent,boundDeviceCount:$boundDeviceCount,boundDevices:$boundDevices,driverError:$driverError,rebootRequired:$reboot}'
 }

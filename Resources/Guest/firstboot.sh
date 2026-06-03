@@ -32,8 +32,12 @@ mkdir -p /run/vegpu/shares /var/lib/vegpu /usr/local/libexec/vegpu
 
 apt_get update
 apt_get install -y openssh-server ca-certificates curl jq gnupg iptables nfs-common nfs-kernel-server rpcbind kmod sudo tmux
-apt_get install -y dkms build-essential linux-headers-arm64 || true
-apt_get install -y "linux-headers-$(uname -r)" || true
+
+mkdir -p /run/vegpu/shares /var/lib/vegpu /usr/local/libexec/vegpu
+
+/usr/local/libexec/vegpu/vegpu-agent ingest-seed-bundle || true
+/usr/local/libexec/vegpu/vegpu-agent apply-kernel-pin
+apt_get install -y dkms build-essential "linux-headers-$(uname -r)" || true
 
 mkdir -p /run/vegpu/shares /var/lib/vegpu /usr/local/libexec/vegpu
 
@@ -42,10 +46,8 @@ vegpuctl ALL=(root) NOPASSWD:ALL
 EOS
 chmod 0440 /etc/sudoers.d/90-vegpu-control
 
-/usr/local/libexec/vegpu/vegpu-agent apply-kernel-pin
 /usr/local/libexec/vegpu/vegpu-agent setup-dkms-autorebuild
 /usr/local/libexec/vegpu/vegpu-agent ensure-ml-cache-policy
-/usr/local/libexec/vegpu/vegpu-agent ingest-seed-bundle || true
 systemctl enable ssh
 /usr/local/libexec/vegpu/vegpu-agent configure-private-network
 /usr/local/libexec/vegpu/vegpu-agent configure-audio-rtp || true
@@ -55,5 +57,5 @@ usermod -aG dialout vegpuctl || true
 /usr/local/libexec/vegpu/vegpu-agent export-linux-home-nfs || true
 systemctl restart ssh
 /usr/local/libexec/vegpu/vegpu-agent update-tools || true
-/usr/local/libexec/vegpu/vegpu-agent install-driver || true
+/usr/local/libexec/vegpu/vegpu-agent install-driver
 /usr/local/libexec/vegpu/vegpu-agent status --json >/var/lib/vegpu/firstboot-status.json || true
