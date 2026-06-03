@@ -154,7 +154,7 @@ final class DisplayControlService: @unchecked Sendable {
             try await prepareDisplayHelper()
             let output = try await ssh.ssh("/usr/local/bin/vegpu-display-control list-gpus --json", timeout: 10)
             let payload = try JSONDecoder().decode(DisplayControlGPUListPayload.self, from: Data(output.utf8))
-            return payload.gpus.filter(\.valid)
+            return payload.gpus.filter { $0.valid }
         } catch {
             return try await listGPUsDirectly()
         }
@@ -228,10 +228,6 @@ final class DisplayControlService: @unchecked Sendable {
 
     private func prepareDisplayHelper(force: Bool = false) async throws {
         guard force || !helperPrepared else { return }
-        if !force, await displayHelperAlreadyInstalled() {
-            helperPrepared = true
-            return
-        }
 
         let source = paths.resources.appendingPathComponent("Guest/gui-ensure.sh")
         let customizationSource = paths.resources.appendingPathComponent("Guest/customization.sh")
@@ -260,15 +256,6 @@ final class DisplayControlService: @unchecked Sendable {
         ].joined(separator: " && ")
         _ = try await ssh.ssh(command, timeout: 30)
         helperPrepared = true
-    }
-
-    private func displayHelperAlreadyInstalled() async -> Bool {
-        let command = [
-            "test -x /usr/local/bin/vegpu-display-control",
-            "test -x /usr/local/sbin/vegpu-display-mode-helper",
-            "test -x /usr/local/libexec/vegpu/customization.sh"
-        ].joined(separator: " && ")
-        return (try? await ssh.ssh(command, timeout: 5)) != nil
     }
 
     private func listGPUsDirectly() async throws -> [DisplayControlGPU] {
@@ -323,6 +310,7 @@ final class DisplayControlMenuModel: ObservableObject {
     private let machine: MachineService
     private var refreshTask: Task<Void, Never>?
     private var audioBufferMs = 20
+    private var refreshGeneration = 0
 
     init(paths: AppPaths, machine: MachineService? = nil) {
         self.service = DisplayControlService(paths: paths)
@@ -342,13 +330,19 @@ final class DisplayControlMenuModel: ObservableObject {
            let session = sessions.first(where: { $0.id == activeSessionID }) {
             return "External \(session.display)"
         }
+        let runningCount = sessions.filter { $0.running }.count
+        if runningCount > 0 {
+            return runningCount == 1 ? "1 External Session Running" : "\(runningCount) External Sessions Running"
+        }
         return "SPICE"
     }
 
     func refresh() {
+        refreshGeneration += 1
+        let generation = refreshGeneration
         refreshTask?.cancel()
         refreshTask = Task { @MainActor in
-            await refreshNow()
+            await refreshNow(generation: generation)
         }
     }
 
@@ -375,6 +369,9 @@ final class DisplayControlMenuModel: ObservableObject {
     func enterSession(_ session: DisplaySession) {
         perform(postReconnect: false) {
             try await self.service.enterSession(session)
+            await MainActor.run {
+                self.activeSessionID = session.id
+            }
         }
     }
 
@@ -385,7 +382,9 @@ final class DisplayControlMenuModel: ObservableObject {
             defer { busy = false }
             do {
                 try await self.service.releaseSession()
+                activeSessionID = nil
                 message = nil
+                NotificationCenter.default.post(name: .vegpuReconnectDisplay, object: self)
             } catch {
                 message = String(describing: error)
             }
@@ -419,8 +418,18 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     func enterOrderedSession(number: Int) {
-        guard number > 0, sessions.indices.contains(number - 1) else { return }
-        enterSession(sessions[number - 1])
+        guard number > 0 else { return }
+        if sessions.indices.contains(number - 1) {
+            enterSession(sessions[number - 1])
+            return
+        }
+        Task { @MainActor in
+            refreshGeneration += 1
+            let generation = refreshGeneration
+            await refreshNow(generation: generation)
+            guard self.sessions.indices.contains(number - 1) else { return }
+            self.enterSession(self.sessions[number - 1])
+        }
     }
 
     func handleShortcutDigit(_ digit: Int) {
@@ -479,7 +488,8 @@ final class DisplayControlMenuModel: ObservableObject {
             do {
                 try await action()
                 if postReconnect {
-                    await refreshNow()
+                    refreshGeneration += 1
+                    await refreshNow(generation: refreshGeneration)
                     NotificationCenter.default.post(name: .vegpuReconnectDisplay, object: self)
                 } else {
                     await refreshSessionsOnly()
@@ -493,28 +503,32 @@ final class DisplayControlMenuModel: ObservableObject {
     private func refreshSessionsOnly() async {
         do {
             let sessionsPayload = try await service.sessions()
-            sessions = sessionsPayload.sessions.filter(\.valid)
-            activeSessionID = sessionsPayload.active == "macos" ? nil : sessionsPayload.active
-            gpus = sessions.map(\.gpu)
+            apply(sessionsPayload: sessionsPayload)
             message = nil
         } catch {
             message = String(describing: error)
         }
     }
 
-    private func refreshNow() async {
+    private func refreshNow(generation: Int? = nil) async {
+        if let generation, generation != refreshGeneration {
+            return
+        }
+        var sessionsLoaded = false
         do {
-            let status = try await service.status()
             let sessionsPayload = try await service.sessions()
-            mode = status.mode
-            selectedGPU = status.selectedGPU
-            sessions = sessionsPayload.sessions.filter(\.valid)
-            activeSessionID = sessionsPayload.active == "macos" ? nil : sessionsPayload.active
-            gpus = sessions.map(\.gpu)
+            if let generation, generation != refreshGeneration {
+                return
+            }
+            apply(sessionsPayload: sessionsPayload)
+            sessionsLoaded = true
             message = nil
         } catch {
             do {
                 let gpuList = try await service.listGPUs()
+                if let generation, generation != refreshGeneration {
+                    return
+                }
                 gpus = gpuList
                 sessions = gpuList.map {
                     DisplaySession(
@@ -532,9 +546,39 @@ final class DisplayControlMenuModel: ObservableObject {
                 activeSessionID = nil
                 message = String(describing: error)
             } catch {
+                if let generation, generation != refreshGeneration {
+                    return
+                }
                 message = String(describing: error)
             }
         }
+
+        do {
+            let status = try await service.status()
+            if let generation, generation != refreshGeneration {
+                return
+            }
+            mode = status.mode
+            selectedGPU = status.selectedGPU
+            if sessionsLoaded {
+                message = nil
+            }
+        } catch {
+            if let generation, generation != refreshGeneration {
+                return
+            }
+            if !sessionsLoaded || sessions.isEmpty {
+                message = String(describing: error)
+            } else {
+                message = nil
+            }
+        }
+    }
+
+    private func apply(sessionsPayload: DisplaySessionsPayload) {
+        sessions = sessionsPayload.sessions.filter { $0.valid }
+        activeSessionID = sessionsPayload.active == "macos" ? nil : sessionsPayload.active
+        gpus = sessions.map(\.gpu)
     }
 
     private func confirmModeSwitch(_ title: String) -> Bool {

@@ -480,7 +480,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     }
 
     private func updateDisplayHealth() {
-        displayHealthy = display != nil && dynamicResolutionSupported
+        displayHealthy = display != nil && displayPixelSize.width > 1 && displayPixelSize.height > 1
     }
 
     private func connect() {

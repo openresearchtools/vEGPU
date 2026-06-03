@@ -70,11 +70,11 @@ struct ExternalDisplaysView: View {
             } label: {
                 Label("Release", systemImage: "rectangle.portrait.and.arrow.right")
             }
-            .disabled(displayControl.busy || displayControl.activeSessionID == nil)
+            .disabled(displayControl.busy || !displayControl.sessions.contains { $0.running })
             Button {
                 displayControl.refresh()
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label("Rescan Devices", systemImage: "arrow.clockwise")
             }
             .disabled(displayControl.busy)
         }
@@ -280,11 +280,11 @@ private struct ExternalDisplayGPUCard: View {
     }
 
     private var connectedOutputs: [DisplaySessionOutput] {
-        session.outputs.filter(\.connected)
+        session.outputs.filter { $0.connected }
     }
 
     private var primaryOutput: DisplaySessionOutput? {
-        session.outputs.first(where: \.primary)
+        session.outputs.first { $0.primary }
     }
 
     private var statusText: String {

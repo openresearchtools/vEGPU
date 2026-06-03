@@ -975,11 +975,31 @@ session_restart() {
   fi
 }
 
+sessions_json_append_entry() {
+  local out_file="$1" first_file="$2" active="$3" idx="$4" name="$5" bdf="$6" id="$7" display="$8" valid="$9" running="${10}" outputs="${11}" first
+  first="$(cat "$first_file" 2>/dev/null || printf 1)"
+  [ "$first" -eq 1 ] || printf ',' >>"$out_file"
+  printf 0 >"$first_file"
+  printf '{"id":%s,"index":%s,"name":%s,"bdf":%s,"display":%s,"state":%s,"active":%s,"valid":%s,"outputs":%s}' \
+    "$(printf '%s' "$id" | json_value)" \
+    "$(printf '%s' "$idx" | json_value)" \
+    "$(printf '%s' "$name" | json_value)" \
+    "$(printf '%s' "$bdf" | json_value)" \
+    "$(printf '%s' "$display" | json_value)" \
+    "$(printf '%s' "$([ "$running" = true ] && printf running || printf stopped)" | json_value)" \
+    "$([ "$active" = "$id" ] && printf true || printf false)" \
+    "$valid" \
+    "$outputs" >>"$out_file"
+}
+
 sessions_json() {
-  local first=1 active idx name raw_bdf bdf valid id display running outputs
+  local active entry_active idx name raw_bdf bdf valid id display running outputs env_file emitted_active=0 entries first_file
+  declare -A seen_sessions=()
   install -d -m 0755 "$SESSION_ROOT" "$SESSION_STATE_ROOT"
   active="$(cat "$SESSION_ROOT/active" 2>/dev/null || printf '%s' macos)"
-  printf '{"active":%s,"sessions":[' "$(printf '%s' "$active" | json_value)"
+  entries="$(mktemp)"
+  first_file="$(mktemp)"
+  printf 1 >"$first_file"
   while IFS=$'\t' read -r idx name raw_bdf; do
     [ -n "${raw_bdf:-}" ] || continue
     bdf="$(normalize_bdf "$raw_bdf" 2>/dev/null || printf '%s' "$raw_bdf")"
@@ -989,24 +1009,55 @@ sessions_json() {
     display="$(session_display_for_index "$idx")"
     running=false
     session_xorg_running "$id" && running=true
+    [ "$running" = true ] && valid=true
     outputs='[]'
     if [ "$running" = true ] && session_load_env "$id"; then
       outputs="$(session_outputs_json_for_display "$DISPLAY_NAME" "$XAUTHORITY_FILE")"
     fi
-    [ "$first" -eq 1 ] || printf ','
-    first=0
-    printf '{"id":%s,"index":%s,"name":%s,"bdf":%s,"display":%s,"state":%s,"active":%s,"valid":%s,"outputs":%s}' \
-      "$(printf '%s' "$id" | json_value)" \
-      "$(printf '%s' "$idx" | json_value)" \
-      "$(printf '%s' "$name" | json_value)" \
-      "$(printf '%s' "$bdf" | json_value)" \
-      "$(printf '%s' "$display" | json_value)" \
-      "$(printf '%s' "$([ "$running" = true ] && printf running || printf stopped)" | json_value)" \
-      "$([ "$active" = "$id" ] && printf true || printf false)" \
-      "$valid" \
-      "$outputs"
+    entry_active="$active"
+    if [ "$active" = "$id" ] && [ "$running" != true ]; then
+      entry_active=macos
+    fi
+    [ "$active" = "$id" ] && [ "$running" = true ] && [ "$valid" = true ] && emitted_active=1
+    seen_sessions["$id"]=1
+    sessions_json_append_entry "$entries" "$first_file" "$entry_active" "$idx" "$name" "$bdf" "$id" "$display" "$valid" "$running" "$outputs"
   done < <(gpu_rows || true)
+  for env_file in "$SESSION_STATE_ROOT"/*/session.env; do
+    [ -f "$env_file" ] || continue
+    SESSION_ID= GPU_BDF= GPU_INDEX= GPU_NAME= DISPLAY_NAME= XAUTHORITY_FILE=
+    # shellcheck disable=SC1090
+    . "$env_file"
+    id="${SESSION_ID:-}"
+    [ -n "$id" ] || continue
+    [ -z "${seen_sessions[$id]+x}" ] || continue
+    bdf="${GPU_BDF:-}"
+    idx="${GPU_INDEX:-0}"
+    name="${GPU_NAME:-NVIDIA GPU}"
+    display="${DISPLAY_NAME:-$(session_display_for_index "$idx")}"
+    valid=false
+    [ -n "$bdf" ] && gpu_valid_for_bdf "$bdf" && valid=true
+    running=false
+    session_xorg_running "$id" && running=true
+    [ "$running" = true ] && valid=true
+    outputs='[]'
+    if [ "$running" = true ] && [ -n "${DISPLAY_NAME:-}" ] && [ -n "${XAUTHORITY_FILE:-}" ]; then
+      outputs="$(session_outputs_json_for_display "$DISPLAY_NAME" "$XAUTHORITY_FILE")"
+    fi
+    entry_active="$active"
+    if [ "$active" = "$id" ] && [ "$running" != true ]; then
+      entry_active=macos
+    fi
+    [ "$active" = "$id" ] && [ "$running" = true ] && [ "$valid" = true ] && emitted_active=1
+    sessions_json_append_entry "$entries" "$first_file" "$entry_active" "$idx" "$name" "$bdf" "$id" "$display" "$valid" "$running" "$outputs"
+  done
+  if [ "$active" != macos ] && [ "$emitted_active" -eq 0 ]; then
+    active=macos
+    printf '%s\n' macos >"$SESSION_ROOT/active"
+  fi
+  printf '{"active":%s,"sessions":[' "$(printf '%s' "$active" | json_value)"
+  cat "$entries"
   printf ']}\n'
+  rm -f "$entries" "$first_file"
 }
 
 case "${1:-status}" in

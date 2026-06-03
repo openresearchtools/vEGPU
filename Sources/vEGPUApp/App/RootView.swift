@@ -80,6 +80,9 @@ struct RootView: View {
         .onChange(of: displayControl.activeSessionID) { _, activeSessionID in
             syncExternalCapture(mode: model.runtimeLaunchMode, activeSessionID: activeSessionID)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .vegpuReconnectDisplay)) { _ in
+            model.spiceSession.reconnect()
+        }
         .overlay {
             ExternalInputCaptureView(session: model.spiceSession)
                 .frame(width: 0, height: 0)

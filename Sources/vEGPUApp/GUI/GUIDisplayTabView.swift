@@ -23,9 +23,6 @@ struct GUIDisplayTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .vegpuRuntimeWillStop)) { _ in
             session.disconnect()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .vegpuReconnectDisplay)) { _ in
-            session.reconnect()
-        }
         .onReceive(NotificationCenter.default.publisher(for: .vegpuExternalSessionShortcut)) { notification in
             guard let digit = notification.object as? Int else { return }
             if digit == 1 {
@@ -36,7 +33,16 @@ struct GUIDisplayTabView: View {
 
     @ViewBuilder
     private var displayBody: some View {
-        if session.connected {
+        if let activeSession = displayControl.activeSessionID {
+            InternalDisplayUnavailableView(
+                status: "External display session active: \(activeSession)",
+                message: "Release the external session to return input and display focus to the embedded GUI.",
+                busy: displayControl.busy,
+                reconnect: { session.reconnect() },
+                returnToGUI: { displayControl.releaseSession() },
+                reload: { displayControl.reload() }
+            )
+        } else if session.connected && session.displayHealthy {
             ZStack {
                 SpiceDisplayView(session: session, retina: model.guiRetina)
                     .background(Color.black)

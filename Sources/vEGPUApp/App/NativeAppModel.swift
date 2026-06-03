@@ -170,9 +170,17 @@ final class NativeAppModel: ObservableObject {
         guard !pollingStarted else { return }
         pollingStarted = true
         Task {
+            var displayPollTick = 0
             while !Task.isCancelled {
                 refreshRuntimeSnapshot(loadManifest: false)
                 refreshMetrics()
+                displayPollTick += 1
+                if runtimeLaunchMode == .gui,
+                   runtimeState == "running",
+                   displayPollTick >= 2 {
+                    displayPollTick = 0
+                    displayControlMenu.refresh()
+                }
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
