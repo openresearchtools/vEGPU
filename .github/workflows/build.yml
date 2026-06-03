@@ -932,11 +932,11 @@ jobs:
           VEGPU_PKG_BUILD_DIR="$RUNNER_TEMP/vegpu-build/pkg" \
           VEGPU_PACKAGE_CHANNEL="$PACKAGE_CHANNEL" \
           VERSION="$VERSION" \
-	          OUT="$OUT" \
-	          scripts/build-release-pkg.sh
-	          test -f "$OUT"
-	          pkgutil --expand "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded"
-	          test -f "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          OUT="$OUT" \
+          scripts/build-release-pkg.sh
+          test -f "$OUT"
+          pkgutil --expand "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          test -f "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
           PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}
