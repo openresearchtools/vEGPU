@@ -380,15 +380,9 @@ gpu_rows() {
 }
 
 write_no_idle_flags() {
-  install -d /etc/X11/xorg.conf.d
-  write_root_file_if_changed "$NO_IDLE_CONF" <<'CONF'
-Section "ServerFlags"
-    Option "BlankTime" "0"
-    Option "StandbyTime" "0"
-    Option "SuspendTime" "0"
-    Option "OffTime" "0"
-EndSection
-CONF
+  # Keep ServerFlags in the active display config. A second ServerFlags
+  # snippet can override GPU isolation and let LightDM bind external cards.
+  rm -f "$NO_IDLE_CONF"
 }
 
 write_spice_xorg() {
@@ -398,6 +392,10 @@ write_spice_xorg() {
 Section "ServerFlags"
     Option "AutoAddGPU" "false"
     Option "AutoBindGPU" "false"
+    Option "BlankTime" "0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
 EndSection
 
 Section "Device"
@@ -427,6 +425,10 @@ write_external_xorg() {
 Section "ServerFlags"
     Option "AutoAddGPU" "false"
     Option "AutoBindGPU" "false"
+    Option "BlankTime" "0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
 EndSection
 
 Section "Device"
@@ -1443,10 +1445,18 @@ configure_launch_display() {
 enable_runtime_services() {
   systemctl enable ssh qemu-guest-agent lightdm >/dev/null 2>&1 || true
   systemctl enable spice-vdagentd >/dev/null 2>&1 || systemctl enable spice-vdagent >/dev/null 2>&1 || true
-  systemctl is-active --quiet ssh >/dev/null 2>&1 || systemctl start ssh >/dev/null 2>&1 || true
-  systemctl is-active --quiet qemu-guest-agent >/dev/null 2>&1 || systemctl start qemu-guest-agent >/dev/null 2>&1 || true
-  systemctl is-active --quiet lightdm >/dev/null 2>&1 || systemctl start lightdm >/dev/null 2>&1 || true
-  systemctl is-active --quiet spice-vdagentd >/dev/null 2>&1 || systemctl start spice-vdagentd >/dev/null 2>&1 || true
+  systemctl is-active --quiet ssh >/dev/null 2>&1 || /usr/bin/timeout 20s systemctl start ssh >/dev/null 2>&1 || true
+  systemctl is-active --quiet qemu-guest-agent >/dev/null 2>&1 || /usr/bin/timeout 20s systemctl start qemu-guest-agent >/dev/null 2>&1 || true
+  systemctl is-active --quiet lightdm >/dev/null 2>&1 || /usr/bin/timeout 20s systemctl start lightdm >/dev/null 2>&1 || true
+  systemctl is-active --quiet spice-vdagentd >/dev/null 2>&1 || /usr/bin/timeout 20s systemctl start spice-vdagentd >/dev/null 2>&1 || true
+}
+
+apply_launch_display_config() {
+  configure_launch_display
+  if systemctl is-active --quiet lightdm >/dev/null 2>&1; then
+    systemctl reset-failed lightdm >/dev/null 2>&1 || true
+    /usr/bin/timeout 20s systemctl restart lightdm >/dev/null 2>&1 || true
+  fi
 }
 
 install_display_control_only() {
@@ -1466,7 +1476,7 @@ install_full_gui() {
   install_customization_script
   install_appearance_once
   install_display_control
-  configure_launch_display
+  apply_launch_display_config
   enable_runtime_services
 }
 
