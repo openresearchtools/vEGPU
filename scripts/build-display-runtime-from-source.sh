@@ -306,7 +306,7 @@ EOF
 spice_client_has_egl_scanout() {
   local spice_client="$PREFIX/Frameworks/spice-client-glib-2.0.8.framework/Versions/A/spice-client-glib-2.0.8"
   [ -f "$spice_client" ] &&
-    strings "$spice_client" | grep -Fq 'SPICE_DISABLE_GL_SCANOUT'
+    strings "$spice_client" | grep -F 'SPICE_DISABLE_GL_SCANOUT' >/dev/null
 }
 
 have_display_frameworks() {
@@ -431,7 +431,7 @@ if [ ! -d "$FRAMEWORKS_OUT/EGL.framework" ] || [ ! -d "$FRAMEWORKS_OUT/GLESv2.fr
   exit 1
 fi
 if ! strings "$FRAMEWORKS_OUT/spice-client-glib-2.0.8.framework/Versions/A/spice-client-glib-2.0.8" |
-  grep -Fq 'SPICE_DISABLE_GL_SCANOUT'; then
+  grep -F 'SPICE_DISABLE_GL_SCANOUT' >/dev/null; then
   printf 'Source-built spice-client-glib is missing HAVE_EGL scanout support.\n' >&2
   exit 1
 fi
