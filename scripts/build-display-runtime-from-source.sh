@@ -176,17 +176,28 @@ archive_git_snapshot() {
 
 patch_angle_for_xcode26() {
   local fence="$BUILD_DIR/WebKit.git/Source/ThirdParty/ANGLE/src/libANGLE/Fence.h"
-  [ -f "$fence" ] || return 0
-  python3 - "$fence" <<'PY'
+  local metal_state_cache="$BUILD_DIR/WebKit.git/Source/ThirdParty/ANGLE/src/libANGLE/renderer/metal/mtl_state_cache.mm"
+  python3 - "$fence" "$metal_state_cache" <<'PY'
 import pathlib
 import sys
 
-path = pathlib.Path(sys.argv[1])
-text = path.read_text()
-old = "    virtual ~FenceNV();\n"
-new = "    ~FenceNV();\n"
-if old in text:
-    path.write_text(text.replace(old, new, 1))
+fence = pathlib.Path(sys.argv[1])
+if fence.exists():
+    text = fence.read_text()
+    old = "    virtual ~FenceNV();\n"
+    new = "    ~FenceNV();\n"
+    if old in text:
+        fence.write_text(text.replace(old, new, 1))
+
+metal_state_cache = pathlib.Path(sys.argv[2])
+if metal_state_cache.exists():
+    text = metal_state_cache.read_text()
+    patched = (
+        text.replace("memset(this,", "memset((void *)this,")
+            .replace("memcpy(this,", "memcpy((void *)this,")
+    )
+    if patched != text:
+        metal_state_cache.write_text(patched)
 PY
 }
 
@@ -261,12 +272,20 @@ stage_display_source_preflight() {
     "$SOURCE_PREFLIGHT/git-sources/WebKit.git" \
     "WebKit" \
     "${webkit_source_paths[@]}"
-  if ! grep -q 'virtual ~FenceNV();' "$webkit_repo/Source/ThirdParty/ANGLE/src/libANGLE/Fence.h" 2>/dev/null; then
+  if ! git -C "$webkit_repo" diff --quiet -- Source/ThirdParty/ANGLE; then
+    git -C "$webkit_repo" diff -- Source/ThirdParty/ANGLE \
+      >"$SOURCE_PREFLIGHT/git-sources/WebKit.git/OPENRESEARCHTOOLS-LOCAL-MODIFICATIONS.patch"
     cat >"$SOURCE_PREFLIGHT/git-sources/WebKit.git/LOCAL_MODIFICATIONS" <<'EOF'
 OpenResearchTools build-time source adjustment:
 - Source/ThirdParty/ANGLE/src/libANGLE/Fence.h removes a redundant virtual
   specifier from FenceNV's destructor so the pinned UTM/WebKit ANGLE source
   builds with Xcode 26's -Werror,-Wunnecessary-virtual-specifier diagnostics.
+- Source/ThirdParty/ANGLE/src/libANGLE/renderer/metal/mtl_state_cache.mm casts
+  `this` to `void *` at legacy memset/memcpy call sites so the same pinned
+  source builds with Xcode 26's -Werror,-Wnontrivial-memcall diagnostics.
+
+The exact patch is included next to this file as:
+OPENRESEARCHTOOLS-LOCAL-MODIFICATIONS.patch
 EOF
   fi
 

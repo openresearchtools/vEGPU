@@ -29,9 +29,9 @@ bad_artifacts="$(
   find . -path './.git' -prune -o -type f \( \
     -path './Resources/Assets/vEGPU.icns' -o \
     -path './Resources/Assets/vEGPU-logo-transparent.png' -o \
-    -path './Resources/Assets/vEGPU-tray.png' \
+    -path './Resources/Assets/vEGPU-tray.png' -o \
+    -path './website/assets/vegpu-logo.png' \
   \) -prune -o -type f \( \
-    -name '.DS_Store' -o \
     -name '*.app' -o \
     -name '*.pkg' -o \
     -name '*.dmg' -o \
@@ -57,11 +57,18 @@ if [ -n "$bad_artifacts" ]; then
   exit 1
 fi
 
+tracked_finder_metadata="$(git ls-files | grep -E '(^|/)\.DS_Store$' || true)"
+if [ -n "$tracked_finder_metadata" ]; then
+  printf 'Finder metadata must not be tracked:\n%s\n' "$tracked_finder_metadata" >&2
+  exit 1
+fi
+
 binary_payloads="$(
   find . -path './.git' -prune -o \( \
       -path './Resources/Assets/vEGPU.icns' -o \
       -path './Resources/Assets/vEGPU-logo-transparent.png' -o \
-      -path './Resources/Assets/vEGPU-tray.png' \
+      -path './Resources/Assets/vEGPU-tray.png' -o \
+      -path './website/assets/vegpu-logo.png' \
     \) -prune -o -type f -print0 |
     xargs -0 file |
     grep -E 'Mach-O|Debian binary package|current ar archive|Zip archive|xar archive|gzip compressed|XZ compressed|PNG image|JPEG image|Apple icon' || true
