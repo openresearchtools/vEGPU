@@ -915,6 +915,7 @@ jobs:
           rm -rf "$RUNNER_TEMP/vegpu-input/machine"
           mv "$RUNNER_TEMP/vegpu-input/machine-rehydrated" "$RUNNER_TEMP/vegpu-input/machine"
           codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-input/machine/vEGPU Machine.app"
+          codesign -d --entitlements :- "$RUNNER_TEMP/vegpu-input/machine/vEGPU Machine.app" 2>/dev/null | grep -F 'com.apple.developer.system-extension.install'
 
       - name: Build pkg
         run: |
@@ -1011,6 +1012,7 @@ jobs:
           if pkgutil --expand-full "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" >/dev/null 2>&1; then
             codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-app.pkg/Payload/Applications/vEGPU.app"
             codesign --verify --deep --strict --verbose=4 "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-machine.pkg/Payload/Applications/vEGPU Machine.app"
+            codesign -d --entitlements :- "$RUNNER_TEMP/vegpu-check/pkg-expanded-full/vEGPU-machine.pkg/Payload/Applications/vEGPU Machine.app" 2>/dev/null | grep -F 'com.apple.developer.system-extension.install'
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz' -print -quit | grep -q .
             find "$RUNNER_TEMP/vegpu-check/pkg-expanded-full" -path '*vEGPU.app*/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json' -print -quit | grep -q .

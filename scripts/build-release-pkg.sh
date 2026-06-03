@@ -55,6 +55,18 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
   MACHINE_INFO="$STAGE_MACHINE/Applications/vEGPU Machine.app/Contents/Info.plist"
   MACHINE_NEW_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$MACHINE_INFO" 2>/dev/null || true)"
   MACHINE_NEW_SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$MACHINE_INFO" 2>/dev/null || true)"
+  MACHINE_ENTITLEMENTS="$WORK/machine-host.entitlements.plist"
+  if ! /usr/bin/codesign -d --entitlements :- "$MACHINE_APP" >"$MACHINE_ENTITLEMENTS" 2>/dev/null; then
+    /usr/bin/codesign -d --entitlements :- "$MACHINE_APP/Contents/MacOS/vEGPU Machine" >"$MACHINE_ENTITLEMENTS" 2>/dev/null || {
+      printf 'Unable to read vEGPU Machine host app entitlements from: %s\n' "$MACHINE_APP" >&2
+      exit 1
+    }
+  fi
+  if ! /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.system-extension.install' "$MACHINE_ENTITLEMENTS" 2>/dev/null | /usr/bin/grep -qx 'true'; then
+    printf 'vEGPU Machine host app is missing required entitlement: com.apple.developer.system-extension.install\n' >&2
+    printf 'Machine app: %s\n' "$MACHINE_APP" >&2
+    exit 1
+  fi
   MACHINE_SOURCE_DEST="$STAGE_MACHINE/Applications/vEGPU Machine.app/Contents/Resources/SourceBundles"
   mkdir -p "$MACHINE_SOURCE_DEST"
   machine_source_count=0
@@ -66,7 +78,7 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
     printf 'Missing vEGPU Machine source tarball next to Machine app: %s\n' "$(dirname "$MACHINE_APP")" >&2
     exit 1
   fi
-  /usr/bin/codesign --force --sign - "$STAGE_MACHINE/Applications/vEGPU Machine.app" >/dev/null
+  /usr/bin/codesign --force --sign - --entitlements "$MACHINE_ENTITLEMENTS" "$STAGE_MACHINE/Applications/vEGPU Machine.app" >/dev/null
 fi
 
 test -f "$STAGE_APP/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
