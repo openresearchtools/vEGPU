@@ -1465,6 +1465,24 @@ EndSection
 EOS
 }
 
+write_no_idle_xorg_display() {
+  write_root_file_if_changed /etc/X11/xorg.conf.d/90-vegpu-no-idle.conf <<'EOS'
+Section "ServerFlags"
+    Option "AutoAddGPU" "false"
+    Option "AutoBindGPU" "false"
+    Option "BlankTime" "0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime" "0"
+EndSection
+
+Section "Monitor"
+    Identifier "Virtual-1"
+    Option "DPMS" "false"
+EndSection
+EOS
+}
+
 configure_virtio_xorg_display() {
   local bdf busid mode nvidia_bdf nvidia_busid
   install -d /etc/X11/xorg.conf.d
@@ -1485,7 +1503,7 @@ configure_virtio_xorg_display() {
       write_spice_only_xorg_display "$busid"
       ;;
   esac
-  write_no_idle_flags
+  write_no_idle_xorg_display
 }
 
 restart_lightdm_for_display_config() {
