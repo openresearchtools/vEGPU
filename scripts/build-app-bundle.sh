@@ -226,6 +226,7 @@ if [ -d "$FRAMEWORKS" ]; then
   while IFS= read -r framework; do
     codesign --force --sign - "$framework" >/dev/null
   done < <(find "$FRAMEWORKS" -maxdepth 1 -type d -name '*.framework' | sort)
+  "$ROOT/scripts/normalize-display-frameworks.sh" --check "$FRAMEWORKS"
 fi
 for framework in "${ANGLE_REQUIRED_FRAMEWORKS[@]}"; do
   if [ ! -d "$FRAMEWORKS/$framework.framework" ]; then

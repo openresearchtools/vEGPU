@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
 BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+MODE="normalize"
+if [ "${1:-}" = "--check" ]; then
+  MODE="check"
+  shift
+fi
 FRAMEWORKS_DIR="${1:-${VEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}}"
 
 plist_set_or_add() {
@@ -13,10 +18,6 @@ plist_set_or_add() {
   local value="$4"
   /usr/libexec/PlistBuddy -c "Set :$key $value" "$info" 2>/dev/null || \
     /usr/libexec/PlistBuddy -c "Add :$key $type $value" "$info" >/dev/null
-}
-
-sanitize_bundle_component() {
-  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
 }
 
 framework_bundle_id() {
@@ -49,6 +50,22 @@ normalize_install_name() {
   fi
 }
 
+framework_binary() {
+  local framework="$1"
+  local name="$2"
+
+  if [ -f "$framework/Versions/A/$name" ]; then
+    printf '%s\n' "$framework/Versions/A/$name"
+  elif [ -f "$framework/$name" ]; then
+    printf '%s\n' "$framework/$name"
+  fi
+}
+
+framework_infos() {
+  local framework="$1"
+  find "$framework" -path '*/Resources/Info.plist' -type f | sort
+}
+
 normalize_framework() {
   local framework="$1"
   local name
@@ -77,7 +94,7 @@ normalize_framework() {
   local infos=()
   while IFS= read -r info; do
     infos+=("$info")
-  done < <(find "$framework" -path '*/Resources/Info.plist' -type f | sort)
+  done < <(framework_infos "$framework")
 
   if [ "${#infos[@]}" -eq 0 ]; then
     mkdir -p "$framework/Versions/A/Resources"
@@ -104,11 +121,46 @@ PLIST
   done
 }
 
+verify_framework_identity() {
+  local framework="$1"
+  local name
+  local expected
+  local info
+  local actual
+  local binary
+  local signature_id
+
+  name="$(basename "$framework" .framework)"
+  expected="$(framework_bundle_id "$name")"
+
+  while IFS= read -r info; do
+    actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info" 2>/dev/null || true)"
+    if [ "$actual" != "$expected" ]; then
+      printf 'Display framework identity mismatch: %s\n  expected: %s\n  actual:   %s\n  plist:    %s\n' \
+        "$name.framework" "$expected" "${actual:-<missing>}" "$info" >&2
+      exit 1
+    fi
+  done < <(framework_infos "$framework")
+
+  binary="$(framework_binary "$framework" "$name")"
+  if [ -n "$binary" ] && command -v codesign >/dev/null 2>&1; then
+    signature_id="$(codesign -dv "$binary" 2>&1 | sed -n 's/^Identifier=//p' | head -n 1 || true)"
+    if [ -n "$signature_id" ] && [ "$signature_id" != "$expected" ]; then
+      printf 'Display framework code signature identity mismatch: %s\n  expected: %s\n  actual:   %s\n  binary:   %s\n' \
+        "$name.framework" "$expected" "$signature_id" "$binary" >&2
+      exit 1
+    fi
+  fi
+}
+
 if [ ! -d "$FRAMEWORKS_DIR" ]; then
   printf 'Display frameworks directory does not exist: %s\n' "$FRAMEWORKS_DIR" >&2
   exit 1
 fi
 
 while IFS= read -r framework; do
-  normalize_framework "$framework"
+  if [ "$MODE" = "normalize" ]; then
+    normalize_framework "$framework"
+  fi
+  verify_framework_identity "$framework"
 done < <(find "$FRAMEWORKS_DIR" -maxdepth 1 -type d -name '*.framework' | sort)

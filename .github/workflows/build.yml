@@ -310,6 +310,9 @@ jobs:
           test -d "$FRAMEWORKS/spice-client-glib-2.0.8.framework"
           test -d "$FRAMEWORKS/EGL.framework"
           test -d "$FRAMEWORKS/GLESv2.framework"
+          if [ "${DISPLAY_MODE}" = "build" ]; then
+            scripts/normalize-display-frameworks.sh --check "$FRAMEWORKS"
+          fi
           otool -D "$FRAMEWORKS/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
           otool -D "$FRAMEWORKS/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
           test -f "$SOURCE"
@@ -695,6 +698,7 @@ jobs:
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-IMPORT.txt"
           find "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
           find "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
+          scripts/normalize-display-frameworks.sh --check "$APP/Contents/Frameworks"
           otool -D "$APP/Contents/Frameworks/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
           otool -D "$APP/Contents/Frameworks/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
