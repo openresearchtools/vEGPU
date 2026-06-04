@@ -499,6 +499,47 @@ textarea.input:focus {
 	min-width: 0;
 }
 
+.endpoint-strip {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+	padding: 0 16px 16px;
+}
+
+.endpoint-chip {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 8px;
+	align-items: center;
+	min-width: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: #f8f9fb;
+	padding: 8px 10px;
+}
+
+.endpoint-chip span {
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 750;
+	text-transform: uppercase;
+}
+
+.endpoint-chip code {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family:
+		ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		Monaco,
+		Consolas,
+		"Liberation Mono",
+		monospace;
+}
+
 .endpoints-popover {
 	position: absolute;
 	top: calc(100% + 8px);
@@ -1194,6 +1235,10 @@ textarea.input:focus {
 	}
 
 	.form-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.endpoint-strip {
 		grid-template-columns: minmax(0, 1fr);
 	}
 

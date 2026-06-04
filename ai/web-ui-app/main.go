@@ -29,16 +29,17 @@ import (
 var embeddedFiles embed.FS
 
 type App struct {
-	appDir       string
-	store        *ConfigStore
-	discovery    *DiscoveryService
-	runtime      *RuntimeService
-	runtimes     *RuntimeManager
-	processes    *ProcessManager
-	hf           *HFService
-	copies       *ModelCopyService
-	llamaFS      fs.FS
-	llamaHandler http.Handler
+	appDir        string
+	store         *ConfigStore
+	discovery     *DiscoveryService
+	runtime       *RuntimeService
+	runtimes      *RuntimeManager
+	processes     *ProcessManager
+	hf            *HFService
+	copies        *ModelCopyService
+	modelAPIRoute *ModelAPIRouteSync
+	llamaFS       fs.FS
+	llamaHandler  http.Handler
 }
 
 var generationPresetKeys = map[string]struct{}{
@@ -81,6 +82,10 @@ func main() {
 	processes := NewProcessManager(store, runtimeSvc, appDir)
 	hfSvc := NewHFService(appDir, store, discovery, runtimeSvc)
 	copySvc := NewModelCopyService(store, discovery, runtimeSvc)
+	modelAPIRoute := NewModelAPIRouteSync(appDir)
+	if err := modelAPIRoute.Sync(store.Get()); err != nil {
+		log.Printf("model API VM route sync failed: %v", err)
+	}
 	go func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -94,16 +99,17 @@ func main() {
 		log.Fatalf("static llama ui: %v", err)
 	}
 	app := &App{
-		appDir:       appDir,
-		store:        store,
-		discovery:    discovery,
-		runtime:      runtimeSvc,
-		runtimes:     runtimeManager,
-		processes:    processes,
-		hf:           hfSvc,
-		copies:       copySvc,
-		llamaFS:      llamaStatic,
-		llamaHandler: http.FileServer(http.FS(llamaStatic)),
+		appDir:        appDir,
+		store:         store,
+		discovery:     discovery,
+		runtime:       runtimeSvc,
+		runtimes:      runtimeManager,
+		processes:     processes,
+		hf:            hfSvc,
+		copies:        copySvc,
+		modelAPIRoute: modelAPIRoute,
+		llamaFS:       llamaStatic,
+		llamaHandler:  http.FileServer(http.FS(llamaStatic)),
 	}
 
 	if store.Get().Discovery.Enabled {
@@ -294,10 +300,11 @@ func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		cfg := a.store.Get()
 		respondJSON(w, http.StatusOK, map[string]any{
-			"appDir":     a.appDir,
-			"configPath": a.store.Path(),
-			"config":     cfg,
-			"models":     a.sortedModelsForClient(r.Context(), cfg),
+			"appDir":          a.appDir,
+			"configPath":      a.store.Path(),
+			"config":          cfg,
+			"routerEndpoints": a.modelAPIRoute.Endpoints(cfg),
+			"models":          a.sortedModelsForClient(r.Context(), cfg),
 		})
 	case http.MethodPatch:
 		var envelope struct {
@@ -325,7 +332,14 @@ func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, err)
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]any{"config": a.store.Get()})
+		cfg := a.store.Get()
+		if err := a.modelAPIRoute.Sync(cfg); err != nil {
+			log.Printf("model API VM route sync failed: %v", err)
+		}
+		respondJSON(w, http.StatusOK, map[string]any{
+			"config":          cfg,
+			"routerEndpoints": a.modelAPIRoute.Endpoints(cfg),
+		})
 	default:
 		methodNotAllowed(w)
 	}

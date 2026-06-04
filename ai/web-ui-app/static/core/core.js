@@ -34,6 +34,7 @@
 	];
 	const state = {
 		appConfig: null,
+		routerEndpoints: null,
 		models: [],
 		modelStatuses: {},
 		modelStatusDetails: {},
@@ -91,6 +92,8 @@
 		serverAllowInsecureSelect: document.getElementById("serverAllowInsecureSelect"),
 		serverResidencyModeSelect: document.getElementById("serverResidencyModeSelect"),
 		serverMaxActiveInput: document.getElementById("serverMaxActiveInput"),
+		macApiEndpoint: document.getElementById("macApiEndpoint"),
+		vmApiEndpoint: document.getElementById("vmApiEndpoint"),
 		saveServerButton: document.getElementById("saveServerButton"),
 		checkRuntimeButton: document.getElementById("checkRuntimeButton"),
 		runtimeSummary: document.getElementById("runtimeSummary"),
@@ -192,6 +195,15 @@
 		next.rpcServers = next.rpcServers ?? [];
 		next.models = next.models ?? {};
 		return next;
+	}
+
+	function normalizeRouterEndpoints(endpoints, config = state.appConfig) {
+		const port = Number(config?.server?.port || 9292);
+		return {
+			macBaseURL: `http://127.0.0.1:${port}`,
+			vmBaseURL: `http://172.29.253.1:${port}`,
+			...(endpoints ?? {})
+		};
 	}
 
 	function setStatus(text) {
@@ -736,6 +748,7 @@
 		try {
 			const configData = await apiFetch("/api/config");
 			state.appConfig = normalizeAppConfig(configData.config);
+			state.routerEndpoints = normalizeRouterEndpoints(configData.routerEndpoints, state.appConfig);
 			setModelsFromServer(configData.models ?? Object.values(state.appConfig.models ?? {}));
 			if (!state.selectedId) {
 				const remembered = localStorage.getItem(selectedModelStorageKey);
@@ -845,6 +858,7 @@
 			body: JSON.stringify({ config })
 		});
 		state.appConfig = normalizeAppConfig(data.config);
+		state.routerEndpoints = normalizeRouterEndpoints(data.routerEndpoints, state.appConfig);
 		setStatus("Settings saved");
 		renderServer();
 		renderDevices();
@@ -1310,6 +1324,7 @@
 	async function loadConfigOnly() {
 		const configData = await apiFetch("/api/config");
 		state.appConfig = normalizeAppConfig(configData.config);
+		state.routerEndpoints = normalizeRouterEndpoints(configData.routerEndpoints, state.appConfig);
 		setModelsFromServer(configData.models ?? Object.values(state.appConfig.models ?? {}));
 	}
 
@@ -1329,6 +1344,9 @@
 		el.serverPortInput.value = server.port ?? 9292;
 		el.serverApiKeysInput.value = (server.apiKeys ?? []).join(",");
 		el.serverAllowInsecureSelect.value = String(!!server.allowInsecureRemote);
+		state.routerEndpoints = normalizeRouterEndpoints(state.routerEndpoints, state.appConfig);
+		if (el.macApiEndpoint) el.macApiEndpoint.textContent = state.routerEndpoints.macBaseURL;
+		if (el.vmApiEndpoint) el.vmApiEndpoint.textContent = state.routerEndpoints.vmBaseURL;
 		const residency = state.appConfig.runtime?.residency ?? {};
 		if (el.serverResidencyModeSelect) el.serverResidencyModeSelect.value = residency.residencyMode ?? "gpu-aware";
 		if (el.serverMaxActiveInput) el.serverMaxActiveInput.value = residency.maxActiveServers ?? 0;
@@ -1499,7 +1517,13 @@
 	function renderEndpoints() {
 		el.endpointsButton.setAttribute("aria-expanded", String(state.endpointsOpen));
 		el.endpointsPopover.classList.toggle("hidden", !state.endpointsOpen);
-		el.endpointsPopover.innerHTML = advertisedEndpoints
+		const routerEndpoints = normalizeRouterEndpoints(state.routerEndpoints, state.appConfig);
+		const bases = [
+			{ method: "Mac", path: routerEndpoints.macBaseURL },
+			{ method: "VM", path: routerEndpoints.vmBaseURL }
+		];
+		el.endpointsPopover.innerHTML = bases
+			.concat(advertisedEndpoints)
 			.map(
 				(endpoint) => `
 				<div class="endpoint-row">
