@@ -75,11 +75,25 @@ public final class NFSShareService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "share", message: "Checking Mac share in Linux", detail: share.exportPath))
         let mounted = await waitForGuestNFSShare(share: share, mode: .fast)
         if mounted.state == "ready" {
+            do {
+                try await reconcileGuestNFSSharePolicy(share)
+            } catch {
+                let detail = String(describing: error)
+                progress.report(ProgressEvent(stage: "share", message: "Mac share policy repair did not finish", detail: detail, level: .error))
+                return .unavailable(share: share, expectedSource: expected, detail: detail)
+            }
             return .ready(share: share, expectedSource: expected, remounted: false)
         }
         if mounted.state == "busy" || mounted.state == "unknown" || mounted.state == "stale" {
             let settled = await waitForGuestNFSShare(share: share, mode: .extended)
             if settled.state == "ready" {
+                do {
+                    try await reconcileGuestNFSSharePolicy(share)
+                } catch {
+                    let detail = String(describing: error)
+                    progress.report(ProgressEvent(stage: "share", message: "Mac share policy repair did not finish", detail: detail, level: .error))
+                    return .unavailable(share: share, expectedSource: expected, detail: detail)
+                }
                 return .ready(share: share, expectedSource: expected, remounted: false)
             }
             if settled.state == "unknown" {
@@ -99,6 +113,11 @@ public final class NFSShareService: @unchecked Sendable {
             progress.report(ProgressEvent(stage: "share", message: "Mac share mount did not finish", detail: detail, level: .error))
             return .unavailable(share: share, expectedSource: expected, detail: detail)
         }
+    }
+
+    private func reconcileGuestNFSSharePolicy(_ share: NFSShareState) async throws {
+        progress.report(ProgressEvent(stage: "share", message: "Refreshing Mac share policy in Linux", detail: share.exportPath))
+        _ = try await ssh.agent(["mount-nfs-share", VMNet.gateway, share.exportPath, guestShareRoot], timeout: 45)
     }
 
     public func ensureBidirectional(macShareRoot: String, linuxHomeMountPath: String, linuxHomeEnabled: Bool = true) async throws -> BidirectionalShareResult {

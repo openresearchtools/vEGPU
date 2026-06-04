@@ -85,10 +85,25 @@ install_scaling_app() {
   fi
 }
 
+share_is_nfs_mounted() {
+  local target="$1"
+  awk -v target="$target" '$5 == target {
+    for (i = 1; i <= NF; i++) {
+      if ($i == "-") {
+        if ($(i + 1) == "nfs" || $(i + 1) == "nfs4") {
+          found = 1
+        }
+        exit
+      }
+    }
+  }
+  END { exit(found ? 0 : 1) }' /proc/self/mountinfo 2>/dev/null
+}
+
 repair_share_access() {
   usermod -aG dialout "$HUMAN_USER" 2>/dev/null || true
   usermod -aG dialout vegpuctl 2>/dev/null || true
-  if /usr/bin/timeout 2s test -e "$SHARE" 2>/dev/null; then
+  if share_is_nfs_mounted "$SHARE"; then
     share_gid="$(/usr/bin/timeout 2s stat -c '%g' "$SHARE" 2>/dev/null || true)"
     share_group="$(getent group "$share_gid" 2>/dev/null | cut -d: -f1 || true)"
     if [ -n "$share_group" ]; then
@@ -209,6 +224,86 @@ EOF
   nmcli connection up "vEGPU vmnet" ifname enp0s3 >/dev/null 2>&1 || true
 }
 
+remove_managed_mac_share_path() {
+  local path="$1"
+  if [ -L "$path" ] || [ -f "$path" ]; then
+    rm -f "$path"
+  elif [ -d "$path" ]; then
+    rmdir "$path" 2>/dev/null || true
+  fi
+}
+
+prune_mac_share_bookmarks() {
+  local bookmarks="$1"
+  local tmp
+  [ -f "$bookmarks" ] || return 0
+  tmp="$(mktemp)"
+  awk '
+    index($0, "file:///mnt/vegpu-share") == 0 &&
+    index($0, "file:///home/vegpu/Mac Share") == 0 &&
+    index($0, "file:///home/vegpu/Mac%20Share") == 0 &&
+    index($0, "file:///home/vegpu/Desktop/Mac Share") == 0 &&
+    index($0, "file:///home/vegpu/Desktop/Mac%20Share") == 0 {
+      print
+    }
+  ' "$bookmarks" >"$tmp"
+  install -o "$HUMAN_USER" -g "$HUMAN_USER" -m 0644 "$tmp" "$bookmarks"
+  rm -f "$tmp"
+}
+
+install_mac_share_launcher() {
+  install -d /usr/local/bin /usr/local/libexec/vegpu
+
+  cat >/usr/local/libexec/vegpu/vegpu-open-mac-share-worker <<'EOS'
+#!/usr/bin/env bash
+set -u
+
+SHARE="${1:-/mnt/vegpu-share}"
+
+notify_user() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "vEGPU" "$1" 2>/dev/null || true
+  else
+    printf '%s\n' "$1" >&2
+  fi
+}
+
+if ! /usr/bin/timeout 8s /usr/bin/stat "$SHARE/." >/dev/null 2>&1; then
+  notify_user "Mac Share is not responding. Use Repair mounts in vEGPU, then open Mac Share again."
+  exit 1
+fi
+
+if command -v thunar >/dev/null 2>&1; then
+  exec thunar "$SHARE"
+fi
+exec xdg-open "$SHARE"
+EOS
+  chmod 0755 /usr/local/libexec/vegpu/vegpu-open-mac-share-worker
+
+  cat >/usr/local/bin/vegpu-open-mac-share <<EOS
+#!/usr/bin/env bash
+set -u
+
+SHARE="$SHARE"
+WORKER=/usr/local/libexec/vegpu/vegpu-open-mac-share-worker
+
+if command -v systemd-run >/dev/null 2>&1 && [ -n "\${DISPLAY:-}" ]; then
+  unit="vegpu-open-mac-share-\$\$-\$(date +%s%N 2>/dev/null || date +%s)"
+  if systemd-run --user --quiet --collect --unit="\$unit" \
+    --setenv="DISPLAY=\$DISPLAY" \
+    --setenv="XAUTHORITY=\${XAUTHORITY:-\$HOME/.Xauthority}" \
+    --setenv="DBUS_SESSION_BUS_ADDRESS=\${DBUS_SESSION_BUS_ADDRESS:-}" \
+    "\$WORKER" "\$SHARE" >/dev/null 2>&1; then
+    exit 0
+  fi
+fi
+
+setsid "\$WORKER" "\$SHARE" >/dev/null 2>&1 &
+exit 0
+EOS
+  chmod 0755 /usr/local/bin/vegpu-open-mac-share
+}
+
 repair_desktop_links() {
   install -d -o "$HUMAN_USER" -g "$HUMAN_USER" \
     "/home/$HUMAN_USER/Desktop" \
@@ -221,19 +316,29 @@ repair_desktop_links() {
   rm -f /usr/local/bin/vegpu-open-mac-share \
     "/home/$HUMAN_USER/Desktop/Mac Share.desktop" \
     "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-  rm -rf "/home/$HUMAN_USER/Mac Share" "/home/$HUMAN_USER/Desktop/Mac Share"
+  remove_managed_mac_share_path "/home/$HUMAN_USER/Mac Share"
+  remove_managed_mac_share_path "/home/$HUMAN_USER/Desktop/Mac Share"
 
-  ln -sfn "$SHARE" "/home/$HUMAN_USER/Mac Share"
-  ln -sfn "$SHARE" "/home/$HUMAN_USER/Desktop/Mac Share"
-  chown -h "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Mac Share"
-  chown -h "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Desktop/Mac Share"
+  install_mac_share_launcher
+  cat >"/home/$HUMAN_USER/Desktop/Mac Share.desktop" <<'EOS'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mac Share
+Comment=Open the vEGPU Mac share
+Exec=/usr/local/bin/vegpu-open-mac-share
+Icon=folder-remote
+Terminal=false
+Categories=Utility;FileManager;
+StartupNotify=true
+EOS
+  cp "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
+  chmod 0755 "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
+  chown "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
+  sudo -u "$HUMAN_USER" env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u "$HUMAN_USER")/bus gio set "/home/$HUMAN_USER/Desktop/Mac Share.desktop" metadata::trusted true >/dev/null 2>&1 || true
 
-  if [ -f "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks" ]; then
-    tmp="$(mktemp)"
-    awk -v raw="file://$SHARE Mac Share" '$0 != raw { print }' "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks" >"$tmp"
-    install -o "$HUMAN_USER" -g "$HUMAN_USER" -m 0644 "$tmp" "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks"
-    rm -f "$tmp"
-  fi
+  prune_mac_share_bookmarks "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks"
+  prune_mac_share_bookmarks "/home/$HUMAN_USER/.gtk-bookmarks"
 }
 
 install_display_control() {

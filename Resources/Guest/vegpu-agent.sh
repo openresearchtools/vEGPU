@@ -1000,6 +1000,140 @@ nfs_mount_source() {
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
+remove_managed_mac_share_path() {
+  local path="$1"
+  if [ -L "$path" ] || [ -f "$path" ]; then
+    rm -f "$path"
+  elif [ -d "$path" ]; then
+    rmdir "$path" 2>/dev/null || true
+  fi
+}
+
+prune_mac_share_bookmarks() {
+  local bookmarks="$1"
+  local tmp
+  [ -f "$bookmarks" ] || return 0
+  tmp="$(mktemp)"
+  awk '
+    index($0, "file:///mnt/vegpu-share") == 0 &&
+    index($0, "file:///home/vegpu/Mac Share") == 0 &&
+    index($0, "file:///home/vegpu/Mac%20Share") == 0 &&
+    index($0, "file:///home/vegpu/Desktop/Mac Share") == 0 &&
+    index($0, "file:///home/vegpu/Desktop/Mac%20Share") == 0 {
+      print
+    }
+  ' "$bookmarks" >"$tmp"
+  install -o vegpu -g vegpu -m 0644 "$tmp" "$bookmarks"
+  rm -f "$tmp"
+}
+
+install_mac_share_launcher() {
+  local target="$1"
+  install -d /usr/local/bin /usr/local/libexec/vegpu
+
+  cat >/usr/local/libexec/vegpu/vegpu-open-mac-share-worker <<'EOS'
+#!/usr/bin/env bash
+set -u
+
+SHARE="${1:-/mnt/vegpu-share}"
+
+notify_user() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "vEGPU" "$1" 2>/dev/null || true
+  else
+    printf '%s\n' "$1" >&2
+  fi
+}
+
+if ! /usr/bin/timeout 8s /usr/bin/stat "$SHARE/." >/dev/null 2>&1; then
+  notify_user "Mac Share is not responding. Use Repair mounts in vEGPU, then open Mac Share again."
+  exit 1
+fi
+
+if command -v thunar >/dev/null 2>&1; then
+  exec thunar "$SHARE"
+fi
+exec xdg-open "$SHARE"
+EOS
+  chmod 0755 /usr/local/libexec/vegpu/vegpu-open-mac-share-worker
+
+  cat >/usr/local/bin/vegpu-open-mac-share <<EOS
+#!/usr/bin/env bash
+set -u
+
+SHARE="$target"
+WORKER=/usr/local/libexec/vegpu/vegpu-open-mac-share-worker
+
+if command -v systemd-run >/dev/null 2>&1 && [ -n "\${DISPLAY:-}" ]; then
+  unit="vegpu-open-mac-share-\$\$-\$(date +%s%N 2>/dev/null || date +%s)"
+  if systemd-run --user --quiet --collect --unit="\$unit" \
+    --setenv="DISPLAY=\$DISPLAY" \
+    --setenv="XAUTHORITY=\${XAUTHORITY:-\$HOME/.Xauthority}" \
+    --setenv="DBUS_SESSION_BUS_ADDRESS=\${DBUS_SESSION_BUS_ADDRESS:-}" \
+    "\$WORKER" "\$SHARE" >/dev/null 2>&1; then
+    exit 0
+  fi
+fi
+
+setsid "\$WORKER" "\$SHARE" >/dev/null 2>&1 &
+exit 0
+EOS
+  chmod 0755 /usr/local/bin/vegpu-open-mac-share
+}
+
+install_mac_share_keepalive() {
+  local target="$1"
+  install -d /usr/local/libexec/vegpu /etc/systemd/system
+
+  cat >/usr/local/libexec/vegpu/vegpu-mac-share-keepalive <<'EOS'
+#!/usr/bin/env bash
+set -u
+
+SHARE="${1:-/mnt/vegpu-share}"
+
+awk -v target="$SHARE" '$5 == target {
+  for (i = 1; i <= NF; i++) {
+    if ($i == "-") {
+      if ($(i + 1) == "nfs" || $(i + 1) == "nfs4") {
+        found = 1
+      }
+      exit
+    }
+  }
+}
+END { exit(found ? 0 : 1) }' /proc/self/mountinfo 2>/dev/null || exit 0
+
+/usr/bin/timeout 4s /usr/bin/stat "$SHARE/." >/dev/null 2>&1 || true
+EOS
+  chmod 0755 /usr/local/libexec/vegpu/vegpu-mac-share-keepalive
+
+  cat >/etc/systemd/system/vegpu-mac-share-keepalive.service <<EOS
+[Unit]
+Description=vEGPU Mac share keepalive
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=8
+ExecStart=/usr/local/libexec/vegpu/vegpu-mac-share-keepalive $target
+EOS
+
+  cat >/etc/systemd/system/vegpu-mac-share-keepalive.timer <<'EOS'
+[Unit]
+Description=vEGPU Mac share keepalive timer
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=vegpu-mac-share-keepalive.service
+
+[Install]
+WantedBy=timers.target
+EOS
+}
+
 repair_share_user_access() {
   local target="$1"
   local group_name=""
@@ -1018,36 +1152,11 @@ repair_share_user_access() {
   fi
   if id vegpu >/dev/null 2>&1; then
     install -d -o vegpu -g vegpu /home/vegpu/Desktop /home/vegpu/.config/gtk-3.0 /home/vegpu/.local/share/applications
-    cat >/usr/local/bin/vegpu-open-mac-share <<EOS
-#!/usr/bin/env bash
-set -euo pipefail
-
-SHARE="$target"
-
-notify_user() {
-  if command -v notify-send >/dev/null 2>&1; then
-    notify-send "vEGPU" "\$1" 2>/dev/null || true
-  else
-    printf '%s\n' "\$1" >&2
-  fi
-}
-
-if ! /usr/bin/timeout 8s /bin/sh -c 'stat "\$1" >/dev/null && ls -ld "\$1/." >/dev/null' sh "\$SHARE"; then
-  notify_user "Mac Share is not responding. Use Repair mounts in vEGPU, then open Mac Share again."
-  exit 1
-fi
-
-exec xdg-open "\$SHARE"
-EOS
-    chmod 0755 /usr/local/bin/vegpu-open-mac-share
+    install_mac_share_launcher "$target"
 
     for path in "/home/vegpu/Mac Share" "/home/vegpu/Desktop/Mac Share"; do
-      if [ -L "$path" ] || [ -f "$path" ]; then
-        rm -f "$path"
-      fi
+      remove_managed_mac_share_path "$path"
     done
-    ln -sfn "$target" "/home/vegpu/Mac Share"
-    chown -h vegpu:vegpu "/home/vegpu/Mac Share"
 
     cat >"/home/vegpu/Desktop/Mac Share.desktop" <<'EOS'
 [Desktop Entry]
@@ -1065,16 +1174,9 @@ EOS
     chmod 0755 "/home/vegpu/Desktop/Mac Share.desktop" "/home/vegpu/.local/share/applications/vegpu-mac-share.desktop"
     chown vegpu:vegpu "/home/vegpu/Desktop/Mac Share.desktop" "/home/vegpu/.local/share/applications/vegpu-mac-share.desktop"
     sudo -u vegpu env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u vegpu)/bus gio set "/home/vegpu/Desktop/Mac Share.desktop" metadata::trusted true >/dev/null 2>&1 || true
-    if command -v xdg-mime >/dev/null 2>&1 && [ -f /usr/share/applications/org.kde.dolphin.desktop ]; then
-      sudo -u vegpu xdg-mime default org.kde.dolphin.desktop inode/directory >/dev/null 2>&1 || true
-    fi
 
-    if [ -f /home/vegpu/.config/gtk-3.0/bookmarks ]; then
-      tmp="$(mktemp)"
-      awk -v raw="file://$target Mac Share" '$0 != raw { print }' /home/vegpu/.config/gtk-3.0/bookmarks >"$tmp"
-      install -o vegpu -g vegpu -m 0644 "$tmp" /home/vegpu/.config/gtk-3.0/bookmarks
-      rm -f "$tmp"
-    fi
+    prune_mac_share_bookmarks /home/vegpu/.config/gtk-3.0/bookmarks
+    prune_mac_share_bookmarks /home/vegpu/.gtk-bookmarks
   fi
 }
 
@@ -1089,6 +1191,7 @@ mount_nfs_share() {
   mount_unit="$(systemd-escape --path --suffix=mount "$target")"
   automount_unit="$(systemd-escape --path --suffix=automount "$target")"
   mkdir -p "$target" /etc/systemd/system
+  install_mac_share_keepalive "$target"
 
   cat >"/etc/systemd/system/$mount_unit" <<EOS
 [Unit]
@@ -1114,18 +1217,20 @@ Wants=network-online.target
 
 [Automount]
 Where=$target
-TimeoutIdleSec=300
 
 [Install]
 WantedBy=multi-user.target
 EOS
 
   systemctl daemon-reload || true
+  systemctl enable "$automount_unit" >/dev/null 2>&1 || true
+  systemctl enable --now vegpu-mac-share-keepalive.timer >/dev/null 2>&1 || true
   current="$(nfs_mount_source "$target")"
   if [ -n "$current" ]; then
     if [ "$current" = "$source" ] &&
-       timeout 8 sh -c 'stat "$1" >/dev/null && ls -ld "$1/." >/dev/null' sh "$target"; then
-      timeout 3 umount "$target" 2>/dev/null || { repair_share_user_access "$target"; return 0; }
+       timeout 8 sh -c 'stat "$1/." >/dev/null' sh "$target"; then
+      repair_share_user_access "$target"
+      return 0
     else
       log "Replacing stale or wrong NFS share mount at $target (current: $current, expected: $source)"
       timeout 8 umount -f "$target" 2>/dev/null || timeout 8 umount -l "$target" 2>/dev/null || true
@@ -1133,9 +1238,8 @@ EOS
   fi
 
   systemctl reset-failed "$automount_unit" "$mount_unit" >/dev/null 2>&1 || true
-  systemctl enable "$automount_unit" >/dev/null 2>&1 || true
   systemctl start "$automount_unit" >/dev/null 2>&1 || true
-  if timeout 8 sh -c 'stat "$1" >/dev/null && ls -ld "$1/." >/dev/null' sh "$target" &&
+  if timeout 8 sh -c 'stat "$1/." >/dev/null' sh "$target" &&
      [ "$(nfs_mount_source "$target")" = "$source" ]; then
     repair_share_user_access "$target"
     return 0
@@ -1146,7 +1250,7 @@ EOS
   systemctl start "$mount_unit" || mount -t nfs -o "$opts" "$source" "$target"
   current="$(nfs_mount_source "$target")"
   [ "$current" = "$source" ] || { log "NFS share mount verification failed: expected $source, saw ${current:-missing}"; return 1; }
-  timeout 8 sh -c 'stat "$1" >/dev/null && ls -ld "$1/." >/dev/null' sh "$target" ||
+  timeout 8 sh -c 'stat "$1/." >/dev/null' sh "$target" ||
     { log "NFS share metadata verification failed for $target"; return 1; }
   repair_share_user_access "$target"
 }
