@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ BASE_DPI = 96
 APP_ID = "com.vegpu.scaling"
 APP_ICON_NAME = "vegpu-scaling"
 TITLE_FONT_FAMILY = "Sans Bold"
+LOCK_WAIT_SECONDS = 2.0
 
 
 @dataclass(frozen=True)
@@ -97,11 +99,19 @@ def lock_path() -> Path:
 
 
 @contextmanager
-def scale_transaction() -> Iterable[None]:
+def scale_transaction(wait_seconds: float = LOCK_WAIT_SECONDS) -> Iterable[None]:
     path = lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("vEGPU Scaling is already applying changes; try again in a moment") from exc
+                time.sleep(0.05)
         try:
             yield
         finally:

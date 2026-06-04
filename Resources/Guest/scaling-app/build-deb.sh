@@ -22,7 +22,6 @@ install_file 0755 "$ROOT/bin/vegpu-scaling" "$PKG_DIR/usr/bin/vegpu-scaling"
 install_file 0644 "$ROOT/src/vegpu_scaling.py" "$PKG_DIR/usr/lib/vegpu-scaling/vegpu_scaling.py"
 install_file 0644 "$ROOT/share/applications/vegpu-scaling.desktop" "$PKG_DIR/usr/share/applications/vegpu-scaling.desktop"
 install_file 0644 "$ROOT/share/icons/hicolor/scalable/apps/vegpu-scaling.svg" "$PKG_DIR/usr/share/icons/hicolor/scalable/apps/vegpu-scaling.svg"
-install_file 0644 "$ROOT/share/xdg/autostart/vegpu-scaling-reapply.desktop" "$PKG_DIR/etc/xdg/autostart/vegpu-scaling-reapply.desktop"
 install -d "$PKG_DIR/usr/share/doc/vegpu-scaling"
 cat >"$PKG_DIR/usr/share/doc/vegpu-scaling/copyright" <<'EOF'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
@@ -77,6 +76,7 @@ fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
 fi
+rm -f /etc/xdg/autostart/vegpu-scaling-reapply.desktop
 if getent passwd vegpu >/dev/null 2>&1; then
   home="$(getent passwd vegpu | cut -d: -f6)"
   if [ -n "$home" ]; then

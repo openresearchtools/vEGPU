@@ -98,6 +98,29 @@ repair_share_access() {
   fi
 }
 
+install_desktop_mount_policy() {
+  install -d /etc/polkit-1/rules.d
+  cat >/etc/polkit-1/rules.d/49-vegpu-desktop-mount.rules <<'EOS'
+polkit.addRule(function(action, subject) {
+  if (subject.user !== "vegpu") {
+    return;
+  }
+  var allowed = [
+    "org.freedesktop.udisks2.filesystem-mount",
+    "org.freedesktop.udisks2.filesystem-mount-system",
+    "org.freedesktop.udisks2.filesystem-unmount-others",
+    "org.freedesktop.udisks2.eject-media",
+    "org.freedesktop.udisks2.power-off-drive"
+  ];
+  if (allowed.indexOf(action.id) >= 0) {
+    return polkit.Result.YES;
+  }
+});
+EOS
+  chmod 0644 /etc/polkit-1/rules.d/49-vegpu-desktop-mount.rules
+  /usr/bin/timeout 5s systemctl try-restart polkit >/dev/null 2>&1 || true
+}
+
 install_desktop_stack() {
   if [ -f "$MARKER" ] &&
      command -v startxfce4 >/dev/null 2>&1 &&
@@ -1543,6 +1566,7 @@ chown -R vegpu:vegpu /home/vegpu/.config
 usermod -aG video,render,input,dialout vegpu || true
 usermod -aG dialout vegpuctl || true
 repair_desktop_links
+install_desktop_mount_policy
 install_customization_script
 install_scaling_app
 run_customization write-prefs

@@ -329,6 +329,7 @@ final class DisplayControlMenuModel: ObservableObject {
     @Published private(set) var mode: DisplayControlMode = .spice
     @Published private(set) var selectedGPU: DisplayControlGPU?
     @Published private(set) var busy = false
+    @Published private(set) var embeddedBusy = false
     @Published private(set) var audioBusy = false
     @Published private(set) var microphonePassthroughEnabled = false
     @Published private(set) var message: String?
@@ -336,6 +337,7 @@ final class DisplayControlMenuModel: ObservableObject {
     private let service: DisplayControlService
     private let machine: MachineService
     private var refreshTask: Task<Void, Never>?
+    private var refreshGeneration = 0
     private var audioBufferMs = 20
 
     init(paths: AppPaths, machine: MachineService? = nil) {
@@ -360,9 +362,12 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     func refresh() {
+        guard !busy, !embeddedBusy else { return }
+        refreshGeneration += 1
+        let generation = refreshGeneration
         refreshTask?.cancel()
         refreshTask = Task { @MainActor in
-            await refreshNow()
+            await refreshNow(refreshGeneration: generation)
         }
     }
 
@@ -393,6 +398,8 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     func releaseSession() {
+        guard !busy else { return }
+        cancelRefresh()
         busy = true
         message = nil
         Task { @MainActor in
@@ -436,7 +443,7 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     func reload() {
-        perform {
+        performEmbedded {
             try await self.service.reload()
         }
     }
@@ -475,6 +482,7 @@ final class DisplayControlMenuModel: ObservableObject {
 
     private func perform(postReconnect: Bool = true, _ action: @escaping () async throws -> Void) {
         guard !busy else { return }
+        cancelRefresh()
         busy = true
         message = nil
         Task { @MainActor in
@@ -493,6 +501,29 @@ final class DisplayControlMenuModel: ObservableObject {
         }
     }
 
+    private func performEmbedded(_ action: @escaping () async throws -> Void) {
+        guard !embeddedBusy else { return }
+        cancelRefresh()
+        embeddedBusy = true
+        message = nil
+        Task { @MainActor in
+            defer { embeddedBusy = false }
+            do {
+                try await action()
+                await refreshNow()
+                NotificationCenter.default.post(name: .vegpuReconnectDisplay, object: self)
+            } catch {
+                message = String(describing: error)
+            }
+        }
+    }
+
+    private func cancelRefresh() {
+        refreshGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
+    }
+
     private func refreshSessionsOnly() async {
         do {
             let sessionsPayload = try await service.sessions()
@@ -505,10 +536,11 @@ final class DisplayControlMenuModel: ObservableObject {
         }
     }
 
-    private func refreshNow() async {
+    private func refreshNow(refreshGeneration expectedGeneration: Int? = nil) async {
         do {
             let status = try await service.status()
             let sessionsPayload = try await service.sessions()
+            guard expectedGeneration == nil || expectedGeneration == refreshGeneration else { return }
             mode = status.mode
             selectedGPU = status.selectedGPU
             sessions = sessionsPayload.sessions.filter(\.valid)
@@ -518,6 +550,7 @@ final class DisplayControlMenuModel: ObservableObject {
         } catch {
             do {
                 let gpuList = try await service.listGPUs()
+                guard expectedGeneration == nil || expectedGeneration == refreshGeneration else { return }
                 gpus = gpuList
                 sessions = gpuList.map {
                     DisplaySession(
@@ -535,6 +568,7 @@ final class DisplayControlMenuModel: ObservableObject {
                 activeSessionID = nil
                 message = String(describing: error)
             } catch {
+                guard expectedGeneration == nil || expectedGeneration == refreshGeneration else { return }
                 message = String(describing: error)
             }
         }

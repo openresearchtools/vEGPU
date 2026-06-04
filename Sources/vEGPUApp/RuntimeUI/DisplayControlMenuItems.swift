@@ -18,7 +18,7 @@ struct DisplayControlMenuItems: View {
                     model.reload()
                 }
             }
-            .disabled(model.busy)
+            .disabled(model.embeddedBusy)
 
             Button("Microphone: \(model.microphonePassthroughEnabled ? "ON" : "OFF")") {
                 perform {

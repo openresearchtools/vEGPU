@@ -58,7 +58,7 @@ install_file 0755 "$ROOT/bin/vegpu-scaling" "$PREFIX/bin/vegpu-scaling"
 install_file 0644 "$ROOT/src/vegpu_scaling.py" "$PREFIX/lib/vegpu-scaling/vegpu_scaling.py"
 install_file 0644 "$ROOT/share/applications/vegpu-scaling.desktop" "$PREFIX/share/applications/vegpu-scaling.desktop"
 install_file 0644 "$ROOT/share/icons/hicolor/scalable/apps/vegpu-scaling.svg" "$PREFIX/share/icons/hicolor/scalable/apps/vegpu-scaling.svg"
-install_file 0644 "$ROOT/share/xdg/autostart/vegpu-scaling-reapply.desktop" "/etc/xdg/autostart/vegpu-scaling-reapply.desktop"
+rm -f /etc/xdg/autostart/vegpu-scaling-reapply.desktop
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -t -f "$PREFIX/share/icons/hicolor" >/dev/null 2>&1 || true

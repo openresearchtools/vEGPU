@@ -6,4 +6,4 @@ Exec=vegpu-scaling --gui
 Icon=vegpu-scaling
 Terminal=false
 Categories=Settings;DesktopSettings;GTK;
-StartupNotify=true
+StartupNotify=false
