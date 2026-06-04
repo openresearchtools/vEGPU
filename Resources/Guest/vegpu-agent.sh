@@ -1009,6 +1009,53 @@ remove_managed_mac_share_path() {
   fi
 }
 
+run_user_command() {
+  local user="$1"
+  shift
+  local home uid bus
+  home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6 || true)"
+  home="${home:-/home/$user}"
+  uid="$(id -u "$user" 2>/dev/null || true)"
+  bus="/run/user/$uid/bus"
+  if command -v runuser >/dev/null 2>&1; then
+    if [ -n "$uid" ] && [ -S "$bus" ]; then
+      runuser -u "$user" -- env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" "$@"
+    elif command -v dbus-run-session >/dev/null 2>&1; then
+      runuser -u "$user" -- env HOME="$home" dbus-run-session "$@"
+    else
+      runuser -u "$user" -- env HOME="$home" "$@"
+    fi
+  elif command -v sudo >/dev/null 2>&1; then
+    if [ -n "$uid" ] && [ -S "$bus" ]; then
+      sudo -u "$user" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" "$@"
+    else
+      sudo -u "$user" env HOME="$home" "$@"
+    fi
+  else
+    return 1
+  fi
+}
+
+trust_desktop_file() {
+  local user="$1"
+  local file="$2"
+  local home checksum
+  [ -f "$file" ] || return 0
+  chmod 0755 "$file" >/dev/null 2>&1 || true
+  chown "$user:$user" "$file" >/dev/null 2>&1 || true
+  command -v gio >/dev/null 2>&1 || return 0
+  home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6 || true)"
+  if [ -n "$home" ]; then
+    install -d -o "$user" -g "$user" "$home/.local/share/gvfs-metadata"
+    chown "$user:$user" "$home/.local" "$home/.local/share" >/dev/null 2>&1 || true
+  fi
+  run_user_command "$user" gio set "$file" metadata::trusted true >/dev/null 2>&1 || true
+  command -v sha256sum >/dev/null 2>&1 || return 0
+  checksum="$(sha256sum "$file" | awk '{ print $1 }')"
+  [ -n "$checksum" ] || return 0
+  run_user_command "$user" gio set -t string "$file" metadata::xfce-exe-checksum "$checksum" >/dev/null 2>&1 || true
+}
+
 prune_mac_share_bookmarks() {
   local bookmarks="$1"
   local tmp
@@ -1135,6 +1182,7 @@ EOS
 }
 
 repair_share_user_access() {
+  local desktop_file app_file
   local target="$1"
   local group_name=""
   usermod -aG dialout vegpu 2>/dev/null || true
@@ -1158,7 +1206,9 @@ repair_share_user_access() {
       remove_managed_mac_share_path "$path"
     done
 
-    cat >"/home/vegpu/Desktop/Mac Share.desktop" <<'EOS'
+    desktop_file="/home/vegpu/Desktop/Mac Share.desktop"
+    app_file="/home/vegpu/.local/share/applications/vegpu-mac-share.desktop"
+    cat >"$desktop_file" <<'EOS'
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -1170,10 +1220,11 @@ Terminal=false
 Categories=Utility;FileManager;
 StartupNotify=true
 EOS
-    cp "/home/vegpu/Desktop/Mac Share.desktop" "/home/vegpu/.local/share/applications/vegpu-mac-share.desktop"
-    chmod 0755 "/home/vegpu/Desktop/Mac Share.desktop" "/home/vegpu/.local/share/applications/vegpu-mac-share.desktop"
-    chown vegpu:vegpu "/home/vegpu/Desktop/Mac Share.desktop" "/home/vegpu/.local/share/applications/vegpu-mac-share.desktop"
-    sudo -u vegpu env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u vegpu)/bus gio set "/home/vegpu/Desktop/Mac Share.desktop" metadata::trusted true >/dev/null 2>&1 || true
+    cp "$desktop_file" "$app_file"
+    chmod 0755 "$desktop_file" "$app_file"
+    chown vegpu:vegpu "$desktop_file" "$app_file"
+    trust_desktop_file vegpu "$desktop_file"
+    trust_desktop_file vegpu "$app_file"
 
     prune_mac_share_bookmarks /home/vegpu/.config/gtk-3.0/bookmarks
     prune_mac_share_bookmarks /home/vegpu/.gtk-bookmarks

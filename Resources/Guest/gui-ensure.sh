@@ -136,11 +136,16 @@ EOS
   /usr/bin/timeout 5s systemctl try-restart polkit >/dev/null 2>&1 || true
 }
 
+firefox_available() {
+  command -v firefox >/dev/null 2>&1 || command -v firefox-esr >/dev/null 2>&1
+}
+
 install_desktop_stack() {
   if [ -f "$MARKER" ] &&
      command -v startxfce4 >/dev/null 2>&1 &&
      command -v spice-vdagent >/dev/null 2>&1 &&
      command -v thunar >/dev/null 2>&1 &&
+     firefox_available &&
      python3 -c 'import gi' >/dev/null 2>&1; then
     return 0
   fi
@@ -165,6 +170,7 @@ install_desktop_stack() {
     gir1.2-gtk-3.0 \
     python3 \
     python3-gi \
+    firefox-esr \
     thunar \
     xdg-utils \
     x11-xserver-utils \
@@ -231,6 +237,53 @@ remove_managed_mac_share_path() {
   elif [ -d "$path" ]; then
     rmdir "$path" 2>/dev/null || true
   fi
+}
+
+run_user_command() {
+  local user="$1"
+  shift
+  local home uid bus
+  home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6 || true)"
+  home="${home:-/home/$user}"
+  uid="$(id -u "$user" 2>/dev/null || true)"
+  bus="/run/user/$uid/bus"
+  if command -v runuser >/dev/null 2>&1; then
+    if [ -n "$uid" ] && [ -S "$bus" ]; then
+      runuser -u "$user" -- env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" "$@"
+    elif command -v dbus-run-session >/dev/null 2>&1; then
+      runuser -u "$user" -- env HOME="$home" dbus-run-session "$@"
+    else
+      runuser -u "$user" -- env HOME="$home" "$@"
+    fi
+  elif command -v sudo >/dev/null 2>&1; then
+    if [ -n "$uid" ] && [ -S "$bus" ]; then
+      sudo -u "$user" env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" "$@"
+    else
+      sudo -u "$user" env HOME="$home" "$@"
+    fi
+  else
+    return 1
+  fi
+}
+
+trust_desktop_file() {
+  local user="$1"
+  local file="$2"
+  local home checksum
+  [ -f "$file" ] || return 0
+  chmod 0755 "$file" >/dev/null 2>&1 || true
+  chown "$user:$user" "$file" >/dev/null 2>&1 || true
+  command -v gio >/dev/null 2>&1 || return 0
+  home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6 || true)"
+  if [ -n "$home" ]; then
+    install -d -o "$user" -g "$user" "$home/.local/share/gvfs-metadata"
+    chown "$user:$user" "$home/.local" "$home/.local/share" >/dev/null 2>&1 || true
+  fi
+  run_user_command "$user" gio set "$file" metadata::trusted true >/dev/null 2>&1 || true
+  command -v sha256sum >/dev/null 2>&1 || return 0
+  checksum="$(sha256sum "$file" | awk '{ print $1 }')"
+  [ -n "$checksum" ] || return 0
+  run_user_command "$user" gio set -t string "$file" metadata::xfce-exe-checksum "$checksum" >/dev/null 2>&1 || true
 }
 
 prune_mac_share_bookmarks() {
@@ -305,6 +358,7 @@ EOS
 }
 
 repair_desktop_links() {
+  local desktop_file app_file
   install -d -o "$HUMAN_USER" -g "$HUMAN_USER" \
     "/home/$HUMAN_USER/Desktop" \
     "/home/$HUMAN_USER/.config/gtk-3.0" \
@@ -320,7 +374,9 @@ repair_desktop_links() {
   remove_managed_mac_share_path "/home/$HUMAN_USER/Desktop/Mac Share"
 
   install_mac_share_launcher
-  cat >"/home/$HUMAN_USER/Desktop/Mac Share.desktop" <<'EOS'
+  desktop_file="/home/$HUMAN_USER/Desktop/Mac Share.desktop"
+  app_file="/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
+  cat >"$desktop_file" <<'EOS'
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -332,10 +388,11 @@ Terminal=false
 Categories=Utility;FileManager;
 StartupNotify=true
 EOS
-  cp "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-  chmod 0755 "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-  chown "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-  sudo -u "$HUMAN_USER" env DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u "$HUMAN_USER")/bus gio set "/home/$HUMAN_USER/Desktop/Mac Share.desktop" metadata::trusted true >/dev/null 2>&1 || true
+  cp "$desktop_file" "$app_file"
+  chmod 0755 "$desktop_file" "$app_file"
+  chown "$HUMAN_USER:$HUMAN_USER" "$desktop_file" "$app_file"
+  trust_desktop_file "$HUMAN_USER" "$desktop_file"
+  trust_desktop_file "$HUMAN_USER" "$app_file"
 
   prune_mac_share_bookmarks "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks"
   prune_mac_share_bookmarks "/home/$HUMAN_USER/.gtk-bookmarks"
