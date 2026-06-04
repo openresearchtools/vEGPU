@@ -218,34 +218,15 @@ repair_desktop_links() {
     "/home/$HUMAN_USER/.local/share/gvfs-metadata" \
     "/home/$HUMAN_USER/.local/share/applications"
 
-  rm -f "/home/$HUMAN_USER/Desktop/Mac Share.desktop" \
+  rm -f /usr/local/bin/vegpu-open-mac-share \
+    "/home/$HUMAN_USER/Desktop/Mac Share.desktop" \
     "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-  for stale_path in "/home/$HUMAN_USER/Mac Share" "/home/$HUMAN_USER/Desktop/Mac Share"; do
-    if [ -L "$stale_path" ] || [ -f "$stale_path" ]; then
-      rm -f "$stale_path"
-    elif [ -d "$stale_path" ] && ! mountpoint -q "$stale_path"; then
-      rmdir "$stale_path" 2>/dev/null || true
-    fi
-  done
+  rm -rf "/home/$HUMAN_USER/Mac Share" "/home/$HUMAN_USER/Desktop/Mac Share"
 
-  if [ -x /usr/local/bin/vegpu-open-mac-share ]; then
-    cat >"/home/$HUMAN_USER/Desktop/Mac Share.desktop" <<'EOS'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Mac Share
-Comment=Open the vEGPU Mac share
-Exec=/usr/local/bin/vegpu-open-mac-share
-Icon=folder-remote
-Terminal=false
-Categories=Utility;FileManager;
-StartupNotify=false
-EOS
-    cp "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-    chmod 0755 "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-    chown "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Desktop/Mac Share.desktop" "/home/$HUMAN_USER/.local/share/applications/vegpu-mac-share.desktop"
-    run_as_user gio set "/home/$HUMAN_USER/Desktop/Mac Share.desktop" metadata::trusted true >/dev/null 2>&1 || true
-  fi
+  ln -sfn "$SHARE" "/home/$HUMAN_USER/Mac Share"
+  ln -sfn "$SHARE" "/home/$HUMAN_USER/Desktop/Mac Share"
+  chown -h "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Mac Share"
+  chown -h "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/Desktop/Mac Share"
 
   if [ -f "/home/$HUMAN_USER/.config/gtk-3.0/bookmarks" ]; then
     tmp="$(mktemp)"
