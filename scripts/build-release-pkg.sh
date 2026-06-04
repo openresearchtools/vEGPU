@@ -484,12 +484,13 @@ source/provenance archives are available at:
 
 Key installed vEGPU.app legal/source files:
 
-- NOTICES.md
-- manifest.json
-- licenses/
+- NOTICES
+- LICENSES
 - source/vEGPU-app-source.tar.gz
 - source/display-runtime-source.tar.gz
 
+NOTICES explains the app/Machine split and where each app's source archives
+live. LICENSES consolidates the full verbatim app-side license and notice text.
 The vEGPU.app Help menu also opens the installed legal bundle and exposes the
 bundled source/provenance archives.
 
@@ -644,6 +645,11 @@ vEGPU.app is the Swift/AppKit application and app-side display client.
 Notices and source archives are installed inside:
 
 /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
+
+Canonical installed legal files:
+
+- NOTICES
+- LICENSES
 
 This artifact package does not include vEGPU Machine.app. Combined releases
 include vEGPU Machine.app and its separate QEMU/VFIO/DriverKit source bundles.

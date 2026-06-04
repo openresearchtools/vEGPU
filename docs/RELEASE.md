@@ -38,9 +38,11 @@ $RUNNER_TEMP/vegpu-artifacts/app/vEGPU.app/Contents/Resources/vEGPURoot/legal/ge
 
 The generated folder contains:
 
-- `NOTICES.md`
+- `NOTICES`
+- `LICENSES`
+- `NOTICES.md` compatibility copy
 - `manifest.json`
-- copied app-side license files under `licenses/`
+- copied app-side license inputs under `license-files/`
 - `source/vEGPU-app-source.tar.gz`
 
 Legacy `THIRD_PARTY_*` files are not copied into the app bundle.
@@ -184,7 +186,8 @@ scripts/build-release-pkg.sh
 The package license screen should mention that the install contains two apps
 with separate notices:
 
-- vEGPU app notices: `vEGPU.app/Contents/Resources/vEGPURoot/legal/generated`
+- vEGPU app notices/licenses: `vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/NOTICES`
+  and `vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/LICENSES`
 - vEGPU Machine notices/source: `vEGPU Machine.app/Contents/Resources`
 
 The app Help menu points users to both.

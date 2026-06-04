@@ -8,12 +8,13 @@ OUT="${1:-${VEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}}"
 REQUIRE_FULL_SOURCE="${VEGPU_REQUIRE_FULL_SOURCE:-0}"
 
 rm -rf "$OUT"
-mkdir -p "$OUT/licenses" "$OUT/source"
+mkdir -p "$OUT/license-files" "$OUT/source"
 
 python3 - "$ROOT" "$OUT" "$REQUIRE_FULL_SOURCE" <<'PY'
 import json
 import os
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,18 @@ default_build_root = Path(
     os.environ.get("VEGPU_BUILD_ROOT")
     or os.path.join(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()), "vegpu-build")
 )
+license_dir = out / "license-files"
+generated_at = datetime.now(timezone.utc).isoformat()
+source_revision = os.environ.get("GITHUB_SHA") or subprocess.run(
+    ["git", "rev-parse", "HEAD"],
+    cwd=root,
+    text=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.DEVNULL,
+    check=False,
+).stdout.strip() or "unknown"
+release_version = os.environ.get("VERSION") or os.environ.get("RELEASE_VERSION") or "unknown"
+utm_commit = os.environ.get("VEGPU_UTM_COMMIT") or "e4a4c34b671284263fc69f81b607de494d7e9b65"
 
 def exists_status(path: Path) -> str:
     return "present" if path.exists() else "missing"
@@ -36,7 +49,7 @@ def copy_license(rel: str, name: str | None = None) -> None:
     src = root / rel
     if not src.exists():
         return
-    dst = out / "licenses" / (name or src.name)
+    dst = license_dir / (name or src.name)
     if src.is_dir():
         if dst.exists():
             shutil.rmtree(dst)
@@ -92,7 +105,7 @@ swift_license_counts_by_checkout: dict[str, int] = {}
 for checkout in sorted(swift_checkout_roots):
     copied = copy_notice_files(
         checkout,
-        out / "licenses" / "swiftpm" / safe_name(checkout.name),
+        license_dir / "swiftpm" / safe_name(checkout.name),
     )
     swift_license_count += copied
     swift_license_counts_by_checkout[checkout.name.lower()] = copied
@@ -124,6 +137,7 @@ if require_full_source:
             )
 
 go_license_count = 0
+go_module_meta: dict[str, dict[str, str]] = {}
 for gomod in sorted((root / "ai").glob("*/go.mod")):
     module_root = gomod.parent
     try:
@@ -153,9 +167,14 @@ for gomod in sorted((root / "ai").glob("*/go.mod")):
         module_dir = obj.get("Dir")
         if not module_dir:
             continue
+        go_module_meta[safe_name(module_path)] = {
+            "path": module_path,
+            "version": obj.get("Version") or "workspace/current",
+            "license": "See license text",
+        }
         go_license_count += copy_notice_files(
             Path(module_dir),
-            out / "licenses" / "go" / safe_name(module_path),
+            license_dir / "go" / safe_name(module_path),
         )
 
 framework_rows: list[tuple[str, str, str]] = []
@@ -177,15 +196,26 @@ for info in sorted(framework_dir.glob("*.framework/Versions/A/Resources/Info.pli
     framework_rows.append((framework, identifier, version))
 
 package_pins: list[str] = []
+package_pin_meta: dict[str, dict[str, str]] = {}
 resolved = root / "Package.resolved"
 if resolved.exists():
     data = json.loads(resolved.read_text())
     for pin in data.get("pins", []):
         state = pin.get("state", {})
+        identity = pin.get("identity", "unknown")
+        location = pin.get("location", "unknown")
+        revision = state.get("revision", "unknown")
+        version = state.get("version") or revision
         package_pins.append(
-            f"- {pin.get('identity', 'unknown')}: {pin.get('location', 'unknown')} "
-            f"@ {state.get('revision', state.get('version', 'unknown'))}"
+            f"- {identity}: {location} @ {revision}"
         )
+        package_pin_meta[identity.lower()] = {
+            "name": identity,
+            "version": version,
+            "revision": revision,
+            "location": location,
+            "license": "See license text",
+        }
 
 go_modules: list[str] = []
 for gomod in sorted((root / "ai").glob("*/go.mod")):
@@ -226,16 +256,177 @@ elif require_full_source:
 
 machine_app = Path(os.environ.get("VEGPU_MACHINE_APP", "/Applications/vEGPU Machine.app"))
 machine_notices = machine_app / "Contents" / "Resources" / "ThirdPartyNotices"
+machine_notice_file = machine_notices / "NOTICES"
+machine_license_file = machine_notices / "LICENSES"
 machine_source_bundles = machine_app / "Contents" / "Resources" / "SourceBundles"
 machine_guest_source = machine_app / "Contents" / "Resources" / "guest-tools" / "source"
 
+angle_meta = {
+    "version": "unknown",
+    "license": "BSD",
+    "source": "third_party/angle/ANGLE.plist",
+}
+angle_plist = root / "third_party" / "angle" / "ANGLE.plist"
+if angle_plist.exists():
+    try:
+        with angle_plist.open("rb") as handle:
+            angle_items = plistlib.load(handle)
+        if angle_items:
+            item = angle_items[0]
+            angle_meta["version"] = str(item.get("OpenSourceVersion", "unknown"))
+            angle_meta["license"] = str(item.get("OpenSourceLicense", "BSD"))
+    except Exception:
+        pass
+
+llama_runtime_manifest_path = None
+bootstrap_llama = os.environ.get("VEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR")
+if bootstrap_llama:
+    candidate = Path(bootstrap_llama) / "llama-runtime-manifest.json"
+    if candidate.exists():
+        llama_runtime_manifest_path = candidate
+
+def read_text_lossy(path: Path) -> str:
+    data = path.read_bytes()
+    return (
+        data.decode("utf-8", errors="replace")
+        if data
+        else ""
+    ).replace("\r\n", "\n").replace("\r", "\n").rstrip()
+
+def license_guess(path: Path, rel: str) -> str:
+    lower = rel.lower()
+    name = path.name.lower()
+    if "apache-2.0" in lower or "apache" in name:
+        return "Apache-2.0"
+    if "mit" in lower:
+        return "MIT"
+    if "angle" in lower:
+        return angle_meta["license"]
+    if "notice" in lower or name.endswith(".md") or "source" in lower or "import" in lower:
+        return "Notice/Provenance"
+    return "See license text"
+
+def metadata_for_license_file(path: Path) -> dict[str, str]:
+    rel = path.relative_to(license_dir).as_posix()
+    lower = rel.lower()
+    base = path.stem
+    meta = {
+        "name": re.sub(r"[-_]+", " ", base).strip() or rel,
+        "version": "unknown",
+        "license": license_guess(path, rel),
+        "source": f"license-files/{rel}",
+    }
+    if rel == "vEGPU-App-Apache-2.0.txt":
+        meta.update({"name": "vEGPU.app", "version": f"{release_version} ({source_revision})", "license": "Apache-2.0"})
+    elif rel == "ANGLE-LICENSE.txt":
+        meta.update({"name": "ANGLE", "version": angle_meta["version"], "license": angle_meta["license"]})
+    elif rel in {"ANGLE-SOURCE.md", "ANGLE-IMPORT.txt"}:
+        meta.update({"name": "ANGLE source provenance", "version": angle_meta["version"], "license": "Notice/Provenance"})
+    elif rel == "CocoaSpice-LICENSE.txt":
+        meta.update({"name": "CocoaSpice", "version": f"UTM {utm_commit}", "license": "Apache-2.0"})
+    elif rel == "UTM-PATCH-README.md":
+        meta.update({"name": "UTM/CocoaSpice patch provenance", "version": utm_commit, "license": "Notice/Provenance"})
+    elif rel == "vEGPU-NOTICES.md":
+        meta.update({"name": "vEGPU app notices seed", "version": source_revision, "license": "Notice/Provenance"})
+    elif "llama.cpp" in lower:
+        meta.update({"name": "llama.cpp", "version": "bundled/runtime manifest", "license": "MIT"})
+    elif "llama-swap" in lower:
+        meta.update({"name": "llama-swap routing provenance", "version": "modified app-side routing", "license": "MIT"})
+    elif "gost" in lower:
+        meta.update({"name": "GOST/local proxy provenance", "version": "modified app-side local proxy", "license": "MIT" if "license" in lower or "mit" in lower else "Notice/Provenance"})
+    elif "vegpu-scaling" in lower:
+        meta.update({"name": "vEGPU Linux scaling helper", "version": release_version, "license": "MIT"})
+    elif "utm-apache" in lower:
+        meta.update({"name": "UTM app-side display provenance", "version": utm_commit, "license": "Apache-2.0"})
+    elif lower.startswith("swiftpm/"):
+        package = rel.split("/", 2)[1]
+        pin = package_pin_meta.get(package.lower())
+        if pin:
+            meta.update({
+                "name": f"SwiftPM: {pin['name']}",
+                "version": f"{pin['version']} ({pin['revision']})",
+                "license": pin["license"],
+            })
+        else:
+            meta.update({"name": f"SwiftPM: {package}"})
+    elif lower.startswith("go/"):
+        module = rel.split("/", 2)[1]
+        gometa = go_module_meta.get(module)
+        if gometa:
+            meta.update({
+                "name": f"Go module: {gometa['path']}",
+                "version": gometa["version"],
+                "license": gometa["license"],
+            })
+        else:
+            meta.update({"name": f"Go module: {module}"})
+    return meta
+
+license_blocks = []
+duplicate_raw_license_paths = {
+    "vEGPU-LICENSES/CocoaSpice-Apache-2.0.txt",
+    "vEGPU-LICENSES/llama-swap-MIT.txt",
+    "vEGPU-LICENSES/llama.cpp-MIT.txt",
+    "vEGPU-LICENSES/gost-MIT.txt",
+}
+for path in sorted(license_dir.rglob("*")):
+    if not path.is_file():
+        continue
+    rel_path = path.relative_to(license_dir).as_posix()
+    if rel_path in duplicate_raw_license_paths:
+        continue
+    text = read_text_lossy(path)
+    meta = metadata_for_license_file(path)
+    license_blocks.append((meta, text))
+
+license_lines = []
+license_lines.append("vEGPU App Third-Party Licenses")
+license_lines.append("================================")
+license_lines.append("")
+license_lines.append("Each package/dependency block below contains the package name, version or revision when known, license metadata, source license file copied into this notice bundle, and the full license or notice text between BEGIN LICENSE and END LICENSE markers.")
+license_lines.append("")
+license_lines.append("This file covers vEGPU.app app-side components only. QEMU, VFIO, DriverKit, firmware, and guest-driver licenses are carried by vEGPU Machine.app in /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/.")
+license_lines.append("")
+for meta, text in license_blocks:
+    license_lines.append(f"Package/Dependency: {meta['name']}")
+    license_lines.append(f"Version/Revision: {meta['version']}")
+    license_lines.append(f"License: {meta['license']}")
+    license_lines.append(f"Source-License-File: {meta['source']}")
+    license_lines.append("----")
+    license_lines.append("BEGIN LICENSE")
+    license_lines.append("----")
+    license_lines.append(text)
+    license_lines.append("----")
+    license_lines.append("END LICENSE")
+    license_lines.append("")
+(out / "LICENSES").write_text("\n".join(license_lines))
+
 notice = []
-notice.append("# vEGPU Licenses and Notices")
+notice.append("vEGPU Notices")
+notice.append("=============")
 notice.append("")
-notice.append("Generated from the current vEGPU source tree and bundle inputs.")
-notice.append(f"Generated at: {datetime.now(timezone.utc).isoformat()}")
+notice.append("This file covers vEGPU.app, the Swift/AppKit host application, app-side display client, AI/runtime control surface, local routing helpers, and app-side orchestration layer.")
 notice.append("")
-notice.append("## Scope")
+notice.append("vEGPU Machine.app is a separate application installed beside vEGPU.app. It owns the QEMU/VFIO/DriverKit/firmware/guest-driver runtime side and carries its own licenses, notices, and source bundles inside that app.")
+notice.append("")
+notice.append("Installed legal and source locations:")
+notice.append("")
+notice.append("- vEGPU.app notices: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/NOTICES")
+notice.append("- vEGPU.app licenses: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/LICENSES")
+notice.append("- vEGPU.app source: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz")
+notice.append("- vEGPU app-side display/ANGLE source: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz")
+notice.append("- vEGPU Machine notices: /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/NOTICES")
+notice.append("- vEGPU Machine licenses: /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/LICENSES")
+notice.append("- vEGPU Machine source bundles: /Applications/vEGPU Machine.app/Contents/Resources/SourceBundles/")
+notice.append("- vEGPU Machine guest source: /Applications/vEGPU Machine.app/Contents/Resources/guest-tools/source/")
+notice.append("")
+notice.append("QEMU-side licenses and notices are inside vEGPU Machine.app, not duplicated in vEGPU.app.")
+notice.append("")
+notice.append(f"Generated at: {generated_at}")
+notice.append(f"vEGPU.app source revision: {source_revision}")
+notice.append("")
+notice.append("Scope")
+notice.append("-----")
 notice.append("")
 notice.append("- vEGPU.app is the Swift/AppKit application and app-side display client.")
 notice.append("- vEGPU Machine.app is the separate QEMU/VFIO/DriverKit runtime app.")
@@ -243,7 +434,8 @@ notice.append("- vEGPU Machine carries its own notices and GPL/source bundles in
 notice.append("- Legacy THIRD_PARTY_* notice files are not used by this generated bundle.")
 notice.append("- The vEGPU Help menu can export the bundled source archives to a user-selected folder.")
 notice.append("")
-notice.append("## App-Side Bundled Display Runtime")
+notice.append("App-Side Bundled Display Runtime")
+notice.append("---------------------------------")
 notice.append("")
 notice.append("These frameworks are generated from the pinned UTM dependency recipe, copied into vEGPU.app/Contents/Frameworks during packaging, and loaded by the app-side SPICE/ANGLE display path.")
 notice.append("")
@@ -252,60 +444,74 @@ notice.append("|---|---|---|")
 for framework, identifier, version in framework_rows:
     notice.append(f"| {framework} | {identifier} | {version} |")
 notice.append("")
-notice.append("## Swift Package Pins")
+notice.append("Swift Package Pins")
+notice.append("------------------")
 notice.append("")
 notice.extend(package_pins or ["- No remote Swift package pins found."])
 notice.append("")
 notice.append(f"SwiftPM license/notice files collected: {swift_license_count}")
 notice.append("")
-notice.append("## Go Modules")
+notice.append("Go Modules")
+notice.append("----------")
 notice.append("")
 notice.extend(go_modules or ["- No Go modules found."])
 notice.append("")
 notice.append(f"Go module license/notice files collected: {go_license_count}")
 notice.append("")
-notice.append("## AI Web UI and Model Router Provenance")
+notice.append("AI Web UI and Model Router Provenance")
+notice.append("-------------------------------------")
 notice.append("")
-notice.append("The app-side AI web UI and router are not unmodified upstream llama.cpp or llama-swap distributions. Directory-specific provenance is copied to `licenses/web-ui-app-NOTICE.txt`; upstream MIT license texts are copied to `licenses/llama.cpp-MIT.txt` and `licenses/llama-swap-MIT.txt`.")
+notice.append("The app-side AI web UI and router are not unmodified upstream llama.cpp or llama-swap distributions. Directory-specific provenance is copied to `license-files/web-ui-app-NOTICE.txt`; upstream MIT license texts are copied to `license-files/llama.cpp-MIT.txt` and `license-files/llama-swap-MIT.txt`.")
 notice.append("Release packages bundle the latest llama.cpp ARM64 runtime build available at vEGPU release time from openresearchtools/llama-cpp-arm64-builds. Additional llama.cpp and TurboQuant runtime versions remain user-managed through /core.")
+if llama_runtime_manifest_path is not None:
+    notice.append(f"Bundled llama.cpp runtime manifest input: {llama_runtime_manifest_path}")
 notice.append("")
-notice.append("## Included License/Notice Files")
+notice.append("Included License/Notice Files")
+notice.append("-----------------------------")
 notice.append("")
-for path in sorted((out / "licenses").rglob("*")):
+notice.append("- LICENSES: consolidated verbatim app-side license/notice text.")
+for path in sorted(license_dir.rglob("*")):
     if path.is_file():
-        notice.append(f"- licenses/{path.relative_to(out / 'licenses')}")
+        notice.append(f"- license-files/{path.relative_to(license_dir)}")
 notice.append("")
-notice.append("## Source Archives")
+notice.append("Source Archives")
+notice.append("---------------")
 notice.append("")
 notice.append("- source/vEGPU-app-source.tar.gz: generated from this vEGPU app source tree, excluding build products and runtime downloads.")
 if display_source is not None:
-    notice.append(f"- source/{display_source.name}: corresponding source/provenance supplied for generated display runtime frameworks.")
+    notice.append(f"- source/{display_source.name}: corresponding source/provenance supplied for generated display runtime frameworks, including ANGLE via the WebKit/ANGLE source snapshot.")
 else:
     notice.append("- Display runtime corresponding source archive: missing in this checkout. Release builds should set VEGPU_REQUIRE_FULL_SOURCE=1 so this cannot be missed.")
 notice.append("")
-notice.append("## vEGPU Machine Notices")
+notice.append("vEGPU Machine Notices")
+notice.append("---------------------")
 notice.append("")
 notice.append(f"- vEGPU Machine app: {machine_app} ({exists_status(machine_app)})")
-notice.append(f"- vEGPU Machine notices: {machine_notices} ({exists_status(machine_notices)})")
+notice.append(f"- vEGPU Machine notices: {machine_notice_file} ({exists_status(machine_notice_file)})")
+notice.append(f"- vEGPU Machine licenses: {machine_license_file} ({exists_status(machine_license_file)})")
 notice.append(f"- vEGPU Machine source bundles: {machine_source_bundles} ({exists_status(machine_source_bundles)})")
 notice.append(f"- vEGPU Machine guest source: {machine_guest_source} ({exists_status(machine_guest_source)})")
 notice.append("")
-notice.append("Use Help > Open vEGPU Machine or Help > Reveal vEGPU Machine Notices in vEGPU.app.")
+notice.append("Use Help > Reveal vEGPU Machine Legal Files or Help > Export vEGPU Machine Sources in vEGPU.app.")
 notice.append("")
 
+(out / "NOTICES").write_text("\n".join(notice))
 (out / "NOTICES.md").write_text("\n".join(notice))
 
 manifest = {
-    "generatedAt": datetime.now(timezone.utc).isoformat(),
+    "generatedAt": generated_at,
     "frameworks": [
         {"framework": framework, "bundleIdentifier": identifier, "bundleVersion": version}
         for framework, identifier, version in framework_rows
     ],
     "swiftPins": package_pins,
     "goModules": go_modules,
+    "licenses": "LICENSES",
+    "notices": "NOTICES",
     "displayRuntimeSource": display_source_manifest_path,
     "machineApp": str(machine_app),
-    "machineNotices": str(machine_notices),
+    "machineNotices": str(machine_notice_file),
+    "machineLicenses": str(machine_license_file),
     "machineSourceBundles": str(machine_source_bundles),
 }
 (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")

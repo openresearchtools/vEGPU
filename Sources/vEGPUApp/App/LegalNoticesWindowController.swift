@@ -10,8 +10,8 @@ final class LegalNoticesWindowController: NSWindowController {
 
     private let appRoot: URL
     private let generatedLegalURL: URL
-    private let appLicensesURL: URL
     private let appNoticesURL: URL
+    private let appLicenseURL: URL
     private let appManifestURL: URL
     private let appSourceURL: URL
     private let displaySourceURL: URL
@@ -24,8 +24,8 @@ final class LegalNoticesWindowController: NSWindowController {
         let root = AppPaths.discoverRoot()
         self.appRoot = root
         self.generatedLegalURL = root.appendingPathComponent("legal/generated", isDirectory: true)
-        self.appLicensesURL = generatedLegalURL.appendingPathComponent("licenses", isDirectory: true)
-        self.appNoticesURL = generatedLegalURL.appendingPathComponent("NOTICES.md")
+        self.appNoticesURL = generatedLegalURL.appendingPathComponent("NOTICES")
+        self.appLicenseURL = generatedLegalURL.appendingPathComponent("LICENSES")
         self.appManifestURL = generatedLegalURL.appendingPathComponent("manifest.json")
         self.appSourceURL = generatedLegalURL.appendingPathComponent("source/vEGPU-app-source.tar.gz")
         self.displaySourceURL = generatedLegalURL.appendingPathComponent("source/display-runtime-source.tar.gz")
@@ -61,6 +61,10 @@ final class LegalNoticesWindowController: NSWindowController {
     private var documents: [NoticeDocument] = []
 
     func revealVEGPUNotices() {
+        revealVEGPULegalFiles()
+    }
+
+    func revealVEGPULegalFiles() {
         reveal(generatedLegalURL, fallbackMessage: "The generated vEGPU notices have not been built yet.")
     }
 
@@ -81,6 +85,10 @@ final class LegalNoticesWindowController: NSWindowController {
     }
 
     func revealVEGPUMachineNotices() {
+        revealVEGPUMachineLegalFiles()
+    }
+
+    func revealVEGPUMachineLegalFiles() {
         reveal(machineNoticesURL, fallbackMessage: "vEGPU Machine notices were not found inside \(machineAppURL.path).")
     }
 
@@ -144,7 +152,7 @@ final class LegalNoticesWindowController: NSWindowController {
         title.font = .boldSystemFont(ofSize: 20)
         stack.addArrangedSubview(title)
 
-        let subtitle = NSTextField(wrappingLabelWithString: "vEGPU.app carries generated app-side notices, licenses, and source archives. vEGPU Machine.app carries separate QEMU/VFIO/DriverKit notices and source bundles. Select a notice below to read it here, or export source archives to a normal folder.")
+        let subtitle = NSTextField(wrappingLabelWithString: "vEGPU.app carries consolidated app-side notices, licenses, and source archives. vEGPU Machine.app carries separate QEMU/VFIO/DriverKit notices and source bundles. Select Notices or Licenses below, or export source archives to a normal folder.")
         subtitle.font = .systemFont(ofSize: 13)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 3
@@ -154,8 +162,7 @@ final class LegalNoticesWindowController: NSWindowController {
         appButtonRow.orientation = .horizontal
         appButtonRow.spacing = 8
         appButtonRow.alignment = .centerY
-        appButtonRow.addArrangedSubview(makeButton("Reveal vEGPU Notices", action: #selector(revealVEGPUNoticesAction)))
-        appButtonRow.addArrangedSubview(makeButton("Reveal vEGPU Source", action: #selector(revealVEGPUSourceAction)))
+        appButtonRow.addArrangedSubview(makeButton("Reveal vEGPU Legal Files", action: #selector(revealVEGPULegalFilesAction)))
         appButtonRow.addArrangedSubview(makeButton("Export vEGPU Sources...", action: #selector(exportVEGPUSourcesAction)))
         stack.addArrangedSubview(appButtonRow)
 
@@ -163,9 +170,7 @@ final class LegalNoticesWindowController: NSWindowController {
         machineButtonRow.orientation = .horizontal
         machineButtonRow.spacing = 8
         machineButtonRow.alignment = .centerY
-        machineButtonRow.addArrangedSubview(makeButton("Open vEGPU Machine", action: #selector(openVEGPUMachineAction)))
-        machineButtonRow.addArrangedSubview(makeButton("Reveal Machine Notices", action: #selector(revealVEGPUMachineNoticesAction)))
-        machineButtonRow.addArrangedSubview(makeButton("Reveal Machine Sources", action: #selector(revealVEGPUMachineGuestSourceAction)))
+        machineButtonRow.addArrangedSubview(makeButton("Reveal Machine Legal Files", action: #selector(revealVEGPUMachineLegalFilesAction)))
         machineButtonRow.addArrangedSubview(makeButton("Export Machine Sources...", action: #selector(exportVEGPUMachineSourcesAction)))
         stack.addArrangedSubview(machineButtonRow)
 
@@ -219,10 +224,8 @@ final class LegalNoticesWindowController: NSWindowController {
 
     private func refreshDocumentList() {
         var next: [NoticeDocument] = []
-        appendIfExists(title: "vEGPU Generated Notices", url: appNoticesURL, into: &next)
-        appendIfExists(title: "vEGPU Legal Manifest", url: appManifestURL, into: &next)
-        appendTextDocuments(in: appLicensesURL, prefix: "vEGPU", into: &next)
-        appendTextDocuments(in: machineNoticesURL, prefix: "Machine", into: &next)
+        appendIfExists(title: "Notices", url: appNoticesURL, into: &next)
+        appendIfExists(title: "Licenses", url: appLicenseURL, into: &next)
 
         documents = dedupe(next).sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         documentPopUp.removeAllItems()
@@ -234,8 +237,9 @@ final class LegalNoticesWindowController: NSWindowController {
             documentPopUp.isEnabled = true
         }
         statusLabel.stringValue = [
-            "vEGPU notices: \(status(generatedLegalURL))",
-            "Machine notices: \(status(machineNoticesURL))",
+            "vEGPU notices: \(status(appNoticesURL))",
+            "vEGPU licenses: \(status(appLicenseURL))",
+            "Machine legal files: \(status(machineNoticesURL))",
             "Source archives: \(status(appSourceURL)); \(status(displaySourceURL)); \(status(machineSourceBundlesURL))"
         ].joined(separator: "\n")
         loadSelectedDocument()
@@ -244,51 +248,6 @@ final class LegalNoticesWindowController: NSWindowController {
     private func appendIfExists(title: String, url: URL, into documents: inout [NoticeDocument]) {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         documents.append(NoticeDocument(title: title, url: url))
-    }
-
-    private func appendTextDocuments(in directory: URL, prefix: String, into documents: inout [NoticeDocument]) {
-        for url in textDocuments(in: directory) {
-            let relative = relativePath(url, under: directory)
-            documents.append(NoticeDocument(title: "\(prefix): \(relative)", url: url))
-        }
-    }
-
-    private func textDocuments(in directory: URL) -> [URL] {
-        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
-        let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        )
-        var urls: [URL] = []
-        while let url = enumerator?.nextObject() as? URL {
-            guard isTextNotice(url) else { continue }
-            urls.append(url)
-        }
-        return urls.sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
-    }
-
-    private func isTextNotice(_ url: URL) -> Bool {
-        let lowerName = url.lastPathComponent.lowercased()
-        if lowerName.hasSuffix(".tar.gz") || lowerName.hasSuffix(".tar.xz") || lowerName.hasSuffix(".tgz") {
-            return false
-        }
-        if lowerName.hasSuffix(".txt") || lowerName.hasSuffix(".md") || lowerName.hasSuffix(".json") || lowerName.hasSuffix(".html") {
-            return true
-        }
-        return lowerName.contains("license")
-            || lowerName.contains("licence")
-            || lowerName.contains("notice")
-            || lowerName.contains("copying")
-            || lowerName.contains("copyright")
-    }
-
-    private func relativePath(_ url: URL, under directory: URL) -> String {
-        let base = directory.path.hasSuffix("/") ? directory.path : directory.path + "/"
-        if url.path.hasPrefix(base) {
-            return String(url.path.dropFirst(base.count))
-        }
-        return url.lastPathComponent
     }
 
     private func dedupe(_ entries: [NoticeDocument]) -> [NoticeDocument] {
@@ -314,6 +273,8 @@ final class LegalNoticesWindowController: NSWindowController {
                 "",
                 "vEGPU app root: \(appRoot.path)",
                 "Generated notices: \(status(appNoticesURL))",
+                "Generated licenses: \(status(appLicenseURL))",
+                "Generated manifest: \(status(appManifestURL))",
                 "vEGPU source archive: \(status(appSourceURL))",
                 "Display runtime source archive: \(status(displaySourceURL))",
                 "vEGPU Machine notices: \(status(machineNoticesURL))",
@@ -407,28 +368,16 @@ final class LegalNoticesWindowController: NSWindowController {
         alert.runModal()
     }
 
-    @objc private func revealVEGPUNoticesAction() {
-        revealVEGPUNotices()
-    }
-
-    @objc private func revealVEGPUSourceAction() {
-        revealVEGPUSource()
+    @objc private func revealVEGPULegalFilesAction() {
+        revealVEGPULegalFiles()
     }
 
     @objc private func exportVEGPUSourcesAction() {
         exportVEGPUSources()
     }
 
-    @objc private func openVEGPUMachineAction() {
-        openVEGPUMachine()
-    }
-
-    @objc private func revealVEGPUMachineNoticesAction() {
-        revealVEGPUMachineNotices()
-    }
-
-    @objc private func revealVEGPUMachineGuestSourceAction() {
-        revealVEGPUMachineSources()
+    @objc private func revealVEGPUMachineLegalFilesAction() {
+        revealVEGPUMachineLegalFiles()
     }
 
     @objc private func exportVEGPUMachineSourcesAction() {

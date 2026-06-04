@@ -19,9 +19,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         configure(model: model)
         startLaunchServicesIfNeeded()
-        DispatchQueue.main.async { [weak self] in
-            self?.installHelpMenuItems()
-        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
             if !NSApplication.shared.windows.contains(where: { $0.canHide }) {
@@ -152,35 +149,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.repairAfterWake()
     }
 
-    @objc private func showLegalNotices() {
+    @objc func showLegalNotices() {
         legalController().show()
     }
 
-    @objc private func revealVEGPUNotices() {
-        legalController().revealVEGPUNotices()
+    @objc func revealVEGPUNotices() {
+        revealVEGPULegalFiles()
     }
 
-    @objc private func revealVEGPUSource() {
+    @objc func revealVEGPULegalFiles() {
+        legalController().revealVEGPULegalFiles()
+    }
+
+    @objc func revealVEGPUSource() {
         legalController().revealVEGPUSource()
     }
 
-    @objc private func exportVEGPUSources() {
+    @objc func exportVEGPUSources() {
         legalController().exportVEGPUSources()
     }
 
-    @objc private func openVEGPUMachine() {
+    @objc func openVEGPUMachine() {
         legalController().openVEGPUMachine()
     }
 
-    @objc private func revealVEGPUMachineNotices() {
-        legalController().revealVEGPUMachineNotices()
+    @objc func revealVEGPUMachineNotices() {
+        revealVEGPUMachineLegalFiles()
     }
 
-    @objc private func revealVEGPUMachineSources() {
+    @objc func revealVEGPUMachineLegalFiles() {
+        legalController().revealVEGPUMachineLegalFiles()
+    }
+
+    @objc func revealVEGPUMachineSources() {
         legalController().revealVEGPUMachineSources()
     }
 
-    @objc private func exportVEGPUMachineSources() {
+    @objc func exportVEGPUMachineSources() {
         legalController().exportVEGPUMachineSources()
     }
 
@@ -241,43 +246,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let controller = LegalNoticesWindowController()
         legalNoticesWindowController = controller
         return controller
-    }
-
-    private func installHelpMenuItems() {
-        guard let mainMenu = NSApplication.shared.mainMenu else { return }
-        let helpMenu: NSMenu
-        if let existing = mainMenu.item(withTitle: "Help")?.submenu {
-            helpMenu = existing
-        } else {
-            helpMenu = NSMenu(title: "Help")
-            let item = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
-            item.submenu = helpMenu
-            mainMenu.addItem(item)
-        }
-        guard helpMenu.item(withTitle: "vEGPU Licenses and Notices...") == nil else { return }
-
-        if helpMenu.numberOfItems > 0 {
-            helpMenu.addItem(.separator())
-        }
-        addHelpMenuItem("Check for Updates...", action: #selector(checkForUpdates), to: helpMenu)
-        addHelpMenuItem("Use Pre-release Updates", action: #selector(togglePrereleaseUpdates), to: helpMenu)
-        addHelpMenuItem("Install Available Update...", action: #selector(installAvailableUpdate), to: helpMenu)
-        helpMenu.addItem(.separator())
-        addHelpMenuItem("vEGPU Licenses and Notices...", action: #selector(showLegalNotices), to: helpMenu)
-        addHelpMenuItem("Reveal vEGPU Notice Files", action: #selector(revealVEGPUNotices), to: helpMenu)
-        addHelpMenuItem("Reveal vEGPU Source Archive", action: #selector(revealVEGPUSource), to: helpMenu)
-        addHelpMenuItem("Export vEGPU Sources...", action: #selector(exportVEGPUSources), to: helpMenu)
-        helpMenu.addItem(.separator())
-        addHelpMenuItem("Open vEGPU Machine", action: #selector(openVEGPUMachine), to: helpMenu)
-        addHelpMenuItem("Reveal vEGPU Machine Notices", action: #selector(revealVEGPUMachineNotices), to: helpMenu)
-        addHelpMenuItem("Reveal vEGPU Machine Sources", action: #selector(revealVEGPUMachineSources), to: helpMenu)
-        addHelpMenuItem("Export vEGPU Machine Sources...", action: #selector(exportVEGPUMachineSources), to: helpMenu)
-    }
-
-    private func addHelpMenuItem(_ title: String, action: Selector, to menu: NSMenu) {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-        item.target = self
-        menu.addItem(item)
     }
 
     private func installAvailableUpdateFlow() async {

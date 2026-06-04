@@ -666,13 +666,15 @@ jobs:
           test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "com.vegpu.app"
           test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "${RELEASE_VERSION}"
           test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "${BUILD_NUMBER}"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/manifest.json"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-LICENSE.txt"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-SOURCE.md"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/ANGLE-IMPORT.txt"
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/licenses/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-LICENSE.txt"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-SOURCE.md"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-IMPORT.txt"
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
           scripts/normalize-display-frameworks.sh --check "$APP/Contents/Frameworks"
           otool -D "$APP/Contents/Frameworks/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
           otool -D "$APP/Contents/Frameworks/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
@@ -693,7 +695,13 @@ jobs:
             echo "legacy THIRD_PARTY notice files must not be bundled" >&2
             exit 1
           fi
-          grep -F 'vEGPU Machine notices' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
+          grep -F 'vEGPU Machine licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          if grep -F 'Package/Dependency: QEMU' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"; then
+            echo "vEGPU.app LICENSES must reference Machine/QEMU notices but not duplicate QEMU license blocks" >&2
+            exit 1
+          fi
 
       - name: Pack vEGPU.app artifact
         run: |
