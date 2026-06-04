@@ -46,21 +46,20 @@ struct GUIDisplayTabView: View {
 
     @ViewBuilder
     private var displayBody: some View {
-        if session.connected {
-            ZStack {
+        ZStack {
+            if session.connected {
                 SpiceDisplayView(session: session, retina: model.guiRetina)
                     .background(Color.black)
                     .ignoresSafeArea()
-                ExternalInputCaptureView(session: session)
-                    .frame(width: 0, height: 0)
-                    .allowsHitTesting(false)
+            } else {
+                Color.black
+                    .ignoresSafeArea()
             }
-            .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
-        } else {
-            Color.black
-                .ignoresSafeArea()
-                .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
+            ExternalInputCaptureView(session: session)
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
         }
+        .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
     }
 
     private func syncExternalCapture(_ activeSessionID: String?) {

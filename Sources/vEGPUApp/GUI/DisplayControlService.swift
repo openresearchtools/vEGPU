@@ -169,9 +169,6 @@ final class DisplayControlService: @unchecked Sendable {
     }
 
     func enterSession(_ session: DisplaySession) async throws {
-        if !session.running {
-            try await startSession(session)
-        }
         let command = "/usr/local/bin/vegpu-display-control session-enter \(shellQuote(session.id))"
         _ = try await ssh.ssh(command, timeout: 20)
     }
