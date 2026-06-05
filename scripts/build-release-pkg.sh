@@ -765,9 +765,27 @@ function commandText(result) {
   return String(result);
 }
 
+var driverIdentifier = "com.vegpu.machine.VFIOUserPCIDriver";
+var cachedDriverState = null;
+
+function safeRunText() {
+  try {
+    return commandText(system.run.apply(system, arguments));
+  } catch (error) {
+    return "";
+  }
+}
+
+function shellText(command) {
+  return safeRunText("/bin/sh", "-c", command);
+}
+
+function textContainsDriver(text) {
+  return String(text || "").indexOf(driverIdentifier) !== -1;
+}
+
 function sipDisabledState() {
-  var result = system.run("/usr/bin/csrutil", "status");
-  var text = commandText(result);
+  var text = safeRunText("/usr/bin/csrutil", "status");
   return /disabled/i.test(text);
 }
 
@@ -791,10 +809,43 @@ function compareVersion(left, right) {
   return 0;
 }
 
+function driverState() {
+  if (cachedDriverState !== null) { return cachedDriverState; }
+
+  var listText = safeRunText("/usr/bin/systemextensionsctl", "list");
+  if (!textContainsDriver(listText)) {
+    listText += "\n" + shellText("/usr/bin/systemextensionsctl list 2>&1 || true");
+  }
+  if (textContainsDriver(listText)) {
+    cachedDriverState = "installed";
+    return cachedDriverState;
+  }
+
+  var registeredBundle = shellText("/usr/bin/find /Library/SystemExtensions -maxdepth 6 -name 'com.vegpu.machine.VFIOUserPCIDriver.dext' -print -quit 2>/dev/null || true");
+  if (textContainsDriver(registeredBundle)) {
+    cachedDriverState = "installed";
+    return cachedDriverState;
+  }
+
+  if (/extension|bundleID|No system extensions/i.test(listText)) {
+    cachedDriverState = "missing";
+    return cachedDriverState;
+  }
+
+  cachedDriverState = "unknown";
+  return cachedDriverState;
+}
+
 function driverInstalled() {
-  var result = system.run("/usr/bin/systemextensionsctl", "list");
-  var text = commandText(result);
-  return text.indexOf("com.vegpu.machine.VFIOUserPCIDriver") !== -1;
+  return driverState() === "installed";
+}
+
+function driverStatusKnownMissing() {
+  return driverState() === "missing";
+}
+
+function driverStatusUnknown() {
+  return driverState() === "unknown";
 }
 
 function machineNeedsInstall() {
@@ -815,7 +866,7 @@ function machineNeedsInstall() {
 }
 
 function driverNeedsRefresh() {
-  return machineNeedsInstall() || !driverInstalled();
+  return machineNeedsInstall() || driverStatusKnownMissing();
 }
   ]]></script>
   <welcome file="WELCOME.html" mime-type="text/html"/>
@@ -827,18 +878,20 @@ function driverNeedsRefresh() {
     <line choice="com.vegpu.status.machine.needs"/>
     <line choice="com.vegpu.status.driver.installed"/>
     <line choice="com.vegpu.status.driver.missing"/>
+    <line choice="com.vegpu.status.driver.unknown"/>
     <line choice="com.vegpu.install.app"/>
     <line choice="com.vegpu.install.machine"/>
   </choices-outline>
   <choice id="com.vegpu.status.sip" title="SIP disabled" description="System Integrity Protection is disabled, so the DriverKit passthrough installer can continue. If SIP were enabled, this installer would stop before installation and show the Recovery instructions." start_selected="true" start_enabled="false" start_visible="true"/>
   <choice id="com.vegpu.status.machine.current" title="vEGPU Machine.app already installed/current" description="The installed vEGPU Machine.app is the same version or newer than this package, so the Machine app file payload is not selected by default." start_selected="true" start_enabled="false" start_visible="!machineNeedsInstall()"/>
   <choice id="com.vegpu.status.machine.needs" title="vEGPU Machine.app missing or older" description="vEGPU Machine.app is missing or older than this package, so the Machine app file payload is selected by default." start_selected="false" start_enabled="false" start_visible="machineNeedsInstall()"/>
-  <choice id="com.vegpu.status.driver.installed" title="DriverKit extension installed" description="systemextensionsctl currently lists com.vegpu.machine.VFIOUserPCIDriver. DriverKit refresh runs only when the vEGPU Machine.app choice is selected." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
-  <choice id="com.vegpu.status.driver.missing" title="DriverKit extension not installed" description="systemextensionsctl does not currently list com.vegpu.machine.VFIOUserPCIDriver. Select vEGPU Machine.app to install or activate the DriverKit extension." start_selected="false" start_enabled="false" start_visible="!driverInstalled()"/>
+  <choice id="com.vegpu.status.driver.installed" title="DriverKit extension installed" description="Installer detected com.vegpu.machine.VFIOUserPCIDriver from systemextensionsctl or the registered /Library/SystemExtensions DriverKit bundle. DriverKit refresh runs only when the vEGPU Machine.app choice is selected." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
+  <choice id="com.vegpu.status.driver.missing" title="DriverKit extension not installed" description="Installer read the current DriverKit extension list and did not find com.vegpu.machine.VFIOUserPCIDriver. vEGPU Machine.app is selected so the installer can install or activate the DriverKit extension." start_selected="false" start_enabled="false" start_visible="driverStatusKnownMissing()"/>
+  <choice id="com.vegpu.status.driver.unknown" title="DriverKit extension status unavailable" description="Installer could not read DriverKit state on this screen. Leave vEGPU Machine.app unselected to keep the current driver state, or select it to force DriverKit refresh/activation. The install scripts log direct systemextensionsctl status during installation." start_selected="false" start_enabled="false" start_visible="driverStatusUnknown()"/>
   <choice id="com.vegpu.install.app" title="vEGPU.app" description="Required main application installed in /Applications. Includes the launcher, GUI, app-side display client, AI/runtime controls, notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.app"/>
   </choice>
-  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app + DriverKit refresh/activation" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications. DriverKit refresh/activation is bundled with this choice and does not run when this choice is not selected." start_selected="machineNeedsInstall()" start_enabled="true" start_visible="true">
+  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app + DriverKit refresh/activation" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications. DriverKit refresh/activation is bundled with this choice and does not run when this choice is not selected." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.vegpu.pkg.machine"/>
     <pkg-ref id="com.vegpu.pkg.driver"/>
   </choice>

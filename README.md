@@ -103,10 +103,14 @@ separate pieces, with notices and source/provenance kept in the app bundles:
 The release package installs vEGPU.app and, when needed, vEGPU Machine.app.
 The Installation Type screen shows Machine.app files and DriverKit refresh as
 separate choices. Machine.app is selected by default when it is missing or older
-than the payload. DriverKit refresh is selected by default when Machine.app is
-changing or the extension is not currently installed. If the installed Machine
-app is the same/newer and the driver is already installed, both choices stay
-visible but are not selected by default.
+than the payload, or when the installer can confirm that the DriverKit extension
+is missing. DriverKit detection uses both `systemextensionsctl` and the
+registered `/Library/SystemExtensions` DriverKit bundle so the screen does not
+report an installed extension as missing when Installer.app cannot scrape one
+probe path. If DriverKit state cannot be read on that screen, the installer says
+the status is unavailable and leaves the Machine/DriverKit choice available for a
+manual refresh. If the installed Machine app is the same/newer and the driver is
+already installed, both choices stay visible but are not selected by default.
 
 When DriverKit refresh is selected, the installer first asks the existing
 Machine app to deactivate the old macOS DriverKit extension when that app is

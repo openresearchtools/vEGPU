@@ -995,6 +995,10 @@ jobs:
           grep -R -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
           grep -R -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
           grep -R -F 'The installed license texts are the controlling terms' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          grep -R -F '/Library/SystemExtensions' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'driverStatusKnownMissing()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'driverStatusUnknown()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'start_selected="driverNeedsRefresh()"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
           PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}
