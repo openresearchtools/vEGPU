@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private weak var mainWindow: NSWindow?
     private var mainWindowController: NSWindowController?
     private var legalNoticesWindowController: LegalNoticesWindowController?
+    private var localNetworkPermission: LocalNetworkPermissionService?
     private var explicitQuitRequested = false
     private var configured = false
     private var launchStartupHandled = false
@@ -42,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let tray = AppTrayController(appDelegate: self)
         tray.configure(model: model)
         self.tray = tray
+        let localNetworkPermission = LocalNetworkPermissionService(progress: model.progress)
+        localNetworkPermission.start()
+        self.localNetworkPermission = localNetworkPermission
         let batterySafetyMonitor = BatteryRuntimeSafetyMonitor(model: model) { [weak self] in
             self?.tray?.screenAnchorRect
         }

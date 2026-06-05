@@ -254,6 +254,13 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <true/>
   <key>NSMicrophoneUsageDescription</key>
   <string>vEGPU can forward the selected Mac microphone to the Linux VM when microphone audio is enabled.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>vEGPU uses Local Network access for the private connection between this Mac and the Linux VM, including SSH control, web UI and proxy routes, runtime RPC, file sharing, and guest setup.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_ssh._tcp</string>
+    <string>_http._tcp</string>
+  </array>
 </dict>
 </plist>
 PLIST

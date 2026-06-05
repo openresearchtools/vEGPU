@@ -666,6 +666,9 @@ jobs:
           test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "com.vegpu.app"
           test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "${RELEASE_VERSION}"
           test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "${BUILD_NUMBER}"
+          plutil -extract NSLocalNetworkUsageDescription raw -o - "$APP/Contents/Info.plist" | grep -q 'VM SSH'
+          plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_ssh._tcp'
+          plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_http._tcp'
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
