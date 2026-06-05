@@ -646,7 +646,7 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         if [ -e \(shellQuote("\(guestRuntimeRoot)/current")) ] && command -v llama-server >/dev/null 2>&1 && command -v rpc-server >/dev/null 2>&1; then
           true
         else
-          echo 'Linux llama runtime is not installed. Restart the VM to ingest the bundled runtime seed, or use Core Runtimes to install a matched release pair.' >&2
+          echo 'Linux llama runtime is not installed. Start or repair the VM so guest sync can reconcile bundled runtimes, or use Core Runtimes to install a matched release pair.' >&2
           exit 127
         fi
         """
@@ -683,6 +683,19 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         }
 
         let id = safeName(spec.id)
+        let marker = LlmsGuestRuntimeMarker(
+            id: id,
+            family: spec.family?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            releaseTag: spec.releaseTag?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            backend: spec.linuxBackend?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            archiveName: spec.assetName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            sha256: spec.sha256?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            serverRel: serverRel,
+            rpcRel: rpcRel,
+            installedAt: ISO8601DateFormatter().string(from: Date()),
+            active: true
+        )
+        let markerJSON = String(data: try JSON.encoder.encode(marker), encoding: .utf8) ?? "{}"
         let archive = FileManager.default.temporaryDirectory.appendingPathComponent("vegpu-llms-runtime-\(id).tar.gz")
         try? FileManager.default.removeItem(at: archive)
         _ = try await runner.runChecked("/usr/bin/tar", ["-C", sourceURL.path, "-czf", archive.path, "."], timeout: 10 * 60)
@@ -717,6 +730,9 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             "sudo -n chmod 0755 \(shellQuote("\(root).tmp/\(serverRel)"))",
             "sudo -n chown -R vegpu:vegpu \(shellQuote(root + ".tmp"))",
             "sudo -n -u vegpu mv \(shellQuote(root + ".tmp")) \(shellQuote(root))",
+            "printf %s \(shellQuote(markerJSON)) | sudo -n tee \(shellQuote("\(root)/.vegpu-runtime.json")) >/dev/null",
+            "sudo -n chown vegpu:vegpu \(shellQuote("\(root)/.vegpu-runtime.json"))",
+            "sudo -n chmod 0644 \(shellQuote("\(root)/.vegpu-runtime.json"))",
             "sudo -n -u vegpu ln -sfn \(shellQuote(root)) \(shellQuote(current))",
             "sudo -n rm -f /usr/local/bin/llama-server",
             "printf %s \(shellQuote(serverWrapper)) | sudo -n tee /usr/local/bin/llama-server >/dev/null",
@@ -748,12 +764,27 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         set -u
         root=\(shellQuote(root))
         current=\(shellQuote(current))
+        marker="$root/.vegpu-runtime.json"
+        marker_required=false
+        case \(shellQuote(safe)) in managed-*) marker_required=true ;; esac
         installed=false
         active=false
         detail=missing
-        if [ -d "$root" ] && find "$root" -type f -name llama-server -perm -111 -print -quit | grep -q .; then
+        family=
+        release_tag=
+        backend=
+        archive_name=
+        sha256=
+        if [ -f "$marker" ]; then
+          family="$(jq -r '.family // empty' "$marker" 2>/dev/null || true)"
+          release_tag="$(jq -r '.releaseTag // empty' "$marker" 2>/dev/null || true)"
+          backend="$(jq -r '.backend // .linuxBackend // empty' "$marker" 2>/dev/null || true)"
+          archive_name="$(jq -r '.archiveName // empty' "$marker" 2>/dev/null || true)"
+          sha256="$(jq -r '.sha256 // empty' "$marker" 2>/dev/null || true)"
+        fi
+        if [ -d "$root" ] && { [ "$marker_required" = false ] || [ -f "$marker" ]; } && find "$root" -type f -name llama-server -perm -111 -print -quit | grep -q .; then
           installed=true
-          detail=installed
+          if [ -f "$marker" ]; then detail=registered; else detail=legacy-installed; fi
           root_target="$(readlink -f "$root" 2>/dev/null || true)"
           current_target="$(readlink -f "$current" 2>/dev/null || true)"
           if [ -n "$root_target" ] && [ "$root_target" = "$current_target" ] && [ -x /usr/local/bin/llama-server ]; then
@@ -761,18 +792,28 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             detail=active
           fi
         fi
-        printf 'installed=%s\\nactive=%s\\ndetail=%s\\n' "$installed" "$active" "$detail"
+        printf 'installed=%s\\nactive=%s\\ndetail=%s\\nfamily=%s\\nreleaseTag=%s\\nlinuxBackend=%s\\narchiveName=%s\\nsha256=%s\\n' "$installed" "$active" "$detail" "$family" "$release_tag" "$backend" "$archive_name" "$sha256"
         """
         let out = try await runGuestScript(script, timeout: 12)
         var installed = false
         var active = false
         var detail: String?
+        var family: String?
+        var releaseTag: String?
+        var linuxBackend: String?
+        var archiveName: String?
+        var sha256: String?
         for line in out.split(whereSeparator: \.isNewline).map(String.init) {
             if line == "installed=true" { installed = true }
             if line == "active=true" { active = true }
             if line.hasPrefix("detail=") { detail = String(line.dropFirst("detail=".count)) }
+            if line.hasPrefix("family=") { family = emptyNil(String(line.dropFirst("family=".count))) }
+            if line.hasPrefix("releaseTag=") { releaseTag = emptyNil(String(line.dropFirst("releaseTag=".count))) }
+            if line.hasPrefix("linuxBackend=") { linuxBackend = emptyNil(String(line.dropFirst("linuxBackend=".count))) }
+            if line.hasPrefix("archiveName=") { archiveName = emptyNil(String(line.dropFirst("archiveName=".count))) }
+            if line.hasPrefix("sha256=") { sha256 = emptyNil(String(line.dropFirst("sha256=".count))) }
         }
-        return LlmsRuntimeInstalledResult(id: safe, root: root, installed: installed, active: active, detail: detail)
+        return LlmsRuntimeInstalledResult(id: safe, root: root, installed: installed, active: active, detail: detail, family: family, releaseTag: releaseTag, linuxBackend: linuxBackend, archiveName: archiveName, sha256: sha256)
     }
 
     public func deleteInstalledRuntime(id: String) async throws {
@@ -1188,6 +1229,19 @@ public final class LlmsRuntimeService: @unchecked Sendable {
     }
 }
 
+private struct LlmsGuestRuntimeMarker: Codable {
+    var id: String
+    var family: String
+    var releaseTag: String
+    var backend: String
+    var archiveName: String
+    var sha256: String
+    var serverRel: String
+    var rpcRel: String?
+    var installedAt: String
+    var active: Bool
+}
+
 public struct LlmsRuntimeStatus: Codable, Equatable, Sendable {
     public var running: Bool
     public var mode: String
@@ -1216,6 +1270,11 @@ private struct LlmsModelCopyProgress: Codable {
     var current: String?
     var copiedBytes: Int64
     var totalBytes: Int64
+}
+
+private func emptyNil(_ value: String) -> String? {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
 }
 
 private struct OkResponse: Codable { var ok: Bool }

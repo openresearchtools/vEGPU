@@ -116,27 +116,13 @@ func (m *RuntimeManager) FetchInstall(ctx context.Context, family, tag, linuxBac
 	if release.MacOSAsset.Name == "" || linuxAsset.Name == "" {
 		return out, fmt.Errorf("release %s does not have matched macOS and %s Linux assets", release.Tag, backendLabel(backend))
 	}
-	pairID := releasePairID(release.Family, release.Tag, backend)
-	_ = m.clearBootstrapPairDeleted(pairID)
-
-	if pair, ok := m.loadRuntimePair(pairID); ok && pair.MacOS != nil && pair.Linux != nil {
-		activated, err := m.ActivatePair(ctx, pairID)
-		if err != nil {
-			return out, err
-		}
-		list, _ := m.List(ctx)
-		out.Pair = activated
-		out.MacOS = *activated.MacOS
-		out.Linux = *activated.Linux
-		out.Runtimes = list
-		return out, nil
-	}
-
-	macRuntime, err := m.downloadAndInstallArchive(ctx, "macos", pairID+"-macos", release, release.MacOSAsset, backend)
+	releaseFamily := normalizeReleaseFamily(release.Family)
+	pairID := managedRuntimePairID(releaseFamily, backend)
+	macRuntime, err := m.ensureDownloadedReleaseRuntime(ctx, "macos", managedRuntimeID(releaseFamily, "macos", ""), release, release.MacOSAsset, "", "")
 	if err != nil {
 		return out, err
 	}
-	linuxRuntime, err := m.downloadAndInstallArchive(ctx, "linux", pairID+"-linux", release, linuxAsset, backend)
+	linuxRuntime, err := m.ensureDownloadedReleaseRuntime(ctx, "linux", managedRuntimeID(releaseFamily, "linux", backend), release, linuxAsset, backend, pairID)
 	if err != nil {
 		return out, err
 	}
@@ -194,8 +180,7 @@ func (m *RuntimeManager) DeletePair(ctx context.Context, pairID string) error {
 	if pair.Active {
 		return fmt.Errorf("runtime pair %s is active; choose another runtime before deleting it", pairID)
 	}
-	shouldTombstone := m.isBootstrapRuntimePair(pair)
-	if pair.MacOS != nil {
+	if pair.MacOS != nil && !isManagedSharedMacRuntime(*pair.MacOS) {
 		if err := m.Delete(ctx, pair.MacOS.ID); err != nil {
 			return err
 		}
@@ -221,13 +206,17 @@ func (m *RuntimeManager) DeletePair(ctx context.Context, pairID string) error {
 	if err := os.RemoveAll(linux.InstallDir); err != nil {
 		return err
 	}
-	if shouldTombstone {
-		return m.markBootstrapPairDeleted(pairID)
-	}
 	return nil
 }
 
-func (m *RuntimeManager) downloadAndInstallArchive(ctx context.Context, platform, id string, release RuntimeRelease, asset RuntimeReleaseAsset, backend string) (ManagedRuntime, error) {
+func (m *RuntimeManager) ensureDownloadedReleaseRuntime(ctx context.Context, platform, id string, release RuntimeRelease, asset RuntimeReleaseAsset, backend, pairID string) (ManagedRuntime, error) {
+	if runtimeInfo, err := m.loadRuntimeDirect(platform, id); err == nil && runtimeMatchesReleaseAsset(runtimeInfo, release, asset, backend, pairID) {
+		return runtimeInfo, nil
+	}
+	return m.downloadAndInstallArchive(ctx, platform, id, release, asset, backend, pairID)
+}
+
+func (m *RuntimeManager) downloadAndInstallArchive(ctx context.Context, platform, id string, release RuntimeRelease, asset RuntimeReleaseAsset, backend, pairID string) (ManagedRuntime, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, asset.DownloadURL, nil)
 	if err != nil {
 		return ManagedRuntime{}, err
@@ -247,11 +236,40 @@ func (m *RuntimeManager) downloadAndInstallArchive(ctx context.Context, platform
 		ReleaseTag:   release.Tag,
 		SourceRef:    release.SourceRef,
 		LinuxBackend: backend,
-		PairID:       releasePairID(release.Family, release.Tag, backend),
+		PairID:       pairID,
 		AssetName:    asset.Name,
 		DownloadURL:  asset.DownloadURL,
 		SHA256:       asset.SHA256,
 	})
+}
+
+func runtimeMatchesReleaseAsset(runtimeInfo ManagedRuntime, release RuntimeRelease, asset RuntimeReleaseAsset, backend, pairID string) bool {
+	if !runtimeMetadataUsable(runtimeInfo) {
+		return false
+	}
+	if runtimeInfo.Family != normalizeReleaseFamily(release.Family) {
+		return false
+	}
+	if strings.TrimSpace(runtimeInfo.ReleaseTag) != strings.TrimSpace(release.Tag) {
+		return false
+	}
+	if strings.TrimSpace(asset.SHA256) != "" && !strings.EqualFold(strings.TrimSpace(runtimeInfo.SHA256), strings.TrimSpace(asset.SHA256)) {
+		return false
+	}
+	if strings.TrimSpace(asset.Name) != "" && strings.TrimSpace(runtimeInfo.AssetName) != strings.TrimSpace(asset.Name) {
+		return false
+	}
+	if normalizeRuntimePlatform(runtimeInfo.Platform) == "linux" {
+		if normalizeLinuxBackend(runtimeInfo.LinuxBackend) != normalizeLinuxBackend(backend) {
+			return false
+		}
+		if sanitizeID(runtimeInfo.PairID) != sanitizeID(pairID) {
+			return false
+		}
+	} else if strings.TrimSpace(runtimeInfo.PairID) != "" {
+		return false
+	}
+	return true
 }
 
 func (m *RuntimeManager) resolveRelease(ctx context.Context, family, tag string) (RuntimeRelease, error) {
@@ -315,14 +333,23 @@ func parseRuntimeRelease(item githubRelease) (RuntimeRelease, bool) {
 
 func runtimePairs(runtimes []ManagedRuntime, cfg AppConfig) []RuntimePair {
 	byID := map[string]*RuntimePair{}
+	managedMacByFamily := map[string]ManagedRuntime{}
 	for _, runtimeInfo := range runtimes {
-		if runtimeInfo.PairID == "" {
+		if isManagedSharedMacRuntime(runtimeInfo) {
+			managedMacByFamily[runtimeInfo.Family] = runtimeInfo
 			continue
 		}
-		pair := byID[runtimeInfo.PairID]
+		pairID := sanitizeID(runtimeInfo.PairID)
+		if pairID == "" && isManagedLinuxRuntime(runtimeInfo) {
+			pairID = managedRuntimePairID(runtimeInfo.Family, runtimeInfo.LinuxBackend)
+		}
+		if pairID == "" {
+			continue
+		}
+		pair := byID[pairID]
 		if pair == nil {
-			pair = &RuntimePair{ID: runtimeInfo.PairID}
-			byID[runtimeInfo.PairID] = pair
+			pair = &RuntimePair{ID: pairID}
+			byID[pairID] = pair
 		}
 		pair.Family = firstNonEmpty(pair.Family, runtimeInfo.Family)
 		pair.ReleaseTag = firstNonEmpty(pair.ReleaseTag, runtimeInfo.ReleaseTag)
@@ -338,6 +365,22 @@ func runtimePairs(runtimes []ManagedRuntime, cfg AppConfig) []RuntimePair {
 			pair.VMDeletePending = runtimeInfo.VMDeletePending
 			pair.InstallError = runtimeInfo.InstallError
 			pair.Linux = &item
+		}
+	}
+	for _, pair := range byID {
+		if pair.MacOS != nil {
+			continue
+		}
+		if pair.Linux == nil || !isManagedLinuxRuntime(*pair.Linux) {
+			continue
+		}
+		if mac, ok := managedMacByFamily[pair.Linux.Family]; ok {
+			item := mac
+			pair.MacOS = &item
+			pair.Family = firstNonEmpty(pair.Family, item.Family)
+			pair.ReleaseTag = firstNonEmpty(pair.ReleaseTag, item.ReleaseTag)
+			pair.SourceRef = firstNonEmpty(pair.SourceRef, item.SourceRef)
+			pair.InstalledAt = maxText(pair.InstalledAt, item.InstalledAt)
 		}
 	}
 	out := make([]RuntimePair, 0, len(byID))
@@ -373,8 +416,35 @@ func (m *RuntimeManager) loadRuntimePair(pairID string) (RuntimePair, bool) {
 	return RuntimePair{}, false
 }
 
-func releasePairID(family, tag, backend string) string {
-	return sanitizeID(normalizeReleaseFamily(family) + "-" + strings.TrimSpace(tag) + "-" + normalizeLinuxBackend(backend))
+func managedRuntimeID(family, platform, backend string) string {
+	family = normalizeReleaseFamily(family)
+	platform = normalizeRuntimePlatform(platform)
+	switch platform {
+	case "macos":
+		return sanitizeID("managed-" + family + "-macos")
+	case "linux":
+		return sanitizeID("managed-" + family + "-" + normalizeLinuxBackend(backend) + "-linux")
+	default:
+		return ""
+	}
+}
+
+func managedRuntimePairID(family, backend string) string {
+	return sanitizeID("managed-" + normalizeReleaseFamily(family) + "-" + normalizeLinuxBackend(backend))
+}
+
+func isManagedRuntimeID(id string) bool {
+	return strings.HasPrefix(sanitizeID(id), "managed-")
+}
+
+func isManagedSharedMacRuntime(runtimeInfo ManagedRuntime) bool {
+	return normalizeRuntimePlatform(runtimeInfo.Platform) == "macos" &&
+		runtimeInfo.ID == managedRuntimeID(runtimeInfo.Family, "macos", "")
+}
+
+func isManagedLinuxRuntime(runtimeInfo ManagedRuntime) bool {
+	return normalizeRuntimePlatform(runtimeInfo.Platform) == "linux" &&
+		runtimeInfo.ID == managedRuntimeID(runtimeInfo.Family, "linux", runtimeInfo.LinuxBackend)
 }
 
 func normalizeReleaseFamily(family string) string {

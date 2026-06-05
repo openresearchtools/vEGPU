@@ -684,6 +684,7 @@ jobs:
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
           tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
           tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/libucontext.git/libucontext-source.tar.gz'
+          test -f "$APP/Contents/Resources/vEGPURoot/Resources/Guest/reconcile-llama-runtimes.sh"
           find "$APP/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit | grep -q .
           test -f "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json"
           find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-macos-arm64.tar.gz' -print -quit | grep -q .

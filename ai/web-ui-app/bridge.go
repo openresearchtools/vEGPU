@@ -37,11 +37,18 @@ type BridgeRuntimeResult struct {
 }
 
 type BridgeRuntimeInstallSpec struct {
-	ID         string `json:"id"`
-	Platform   string `json:"platform"`
-	SourceDir  string `json:"sourceDir"`
-	ServerPath string `json:"serverPath"`
-	RPCPath    string `json:"rpcPath,omitempty"`
+	ID           string `json:"id"`
+	Platform     string `json:"platform"`
+	SourceDir    string `json:"sourceDir"`
+	ServerPath   string `json:"serverPath"`
+	RPCPath      string `json:"rpcPath,omitempty"`
+	Family       string `json:"family,omitempty"`
+	ReleaseTag   string `json:"releaseTag,omitempty"`
+	SourceRef    string `json:"sourceRef,omitempty"`
+	LinuxBackend string `json:"linuxBackend,omitempty"`
+	PairID       string `json:"pairId,omitempty"`
+	AssetName    string `json:"assetName,omitempty"`
+	SHA256       string `json:"sha256,omitempty"`
 }
 
 type BridgeRuntimeInstallResult struct {
@@ -53,11 +60,16 @@ type BridgeRuntimeInstallResult struct {
 }
 
 type BridgeRuntimeInstalledResult struct {
-	ID        string `json:"id"`
-	Root      string `json:"root"`
-	Installed bool   `json:"installed"`
-	Active    bool   `json:"active"`
-	Detail    string `json:"detail,omitempty"`
+	ID           string `json:"id"`
+	Root         string `json:"root"`
+	Installed    bool   `json:"installed"`
+	Active       bool   `json:"active"`
+	Detail       string `json:"detail,omitempty"`
+	Family       string `json:"family,omitempty"`
+	ReleaseTag   string `json:"releaseTag,omitempty"`
+	LinuxBackend string `json:"linuxBackend,omitempty"`
+	ArchiveName  string `json:"archiveName,omitempty"`
+	SHA256       string `json:"sha256,omitempty"`
 }
 
 type BridgeHFDownloadSpec struct {

@@ -75,13 +75,42 @@ public struct LlmsRuntimeInstallSpec: Codable, Equatable, Sendable {
     public var sourceDir: String
     public var serverPath: String
     public var rpcPath: String?
+    public var family: String?
+    public var releaseTag: String?
+    public var sourceRef: String?
+    public var linuxBackend: String?
+    public var pairID: String?
+    public var assetName: String?
+    public var sha256: String?
 
-    public init(id: String, platform: String, sourceDir: String, serverPath: String, rpcPath: String? = nil) {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case platform
+        case sourceDir
+        case serverPath
+        case rpcPath
+        case family
+        case releaseTag
+        case sourceRef
+        case linuxBackend
+        case pairID = "pairId"
+        case assetName
+        case sha256
+    }
+
+    public init(id: String, platform: String, sourceDir: String, serverPath: String, rpcPath: String? = nil, family: String? = nil, releaseTag: String? = nil, sourceRef: String? = nil, linuxBackend: String? = nil, pairID: String? = nil, assetName: String? = nil, sha256: String? = nil) {
         self.id = id
         self.platform = platform
         self.sourceDir = sourceDir
         self.serverPath = serverPath
         self.rpcPath = rpcPath
+        self.family = family
+        self.releaseTag = releaseTag
+        self.sourceRef = sourceRef
+        self.linuxBackend = linuxBackend
+        self.pairID = pairID
+        self.assetName = assetName
+        self.sha256 = sha256
     }
 }
 
@@ -99,6 +128,11 @@ public struct LlmsRuntimeInstalledResult: Codable, Equatable, Sendable {
     public var installed: Bool
     public var active: Bool
     public var detail: String?
+    public var family: String? = nil
+    public var releaseTag: String? = nil
+    public var linuxBackend: String? = nil
+    public var archiveName: String? = nil
+    public var sha256: String? = nil
 }
 
 public struct LlamaDevice: Codable, Equatable, Sendable {

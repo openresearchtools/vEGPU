@@ -31,8 +31,10 @@ public final class GuestSyncService: @unchecked Sendable {
         try await syncGuestScripts()
         try await syncGuiAssets()
         try await syncScalingApp()
+        try await syncBundledLlamaRuntimeSeed()
         if !force, let runtimePid, markerMatches(runtimePid: runtimePid, fingerprint: fingerprint) {
             if await guestDriverReady() {
+                try await reconcileBundledLlamaRuntimes()
                 return false
             }
             progress.report(ProgressEvent(stage: "driver", message: "Refreshing Linux guest DMA driver for current kernel"))
@@ -67,6 +69,7 @@ public final class GuestSyncService: @unchecked Sendable {
                 throw RuntimeError.message("Linux guest DMA driver install failed: \(firstLine(String(describing: error)))")
             }
         }
+        try await reconcileBundledLlamaRuntimes()
         _ = try await ssh.agent(["status", "--json"])
         if let runtimePid {
             try JSON.write(GuestSyncMarker(fingerprint: fingerprint, runtimePid: runtimePid, syncedAt: ISO8601DateFormatter().string(from: Date())), to: markerURL)
@@ -80,6 +83,7 @@ public final class GuestSyncService: @unchecked Sendable {
         let scripts: [(String, String)] = [
             ("vegpu-agent.sh", "/usr/local/libexec/vegpu/vegpu-agent"),
             ("customization.sh", "/usr/local/libexec/vegpu/customization.sh"),
+            ("reconcile-llama-runtimes.sh", "/usr/local/libexec/vegpu/reconcile-llama-runtimes"),
             ("firstboot.sh", "/usr/local/sbin/vegpu-firstboot.sh"),
             ("gui-ensure.sh", "/usr/local/sbin/vegpu-gui-ensure.sh")
         ]
@@ -175,6 +179,39 @@ public final class GuestSyncService: @unchecked Sendable {
         }
     }
 
+    private func syncBundledLlamaRuntimeSeed() async throws {
+        guard let seed = try bundledLlamaRuntimeSeed() else { return }
+        let remoteRoot = "/var/lib/vegpu/llama-runtime-seed"
+        let tempRoot = "/tmp/vegpu-sync/llama-runtime-seed-\(UUID().uuidString)"
+        progress.report(ProgressEvent(stage: "guest-sync", message: "Checking bundled llama.cpp VM runtime seed"))
+        _ = try await ssh.ssh("rm -rf \(shellQuote(tempRoot)) && mkdir -p \(shellQuote(tempRoot))")
+        defer { Task { try? await ssh.ssh("rm -rf \(shellQuote(tempRoot))") } }
+        try await ssh.scpToGuest(localPath: seed.manifest.path, remotePath: "\(tempRoot)/llama-runtime-manifest.json")
+        _ = try await ssh.ssh("sudo -n install -D -m 0644 \(shellQuote("\(tempRoot)/llama-runtime-manifest.json")) \(shellQuote("\(remoteRoot)/llama-runtime-manifest.json"))")
+        for asset in seed.assets {
+            let remotePath = "\(remoteRoot)/\(asset.relativePath)"
+            if let sha = try? await remoteSHA256(remotePath), !asset.sha256.isEmpty, sha == asset.sha256 {
+                continue
+            }
+            progress.report(ProgressEvent(stage: "guest-sync", message: "Uploading bundled llama.cpp VM runtime", detail: asset.localURL.lastPathComponent))
+            let remoteTemp = "\(tempRoot)/\(asset.localURL.lastPathComponent)"
+            try await ssh.scpToGuest(localPath: asset.localURL.path, remotePath: remoteTemp)
+            _ = try await ssh.ssh("sudo -n install -D -m 0644 \(shellQuote(remoteTemp)) \(shellQuote(remotePath))")
+        }
+    }
+
+    private func reconcileBundledLlamaRuntimes() async throws {
+        guard (try? bundledLlamaRuntimeSeed()) != nil else { return }
+        progress.report(ProgressEvent(stage: "guest-sync", message: "Reconciling bundled llama.cpp VM runtimes"))
+        _ = try await ssh.agent(["reconcile-llama-runtimes"], timeout: 1_800)
+    }
+
+    private func remoteSHA256(_ path: String) async throws -> String? {
+        let output = try await ssh.ssh("if [ -f \(shellQuote(path)) ]; then sha256sum \(shellQuote(path)) | awk '{print $1}'; fi")
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private func guestDriverReady() async -> Bool {
         guard let text = try? await ssh.agent(["status", "--json"]),
               let data = text.data(using: .utf8),
@@ -190,7 +227,7 @@ public final class GuestSyncService: @unchecked Sendable {
         var hasher = SHA256()
         hasher.update(data: try JSON.encoder.encode(manifest))
         let guestDir = paths.resources.appendingPathComponent("Guest", isDirectory: true)
-        for script in ["vegpu-agent.sh", "customization.sh", "gui-ensure.sh", "firstboot.sh"] {
+        for script in ["vegpu-agent.sh", "customization.sh", "reconcile-llama-runtimes.sh", "gui-ensure.sh", "firstboot.sh"] {
             hasher.update(data: Data([0]))
             hasher.update(data: Data(script.utf8))
             if let data = try? Data(contentsOf: guestDir.appendingPathComponent(script)) {
@@ -198,6 +235,7 @@ public final class GuestSyncService: @unchecked Sendable {
                 hasher.update(data: data)
             }
         }
+        try hashBundledLlamaRuntimeSeed(into: &hasher)
         let assetsDir = paths.resources.appendingPathComponent("Assets", isDirectory: true)
         for asset in ["vEGPU-logo-transparent.png"] {
             hasher.update(data: Data([0]))
@@ -238,6 +276,69 @@ public final class GuestSyncService: @unchecked Sendable {
             }
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private struct BundledLlamaRuntimeSeed {
+        var manifest: URL
+        var assets: [BundledLlamaRuntimeAsset]
+    }
+
+    private struct BundledLlamaRuntimeAsset {
+        var backend: String
+        var relativePath: String
+        var sha256: String
+        var localURL: URL
+    }
+
+    private func bundledLlamaRuntimeSeed() throws -> BundledLlamaRuntimeSeed? {
+        let root = paths.root.appendingPathComponent("ai/bootstrap-runtimes/llama", isDirectory: true)
+        let manifestURL = root.appendingPathComponent("llama-runtime-manifest.json")
+        guard FileManager.default.fileExists(atPath: manifestURL.path) else { return nil }
+        let data = try Data(contentsOf: manifestURL)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let assets = object["assets"] as? [String: Any] else {
+            throw RuntimeError.message("Bundled llama runtime manifest is invalid: \(manifestURL.path)")
+        }
+        let rootPath = root.standardizedFileURL.path + "/"
+        var runtimeAssets: [BundledLlamaRuntimeAsset] = []
+        for backend in ["cuda13", "vulkan"] {
+            guard let asset = assets[backend] as? [String: Any],
+                  let relativePath = asset["path"] as? String,
+                  !relativePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw RuntimeError.message("Bundled llama runtime manifest is missing \(backend) Linux asset")
+            }
+            let localURL = root.appendingPathComponent(relativePath).standardizedFileURL
+            guard localURL.path.hasPrefix(rootPath) else {
+                throw RuntimeError.message("Bundled llama runtime asset escapes seed root: \(relativePath)")
+            }
+            guard FileManager.default.fileExists(atPath: localURL.path) else {
+                throw RuntimeError.message("Bundled llama runtime asset is missing: \(localURL.path)")
+            }
+            runtimeAssets.append(BundledLlamaRuntimeAsset(
+                backend: backend,
+                relativePath: relativePath,
+                sha256: asset["sha256"] as? String ?? "",
+                localURL: localURL
+            ))
+        }
+        return BundledLlamaRuntimeSeed(manifest: manifestURL, assets: runtimeAssets)
+    }
+
+    private func hashBundledLlamaRuntimeSeed(into hasher: inout SHA256) throws {
+        guard let seed = try bundledLlamaRuntimeSeed() else {
+            hasher.update(data: Data("llama-runtime-seed:none".utf8))
+            return
+        }
+        hasher.update(data: Data("llama-runtime-seed".utf8))
+        hasher.update(data: try Data(contentsOf: seed.manifest))
+        for asset in seed.assets.sorted(by: { $0.backend < $1.backend }) {
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data(asset.backend.utf8))
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data(asset.relativePath.utf8))
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data(asset.sha256.utf8))
+        }
     }
 
     private func markerMatches(runtimePid: Int32, fingerprint: String) -> Bool {

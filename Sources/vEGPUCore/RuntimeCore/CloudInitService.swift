@@ -64,6 +64,7 @@ public final class CloudInitService: @unchecked Sendable {
     private func userData(publicKey: String, password: String, mode: RuntimeLaunchMode, guiAppearance: GUIAppearance) throws -> String {
         let agent = try String(contentsOf: paths.resources.appendingPathComponent("Guest/vegpu-agent.sh"), encoding: .utf8)
         let firstBoot = try String(contentsOf: paths.resources.appendingPathComponent("Guest/firstboot.sh"), encoding: .utf8)
+        let llamaRuntimeReconcile = try String(contentsOf: paths.resources.appendingPathComponent("Guest/reconcile-llama-runtimes.sh"), encoding: .utf8)
         let guiBoot = mode == .gui ? try String(contentsOf: paths.resources.appendingPathComponent("Guest/gui-ensure.sh"), encoding: .utf8) : nil
         let guiCustomization = mode == .gui ? try String(contentsOf: paths.resources.appendingPathComponent("Guest/customization.sh"), encoding: .utf8) : nil
         let guiAssetWriteFile = mode == .gui ? try guiAssetWriteFiles() : ""
@@ -125,6 +126,11 @@ public final class CloudInitService: @unchecked Sendable {
             permissions: '0755'
             encoding: b64
             content: \(base64(firstBoot))
+          - path: /usr/local/libexec/vegpu/reconcile-llama-runtimes
+            owner: root:root
+            permissions: '0755'
+            encoding: b64
+            content: \(base64(llamaRuntimeReconcile))
           - path: /etc/sudoers.d/90-vegpu-control
             owner: root:root
             permissions: '0440'
@@ -207,7 +213,6 @@ public final class CloudInitService: @unchecked Sendable {
         for package in packages {
             try copySeedPackage(bundle: bundle, package: package)
         }
-        try copySeedLlamaRuntimes(bundle: bundle)
     }
 
     private func copySeedPackage(bundle: URL, package: ManifestPackage) throws {
@@ -226,15 +231,4 @@ public final class CloudInitService: @unchecked Sendable {
         try FileManager.default.copyItem(atPath: source, toPath: destination.path)
     }
 
-    private func copySeedLlamaRuntimes(bundle: URL) throws {
-        let source = paths.root.appendingPathComponent("ai/bootstrap-runtimes/llama", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: source.appendingPathComponent("llama-runtime-manifest.json").path) else {
-            return
-        }
-        let destination = bundle.appendingPathComponent("llama-runtimes", isDirectory: true)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
-        try FileManager.default.copyItem(at: source, to: destination)
-    }
 }

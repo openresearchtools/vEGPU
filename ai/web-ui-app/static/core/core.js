@@ -1401,6 +1401,7 @@
 							${pending ? `<span class="status-pill status-loading">${escapeHTML(pending)}</span>` : ""}
 							${active ? `<span class="status-pill status-loaded">active</span>` : ""}
 							${pair.vmInstalled ? `<span class="status-pill">VM installed</span>` : ""}
+							${!pair.vmInstalled && !error ? `<span class="status-pill">VM pending</span>` : ""}
 							${pair.vmDeletePending ? `<span class="status-pill status-failed">VM delete pending</span>` : ""}
 						</div>
 					</div>

@@ -122,6 +122,7 @@ script_mismatches=()
 for rel in \
   "Resources/Guest/firstboot.sh" \
   "Resources/Guest/customization.sh" \
+  "Resources/Guest/reconcile-llama-runtimes.sh" \
   "Resources/Guest/gui-ensure.sh" \
   "Resources/Guest/vegpu-agent.sh"
 do

@@ -79,6 +79,13 @@ func main() {
 	runtimeSvc := NewRuntimeService(appDir, store)
 	discovery := NewDiscoveryService(appDir, runtimeSvc)
 	runtimeManager := NewRuntimeManager(appDir, store, runtimeSvc)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		if err := runtimeManager.ensureBootstrapRuntimes(ctx); err != nil {
+			log.Printf("bundled runtime registration failed: %v", err)
+		}
+	}()
 	processes := NewProcessManager(store, runtimeSvc, appDir)
 	hfSvc := NewHFService(appDir, store, discovery, runtimeSvc)
 	copySvc := NewModelCopyService(store, discovery, runtimeSvc)

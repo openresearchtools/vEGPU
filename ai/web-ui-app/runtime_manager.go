@@ -17,15 +17,17 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 const runtimeMetadataFile = "runtime.json"
 
 type RuntimeManager struct {
-	appDir  string
-	store   *ConfigStore
-	runtime *RuntimeService
+	appDir   string
+	store    *ConfigStore
+	runtime  *RuntimeService
+	ensureMu sync.Mutex
 }
 
 type ManagedRuntime struct {
@@ -174,23 +176,37 @@ func (m *RuntimeManager) List(ctx context.Context) (RuntimeListPayload, error) {
 }
 
 func (m *RuntimeManager) ensureBootstrapRuntimes(ctx context.Context) error {
+	m.ensureMu.Lock()
+	defer m.ensureMu.Unlock()
 	manifest, root, err := m.readBootstrapRuntimeManifest()
 	if err != nil || manifest == nil {
 		return err
 	}
-	if normalizeReleaseFamily(manifest.Family) != "llama" {
+	family := normalizeReleaseFamily(manifest.Family)
+	if family != "llama" {
 		return nil
 	}
+	macAsset, ok := manifest.Assets["macos"]
+	if !ok || strings.TrimSpace(macAsset.Path) == "" {
+		return fmt.Errorf("bundled llama runtime manifest is missing macOS asset")
+	}
+	if _, err := m.ensureBootstrapRuntimeAsset(ctx, "macos", managedRuntimeID(family, "macos", ""), *manifest, macAsset, root, "", ""); err != nil {
+		return err
+	}
 	for _, backend := range []string{"cuda13", "vulkan"} {
-		if err := m.ensureBootstrapRuntimePair(ctx, *manifest, root, backend); err != nil {
+		asset, ok := manifest.Assets[backend]
+		if !ok || strings.TrimSpace(asset.Path) == "" {
+			return fmt.Errorf("bundled llama runtime manifest is missing %s Linux asset", backendLabel(backend))
+		}
+		pairID := managedRuntimePairID(family, backend)
+		if _, err := m.ensureBootstrapRuntimeAsset(ctx, "linux", managedRuntimeID(family, "linux", backend), *manifest, asset, root, backend, pairID); err != nil {
 			return err
 		}
 	}
 	cfg := m.store.Get()
-	if strings.TrimSpace(cfg.Runtime.ActiveRuntimePair) == "" || cfg.Runtime.ActiveVersion == "" || cfg.Runtime.ActiveVersion == "none" {
-		pairID := releasePairID(manifest.Family, manifest.Tag, "cuda13")
-		mac, macErr := m.loadRuntimeDirect("macos", pairID+"-macos")
-		linux, linuxErr := m.loadRuntimeDirect("linux", pairID+"-linux")
+	if backend, ok := shouldAutoSelectBundledStandardBackend(cfg); ok {
+		mac, macErr := m.loadRuntimeDirect("macos", managedRuntimeID(family, "macos", ""))
+		linux, linuxErr := m.loadRuntimeDirect("linux", managedRuntimeID(family, "linux", backend))
 		if macErr == nil && linuxErr == nil {
 			if err := m.selectRuntimePairLocal(mac, linux); err != nil {
 				return err
@@ -217,103 +233,28 @@ func (m *RuntimeManager) readBootstrapRuntimeManifest() (*BootstrapRuntimeManife
 	return &manifest, root, nil
 }
 
-func (m *RuntimeManager) bootstrapDeletedDir() string {
-	return filepath.Join(m.runtime.WorkDir(), "runtimes", ".bootstrap-deleted")
-}
-
-func (m *RuntimeManager) bootstrapPairDeleted(pairID string) bool {
-	_, err := os.Stat(filepath.Join(m.bootstrapDeletedDir(), sanitizeID(pairID)))
-	return err == nil
-}
-
-func (m *RuntimeManager) markBootstrapPairDeleted(pairID string) error {
-	dir := m.bootstrapDeletedDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+func (m *RuntimeManager) ensureBootstrapRuntimeAsset(ctx context.Context, platform, id string, manifest BootstrapRuntimeManifest, asset BootstrapRuntimeAsset, root, backend, pairID string) (ManagedRuntime, error) {
+	if normalizeRuntimePlatform(platform) == "linux" {
+		backend = normalizeLinuxBackend(backend)
+	} else {
+		backend = ""
 	}
-	return os.WriteFile(filepath.Join(dir, sanitizeID(pairID)), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644)
-}
-
-func (m *RuntimeManager) clearBootstrapPairDeleted(pairID string) error {
-	err := os.Remove(filepath.Join(m.bootstrapDeletedDir(), sanitizeID(pairID)))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	return err
-}
-
-func (m *RuntimeManager) isBootstrapRuntimePair(pair RuntimePair) bool {
-	manifest, _, err := m.readBootstrapRuntimeManifest()
-	if err != nil || manifest == nil {
-		return false
-	}
-	for _, backend := range []string{"cuda13", "vulkan"} {
-		if pair.ID == releasePairID(manifest.Family, manifest.Tag, backend) {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *RuntimeManager) ensureBootstrapRuntimePair(ctx context.Context, manifest BootstrapRuntimeManifest, root, backend string) error {
-	backend = normalizeLinuxBackend(backend)
-	if backend == "" {
-		return nil
-	}
-	pairID := releasePairID(manifest.Family, manifest.Tag, backend)
-	if m.bootstrapPairDeleted(pairID) {
-		return nil
-	}
-	macAsset, ok := manifest.Assets["macos"]
-	if !ok || strings.TrimSpace(macAsset.Path) == "" {
-		return fmt.Errorf("bundled llama runtime manifest is missing macOS asset")
-	}
-	linuxAsset, ok := manifest.Assets[backend]
-	if !ok || strings.TrimSpace(linuxAsset.Path) == "" {
-		return fmt.Errorf("bundled llama runtime manifest is missing %s Linux asset", backendLabel(backend))
-	}
-	if _, err := m.loadRuntimeDirect("macos", pairID+"-macos"); err != nil {
-		if _, err := m.installBootstrapArchive(ctx, "macos", pairID+"-macos", manifest, macAsset, root, backend); err != nil {
-			return err
-		}
-	}
-	if linuxRuntime, err := m.loadRuntimeDirect("linux", pairID+"-linux"); err == nil {
-		installed, active := mountedLinuxRuntimeState(linuxRuntime.ID)
+	id = sanitizeID(id)
+	if runtimeInfo, err := m.loadRuntimeDirect(platform, id); err == nil && runtimeMatchesBundledAsset(runtimeInfo, manifest, asset, backend, pairID) {
 		changed := false
-		if linuxRuntime.VMInstalled != installed {
-			linuxRuntime.VMInstalled = installed
-			changed = true
-		}
-		if installed && strings.Contains(linuxRuntime.InstallError, "first boot") {
-			linuxRuntime.InstallError = ""
-			changed = true
-		} else if !installed && linuxRuntime.InstallError == "" {
-			linuxRuntime.InstallError = "VM runtime will install from the bundled seed on first boot; retry VM install after the VM is running."
-			changed = true
-		}
-		if active != linuxRuntime.Active && active {
-			linuxRuntime.Active = true
+		if platform == "linux" && legacyRuntimeInstallMessage(runtimeInfo.InstallError) {
+			runtimeInfo.InstallError = ""
 			changed = true
 		}
 		if changed {
-			return writeRuntimeMetadata(linuxRuntime)
+			return runtimeInfo, writeRuntimeMetadata(runtimeInfo)
 		}
-		return nil
+		return runtimeInfo, nil
 	}
-	linuxRuntime, err := m.installBootstrapArchive(ctx, "linux", pairID+"-linux", manifest, linuxAsset, root, backend)
-	if err != nil {
-		return err
-	}
-	installed, active := mountedLinuxRuntimeState(linuxRuntime.ID)
-	linuxRuntime.VMInstalled = installed
-	linuxRuntime.Active = active
-	if !installed {
-		linuxRuntime.InstallError = "VM runtime will install from the bundled seed on first boot; retry VM install after the VM is running."
-	}
-	return writeRuntimeMetadata(linuxRuntime)
+	return m.installBootstrapArchive(ctx, platform, id, manifest, asset, root, backend, pairID)
 }
 
-func (m *RuntimeManager) installBootstrapArchive(ctx context.Context, platform, id string, manifest BootstrapRuntimeManifest, asset BootstrapRuntimeAsset, root, backend string) (ManagedRuntime, error) {
+func (m *RuntimeManager) installBootstrapArchive(ctx context.Context, platform, id string, manifest BootstrapRuntimeManifest, asset BootstrapRuntimeAsset, root, backend, pairID string) (ManagedRuntime, error) {
 	archivePath := filepath.Clean(filepath.Join(root, asset.Path))
 	if !pathInside(root, archivePath) {
 		return ManagedRuntime{}, fmt.Errorf("bundled runtime archive escapes bootstrap directory: %s", asset.Path)
@@ -337,11 +278,105 @@ func (m *RuntimeManager) installBootstrapArchive(ctx context.Context, platform, 
 		ReleaseTag:   manifest.Tag,
 		SourceRef:    manifest.SourceRef,
 		LinuxBackend: backend,
-		PairID:       releasePairID(manifest.Family, manifest.Tag, backend),
+		PairID:       pairID,
 		AssetName:    asset.Name,
 		DownloadURL:  asset.DownloadURL,
 		SHA256:       asset.SHA256,
 	})
+}
+
+func runtimeMatchesBundledAsset(runtimeInfo ManagedRuntime, manifest BootstrapRuntimeManifest, asset BootstrapRuntimeAsset, backend, pairID string) bool {
+	if !runtimeMetadataUsable(runtimeInfo) {
+		return false
+	}
+	if runtimeInfo.Family != normalizeReleaseFamily(manifest.Family) {
+		return false
+	}
+	if strings.TrimSpace(runtimeInfo.ReleaseTag) != strings.TrimSpace(manifest.Tag) {
+		return false
+	}
+	if strings.TrimSpace(asset.SHA256) != "" && !strings.EqualFold(strings.TrimSpace(runtimeInfo.SHA256), strings.TrimSpace(asset.SHA256)) {
+		return false
+	}
+	if strings.TrimSpace(asset.Name) != "" && strings.TrimSpace(runtimeInfo.AssetName) != strings.TrimSpace(asset.Name) {
+		return false
+	}
+	if normalizeRuntimePlatform(runtimeInfo.Platform) == "linux" {
+		if normalizeLinuxBackend(runtimeInfo.LinuxBackend) != normalizeLinuxBackend(backend) {
+			return false
+		}
+		if sanitizeID(runtimeInfo.PairID) != sanitizeID(pairID) {
+			return false
+		}
+	} else if strings.TrimSpace(runtimeInfo.PairID) != "" {
+		return false
+	}
+	return true
+}
+
+func runtimeMetadataUsable(runtimeInfo ManagedRuntime) bool {
+	if strings.TrimSpace(runtimeInfo.InstallDir) == "" || strings.TrimSpace(runtimeInfo.RootDir) == "" || strings.TrimSpace(runtimeInfo.ServerPath) == "" {
+		return false
+	}
+	if _, err := os.Stat(runtimeInfo.RootDir); err != nil {
+		return false
+	}
+	if info, err := os.Stat(runtimeInfo.ServerPath); err != nil || info.IsDir() {
+		return false
+	}
+	return true
+}
+
+func legacyRuntimeInstallMessage(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return strings.Contains(value, "first boot") ||
+		strings.Contains(value, "bundled seed") ||
+		strings.Contains(value, "vm runtime is missing from")
+}
+
+func shouldAutoSelectBundledStandardBackend(cfg AppConfig) (string, bool) {
+	noActive := strings.TrimSpace(cfg.Runtime.ActiveRuntimePair) == "" &&
+		strings.TrimSpace(cfg.Runtime.ActiveMacRuntime) == "" &&
+		strings.TrimSpace(cfg.Runtime.ActiveLinuxRuntime) == "" &&
+		(strings.TrimSpace(cfg.Runtime.ActiveVersion) == "" || strings.EqualFold(strings.TrimSpace(cfg.Runtime.ActiveVersion), "none"))
+	if noActive {
+		return "cuda13", true
+	}
+	values := []string{
+		cfg.Runtime.ActiveRuntimePair,
+		cfg.Runtime.ActiveVersion,
+		cfg.Runtime.ActiveMacRuntime,
+		cfg.Runtime.ActiveLinuxRuntime,
+		cfg.Runtime.UpdateChannel,
+	}
+	for _, raw := range values {
+		lower := strings.ToLower(strings.TrimSpace(raw))
+		if lower == "" {
+			continue
+		}
+		if strings.Contains(lower, "turbo") {
+			return "", false
+		}
+		if strings.Contains(lower, "custom") && !strings.Contains(lower, "llama") {
+			return "", false
+		}
+	}
+	for _, raw := range values {
+		lower := strings.ToLower(strings.TrimSpace(raw))
+		if !strings.Contains(lower, "llama") {
+			continue
+		}
+		switch {
+		case strings.Contains(lower, "vulkan"):
+			return "vulkan", true
+		case strings.Contains(lower, "cuda13") || strings.Contains(lower, "cuda-13") || strings.Contains(lower, "cuda"):
+			return "cuda13", true
+		}
+	}
+	if normalizeReleaseFamily(cfg.Runtime.UpdateChannel) == "llama" {
+		return "cuda13", true
+	}
+	return "", false
 }
 
 func (m *RuntimeManager) Upload(ctx context.Context, platform, archiveName string, archive io.Reader) (ManagedRuntime, error) {
@@ -402,7 +437,9 @@ func (m *RuntimeManager) installArchive(ctx context.Context, platform, id, archi
 	runtimeInfo.Family = normalizeReleaseFamily(metadata.Family)
 	runtimeInfo.ReleaseTag = strings.TrimSpace(metadata.ReleaseTag)
 	runtimeInfo.SourceRef = strings.TrimSpace(metadata.SourceRef)
-	runtimeInfo.LinuxBackend = normalizeLinuxBackend(metadata.LinuxBackend)
+	if runtimeInfo.Platform == "linux" {
+		runtimeInfo.LinuxBackend = normalizeLinuxBackend(metadata.LinuxBackend)
+	}
 	if strings.TrimSpace(metadata.PairID) != "" {
 		runtimeInfo.PairID = sanitizeID(metadata.PairID)
 	}
@@ -529,21 +566,46 @@ func (m *RuntimeManager) installLinuxRuntime(ctx context.Context, runtimeInfo *M
 	installCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 	result, err := m.runtime.InstallBridgeRuntime(installCtx, BridgeRuntimeInstallSpec{
-		ID:         runtimeInfo.ID,
-		Platform:   runtimeInfo.Platform,
-		SourceDir:  runtimeInfo.RootDir,
-		ServerPath: runtimeInfo.ServerPath,
-		RPCPath:    runtimeInfo.RPCPath,
+		ID:           runtimeInfo.ID,
+		Platform:     runtimeInfo.Platform,
+		SourceDir:    runtimeInfo.RootDir,
+		ServerPath:   runtimeInfo.ServerPath,
+		RPCPath:      runtimeInfo.RPCPath,
+		Family:       runtimeInfo.Family,
+		ReleaseTag:   runtimeInfo.ReleaseTag,
+		SourceRef:    runtimeInfo.SourceRef,
+		LinuxBackend: runtimeInfo.LinuxBackend,
+		PairID:       runtimeInfo.PairID,
+		AssetName:    runtimeInfo.AssetName,
+		SHA256:       runtimeInfo.SHA256,
 	})
 	if err != nil {
 		runtimeInfo.InstallError = err.Error()
 		runtimeInfo.VMInstalled = false
 		return err
 	}
+	installed := result.Active
+	active := result.Active
+	if isManagedRuntimeID(runtimeInfo.ID) {
+		status, statusErr := m.runtime.BridgeRuntimeInstalled(installCtx, runtimeInfo.ID)
+		if statusErr != nil {
+			runtimeInfo.InstallError = statusErr.Error()
+			runtimeInfo.VMInstalled = false
+			return statusErr
+		}
+		if !status.Installed || !statusMatchesManagedRuntime(*runtimeInfo, status) {
+			err := fmt.Errorf("VM runtime marker for %s does not match selected %s %s %s runtime", runtimeInfo.ID, runtimeInfo.Family, runtimeInfo.ReleaseTag, backendLabel(runtimeInfo.LinuxBackend))
+			runtimeInfo.InstallError = err.Error()
+			runtimeInfo.VMInstalled = false
+			return err
+		}
+		installed = true
+		active = status.Active
+	}
 	runtimeInfo.InstallError = ""
-	runtimeInfo.VMInstalled = result.Active
+	runtimeInfo.VMInstalled = installed
 	runtimeInfo.VMDeletePending = false
-	runtimeInfo.Active = result.Active
+	runtimeInfo.Active = active
 	if !activate {
 		return nil
 	}
@@ -586,31 +648,43 @@ func (m *RuntimeManager) refreshLinuxInstallState(ctx context.Context, runtimeIn
 	defer cancel()
 	status, err := m.runtime.BridgeRuntimeInstalled(probeCtx, runtimeInfo.ID)
 	if err != nil {
-		installed, active := mountedLinuxRuntimeState(runtimeInfo.ID)
-		status = BridgeRuntimeInstalledResult{
-			ID:        runtimeInfo.ID,
-			Root:      path.Join(vmRuntimeHomeRoot, sanitizeID(runtimeInfo.ID)),
-			Installed: installed,
-			Active:    active,
-			Detail:    "checked mounted Linux home",
-		}
-	}
-	changed := false
-	if runtimeInfo.VMInstalled != status.Installed {
-		runtimeInfo.VMInstalled = status.Installed
-		changed = true
-	}
-	if !status.Installed {
-		msg := "VM runtime is missing from " + vmRuntimeHomeRoot + "; retry VM install"
-		if runtimeInfo.InstallError != msg {
-			runtimeInfo.InstallError = msg
+		changed := false
+		if runtimeInfo.VMInstalled {
+			runtimeInfo.VMInstalled = false
 			changed = true
 		}
-	} else if strings.Contains(runtimeInfo.InstallError, "VM runtime is missing from ") {
+		if legacyRuntimeInstallMessage(runtimeInfo.InstallError) {
+			runtimeInfo.InstallError = ""
+			changed = true
+		}
+		if changed {
+			_ = writeRuntimeMetadata(*runtimeInfo)
+		}
+		return
+	}
+	installed := status.Installed
+	active := status.Active
+	if installed && isManagedRuntimeID(runtimeInfo.ID) && !statusMatchesManagedRuntime(*runtimeInfo, status) {
+		installed = false
+		active = false
+	}
+	changed := false
+	if runtimeInfo.VMInstalled != installed {
+		runtimeInfo.VMInstalled = installed
+		changed = true
+	}
+	if runtimeInfo.Active != active {
+		runtimeInfo.Active = active
+		changed = true
+	}
+	if installed && runtimeInfo.InstallError != "" {
+		runtimeInfo.InstallError = ""
+		changed = true
+	} else if !installed && legacyRuntimeInstallMessage(runtimeInfo.InstallError) {
 		runtimeInfo.InstallError = ""
 		changed = true
 	}
-	if !status.Installed && runtimeInfo.VMDeletePending {
+	if !installed && runtimeInfo.VMDeletePending {
 		runtimeInfo.VMDeletePending = false
 		changed = true
 	}
@@ -620,45 +694,30 @@ func (m *RuntimeManager) refreshLinuxInstallState(ctx context.Context, runtimeIn
 }
 
 func shouldRefreshLinuxInstallState(runtimeInfo ManagedRuntime, cfg AppConfig) bool {
-	return runtimeInfo.ID == cfg.Runtime.ActiveLinuxRuntime ||
+	return isManagedRuntimeID(runtimeInfo.ID) ||
+		runtimeInfo.ID == cfg.Runtime.ActiveLinuxRuntime ||
 		runtimeInfo.Active ||
 		runtimeInfo.VMDeletePending ||
-		strings.Contains(runtimeInfo.InstallError, "VM runtime is missing from ")
+		strings.TrimSpace(runtimeInfo.InstallError) != ""
 }
 
-func mountedLinuxRuntimeState(id string) (bool, bool) {
-	mount := linuxHomeMountPath()
-	if mount == "" {
-		return false, false
+func statusMatchesManagedRuntime(runtimeInfo ManagedRuntime, status BridgeRuntimeInstalledResult) bool {
+	if normalizeReleaseFamily(status.Family) != normalizeReleaseFamily(runtimeInfo.Family) {
+		return false
 	}
-	root := filepath.Join(mount, "custom-llama-runtimes", sanitizeID(id))
-	if _, err := findNamedFile(root, "llama-server"); err != nil {
-		return false, false
+	if strings.TrimSpace(status.ReleaseTag) != strings.TrimSpace(runtimeInfo.ReleaseTag) {
+		return false
 	}
-	current, err := filepath.EvalSymlinks(filepath.Join(mount, "custom-llama-runtimes", "current"))
-	if err != nil {
-		return true, false
+	if normalizeLinuxBackend(status.LinuxBackend) != normalizeLinuxBackend(runtimeInfo.LinuxBackend) {
+		return false
 	}
-	resolved, err := filepath.EvalSymlinks(root)
-	return true, err == nil && current == resolved
-}
-
-func linuxHomeMountPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "/Volumes/vEGPU/Home"
+	if strings.TrimSpace(runtimeInfo.SHA256) != "" && !strings.EqualFold(strings.TrimSpace(runtimeInfo.SHA256), strings.TrimSpace(status.SHA256)) {
+		return false
 	}
-	raw, err := os.ReadFile(filepath.Join(home, "Library", "Application Support", "vEGPU", "Machine", "machine.json"))
-	if err != nil {
-		return "/Volumes/vEGPU/Home"
+	if strings.TrimSpace(status.ArchiveName) != "" && strings.TrimSpace(runtimeInfo.AssetName) != "" && strings.TrimSpace(status.ArchiveName) != strings.TrimSpace(runtimeInfo.AssetName) {
+		return false
 	}
-	var payload struct {
-		LinuxHomeMountPath string `json:"linuxHomeMountPath"`
-	}
-	if json.Unmarshal(raw, &payload) == nil && strings.TrimSpace(payload.LinuxHomeMountPath) != "" {
-		return payload.LinuxHomeMountPath
-	}
-	return "/Volumes/vEGPU/Home"
+	return true
 }
 
 func (m *RuntimeManager) Delete(ctx context.Context, id string) error {
@@ -799,7 +858,14 @@ func (m *RuntimeManager) isRuntimeActive(runtimeInfo ManagedRuntime, cfg AppConf
 }
 
 func (m *RuntimeManager) selectRuntimePairLocal(mac, linux ManagedRuntime) error {
-	if mac.PairID == "" || mac.PairID != linux.PairID {
+	pairID := sanitizeID(linux.PairID)
+	if pairID == "" {
+		pairID = sanitizeID(mac.PairID)
+	}
+	if pairID == "" {
+		return nil
+	}
+	if mac.PairID != "" && sanitizeID(mac.PairID) != pairID && !isManagedSharedMacRuntime(mac) {
 		return nil
 	}
 	if err := m.store.Update(func(next *AppConfig) error {
@@ -808,8 +874,8 @@ func (m *RuntimeManager) selectRuntimePairLocal(mac, linux ManagedRuntime) error
 			next.Runtime.RPCServerPath = mac.RPCPath
 		}
 		next.Runtime.ReleaseRepo = firstNonEmpty(mac.DownloadURL, linux.DownloadURL, "custom")
-		next.Runtime.ActiveVersion = mac.PairID
-		next.Runtime.ActiveRuntimePair = mac.PairID
+		next.Runtime.ActiveVersion = pairID
+		next.Runtime.ActiveRuntimePair = pairID
 		next.Runtime.ActiveMacRuntime = mac.ID
 		next.Runtime.ActiveLinuxRuntime = linux.ID
 		next.Runtime.UpdateChannel = firstNonEmpty(mac.Family, linux.Family, "custom")
