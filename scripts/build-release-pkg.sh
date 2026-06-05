@@ -81,8 +81,18 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
   /usr/bin/codesign --force --sign - --entitlements "$MACHINE_ENTITLEMENTS" "$STAGE_MACHINE/Applications/vEGPU Machine.app" >/dev/null
 fi
 
-test -f "$STAGE_APP/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
-test -f "$STAGE_APP/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
+APP_LEGAL="$STAGE_APP/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated"
+test -f "$APP_LEGAL/NOTICES"
+test -f "$APP_LEGAL/LICENSES"
+test -f "$APP_LEGAL/source/vEGPU-app-source.tar.gz"
+test -f "$APP_LEGAL/source/display-runtime-source.tar.gz"
+test -d "$APP_LEGAL/license-files/display-runtime"
+test -d "$APP_LEGAL/license-files/llama-runtime"
+test "$(find "$APP_LEGAL/license-files/display-runtime" -type f | wc -l | tr -d ' ')" -ge 20
+test "$(find "$APP_LEGAL/license-files/llama-runtime" -type f | wc -l | tr -d ' ')" -ge 3
+grep -F 'Package/Dependency: Display runtime: glib' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: Display runtime: openssl' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP_LEGAL/LICENSES" >/dev/null
 
 write_install_scripts() {
   local dir="$1"

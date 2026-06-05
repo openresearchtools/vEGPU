@@ -12,12 +12,14 @@ mkdir -p "$OUT/license-files" "$OUT/source"
 
 python3 - "$ROOT" "$OUT" "$REQUIRE_FULL_SOURCE" <<'PY'
 import json
+import io
 import os
 import plistlib
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,6 +95,263 @@ def copy_notice_files(src_dir: Path, dst_dir: Path) -> int:
             shutil.copy2(item, dst)
             count += 1
     return count
+
+archive_suffixes = (
+    ".tar.gz",
+    ".tgz",
+    ".tar.xz",
+    ".txz",
+    ".tar.bz2",
+    ".tbz2",
+    ".tar",
+)
+max_archive_scan_depth = 8
+
+license_name_prefixes = (
+    "license",
+    "licenses",
+    "licence",
+    "licences",
+    "notice",
+    "notices",
+    "copying",
+    "copyings",
+    "copyright",
+    "copyrights",
+    "third_party_license",
+    "third_party_licenses",
+    "third-party-license",
+    "third-party-licenses",
+    "third_party_notice",
+    "third_party_notices",
+    "third-party-notice",
+    "third-party-notices",
+)
+
+license_suffix_terms = {
+    "agpl",
+    "apache",
+    "apl",
+    "bsd",
+    "buildtools",
+    "exception",
+    "gpl",
+    "gpl2",
+    "gpl3",
+    "isc",
+    "lgpl",
+    "lgpl2",
+    "lgpl21",
+    "lgpl3",
+    "lib",
+    "lesser",
+    "mit",
+    "mpl",
+    "new",
+    "old",
+    "openssl",
+    "unlicense",
+    "zlib",
+}
+
+license_text_extensions = {
+    "adoc",
+    "html",
+    "htm",
+    "md",
+    "plist",
+    "rst",
+    "rtf",
+    "text",
+    "txt",
+}
+
+def archive_basename(name: str) -> str:
+    base = Path(name).name
+    lower = base.lower()
+    for suffix in archive_suffixes:
+        if lower.endswith(suffix):
+            return base[: -len(suffix)]
+    return Path(base).stem
+
+def looks_like_archive(name: str) -> bool:
+    lower = name.lower()
+    return any(lower.endswith(suffix) for suffix in archive_suffixes)
+
+def looks_like_license_path(name: str) -> bool:
+    normalized = name.replace("\\", "/")
+    parts = [part for part in normalized.split("/") if part and part not in {".", ".."}]
+    if not parts:
+        return False
+    base = parts[-1].lower()
+    for prefix in license_name_prefixes:
+        if base == prefix:
+            return True
+        for separator in (".", "-", "_"):
+            marker = prefix + separator
+            if not base.startswith(marker):
+                continue
+            suffix = base[len(marker):]
+            tokens = [token for token in re.split(r"[-_.]+", suffix) if token]
+            if not tokens:
+                return True
+            if tokens[-1] in license_text_extensions:
+                return True
+            if any(
+                token in license_suffix_terms
+                or token.startswith("gpl")
+                or token.startswith("lgpl")
+                or token.startswith("agpl")
+                for token in tokens
+            ):
+                return True
+    return False
+
+def safe_member_path(name: str) -> Path:
+    parts = [
+        safe_name(part)
+        for part in name.replace("\\", "/").split("/")
+        if part and part not in {".", ".."}
+    ]
+    return Path(*parts) if parts else Path("LICENSE")
+
+def copy_tar_license_member(tar: tarfile.TarFile, member: tarfile.TarInfo, dst_root: Path) -> bool:
+    if not member.isfile() or not looks_like_license_path(member.name):
+        return False
+    handle = tar.extractfile(member)
+    if handle is None:
+        return False
+    dst = dst_root / safe_member_path(member.name)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    with handle, dst.open("wb") as out_file:
+        shutil.copyfileobj(handle, out_file)
+    return True
+
+def collect_tar_license_files_from_tar(tar: tarfile.TarFile, dst_root: Path, label: str, depth: int) -> int:
+    copied = 0
+    for member in tar.getmembers():
+        if copy_tar_license_member(tar, member, dst_root):
+            copied += 1
+            continue
+        if depth >= max_archive_scan_depth or not member.isfile() or not looks_like_archive(member.name):
+            continue
+        handle = tar.extractfile(member)
+        if handle is None:
+            continue
+        nested_root = dst_root / "nested-archives" / safe_name(archive_basename(member.name))
+        with handle:
+            data = handle.read()
+        copied += collect_tar_license_files_from_bytes(
+            data,
+            nested_root,
+            f"{label}!/{member.name}",
+            depth + 1,
+        )
+    return copied
+
+def collect_tar_license_files_from_file(archive: Path, dst_root: Path, depth: int = 0) -> int:
+    copied = 0
+    try:
+        with tarfile.open(archive, mode="r:*") as tar:
+            copied += collect_tar_license_files_from_tar(tar, dst_root, str(archive), depth)
+    except (tarfile.TarError, OSError) as exc:
+        if require_full_source:
+            raise SystemExit(f"Unable to inspect legal source archive {archive}: {exc}") from exc
+    return copied
+
+def collect_tar_license_files_from_bytes(data: bytes, dst_root: Path, label: str, depth: int = 0) -> int:
+    copied = 0
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
+            copied += collect_tar_license_files_from_tar(tar, dst_root, label, depth)
+    except (tarfile.TarError, OSError) as exc:
+        if require_full_source:
+            raise SystemExit(f"Unable to inspect nested legal source archive {label}: {exc}") from exc
+    return copied
+
+def collect_display_runtime_licenses(display_source: Path | None) -> tuple[int, int]:
+    if display_source is None or not display_source.is_file():
+        return (0, 0)
+    copied = 0
+    archives = 0
+    try:
+        with tarfile.open(display_source, mode="r:*") as outer:
+            for member in outer.getmembers():
+                name = member.name.replace("\\", "/")
+                if not member.isfile():
+                    continue
+                if looks_like_license_path(name) and name.startswith("display-runtime-source/"):
+                    copied += 1 if copy_tar_license_member(
+                        outer,
+                        member,
+                        license_dir / "display-runtime" / "source-bundle",
+                    ) else 0
+                    continue
+                if not looks_like_archive(name):
+                    continue
+                if "/upstream-sources/" in name:
+                    group = "upstream-sources"
+                elif "/git-sources/" in name:
+                    group = "git-sources"
+                else:
+                    continue
+                handle = outer.extractfile(member)
+                if handle is None:
+                    continue
+                archive_id = safe_name(archive_basename(name))
+                with handle:
+                    data = handle.read()
+                archives += 1
+                copied += collect_tar_license_files_from_bytes(
+                    data,
+                    license_dir / "display-runtime" / group / archive_id,
+                    name,
+                )
+    except (tarfile.TarError, OSError) as exc:
+        if require_full_source:
+            raise SystemExit(f"Unable to inspect display runtime legal source archive {display_source}: {exc}") from exc
+    if require_full_source and copied == 0:
+        raise SystemExit(
+            "Display runtime source archive was present but no license/notice files were harvested."
+        )
+    return (copied, archives)
+
+def collect_llama_runtime_licenses(runtime_dir: Path | None, manifest: dict | None) -> tuple[int, int]:
+    if runtime_dir is None or manifest is None:
+        return (0, 0)
+    copied = 0
+    archives = 0
+    assets = manifest.get("assets", {})
+    if not isinstance(assets, dict):
+        return (0, 0)
+    for asset in assets.values():
+        if not isinstance(asset, dict):
+            continue
+        path = str(asset.get("path") or "")
+        if not path or not looks_like_archive(path):
+            continue
+        archive = (runtime_dir / path).resolve()
+        try:
+            archive.relative_to(runtime_dir.resolve())
+        except ValueError:
+            if require_full_source:
+                raise SystemExit(f"Bundled llama runtime archive escapes runtime directory: {path}")
+            continue
+        if not archive.exists():
+            if require_full_source:
+                raise SystemExit(f"Bundled llama runtime archive missing: {archive}")
+            continue
+        archive_id = safe_name(archive_basename(str(asset.get("name") or archive.name)))
+        archives += 1
+        copied += collect_tar_license_files_from_file(
+            archive,
+            license_dir / "llama-runtime" / archive_id,
+        )
+    if require_full_source and archives > 0 and copied == 0:
+        raise SystemExit(
+            "Bundled llama runtime archives were present but no license/notice files were harvested."
+        )
+    return (copied, archives)
 
 swift_license_count = 0
 swift_checkout_roots: set[Path] = set()
@@ -279,23 +538,59 @@ if angle_plist.exists():
         pass
 
 llama_runtime_manifest_path = None
+llama_runtime_manifest = None
+bootstrap_llama_path = None
 bootstrap_llama = os.environ.get("VEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR")
 if bootstrap_llama:
-    candidate = Path(bootstrap_llama) / "llama-runtime-manifest.json"
+    bootstrap_llama_path = Path(bootstrap_llama)
+    candidate = bootstrap_llama_path / "llama-runtime-manifest.json"
     if candidate.exists():
         llama_runtime_manifest_path = candidate
+        try:
+            llama_runtime_manifest = json.loads(candidate.read_text())
+        except json.JSONDecodeError as exc:
+            if require_full_source:
+                raise SystemExit(f"Bundled llama runtime manifest is invalid JSON: {exc}") from exc
+
+display_runtime_license_count, display_runtime_source_archive_count = collect_display_runtime_licenses(display_source)
+llama_runtime_license_count, llama_runtime_archive_count = collect_llama_runtime_licenses(bootstrap_llama_path, llama_runtime_manifest)
 
 def read_text_lossy(path: Path) -> str:
     data = path.read_bytes()
-    return (
-        data.decode("utf-8", errors="replace")
-        if data
-        else ""
-    ).replace("\r\n", "\n").replace("\r", "\n").rstrip()
+    if not data:
+        return ""
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        text = data.decode("utf-16", errors="replace")
+    else:
+        text = data.decode("utf-8", errors="replace")
+    return text.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n").rstrip()
+
+def guess_license_from_text(path: Path) -> str | None:
+    lower = read_text_lossy(path).lower()
+    if "gnu lesser general public license" in lower:
+        return "LGPL"
+    if "gnu general public license" in lower:
+        return "GPL"
+    if "apache license" in lower and "version 2.0" in lower:
+        return "Apache-2.0"
+    if "mozilla public license" in lower:
+        return "MPL"
+    if "permission is hereby granted, free of charge" in lower:
+        return "MIT"
+    if "redistribution and use in source and binary forms" in lower:
+        return "BSD"
+    if "isc license" in lower:
+        return "ISC"
+    if "zlib license" in lower:
+        return "Zlib"
+    return None
 
 def license_guess(path: Path, rel: str) -> str:
     lower = rel.lower()
     name = path.name.lower()
+    text_guess = guess_license_from_text(path)
+    if text_guess:
+        return text_guess
     if "apache-2.0" in lower or "apache" in name:
         return "Apache-2.0"
     if "mit" in lower:
@@ -305,6 +600,15 @@ def license_guess(path: Path, rel: str) -> str:
     if "notice" in lower or name.endswith(".md") or "source" in lower or "import" in lower:
         return "Notice/Provenance"
     return "See license text"
+
+def name_version_from_archive_id(archive_id: str) -> tuple[str, str]:
+    value = archive_id.replace("_", "-")
+    match = re.match(r"(.+?)-([0-9][A-Za-z0-9_.+-]*)$", value)
+    if match:
+        return (match.group(1), match.group(2))
+    if value.endswith("-source"):
+        return (value[:-len("-source")], "source archive")
+    return (value, "source archive")
 
 def metadata_for_license_file(path: Path) -> dict[str, str]:
     rel = path.relative_to(license_dir).as_posix()
@@ -338,6 +642,28 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
         meta.update({"name": "vEGPU Linux scaling helper", "version": release_version, "license": "MIT"})
     elif "utm-apache" in lower:
         meta.update({"name": "UTM app-side display provenance", "version": utm_commit, "license": "Apache-2.0"})
+    elif lower.startswith("display-runtime/"):
+        parts = rel.split("/")
+        archive_id = parts[2] if len(parts) > 2 else Path(rel).stem
+        package_name, package_version = name_version_from_archive_id(archive_id)
+        meta.update({
+            "name": f"Display runtime: {package_name}",
+            "version": package_version,
+            "license": license_guess(path, rel),
+        })
+    elif lower.startswith("llama-runtime/"):
+        parts = rel.split("/")
+        archive_id = parts[1] if len(parts) > 1 else Path(rel).stem
+        version = (
+            str(llama_runtime_manifest.get("tag") or "bundled/runtime archive")
+            if isinstance(llama_runtime_manifest, dict)
+            else "bundled/runtime archive"
+        )
+        meta.update({
+            "name": f"Bundled llama.cpp runtime: {archive_id}",
+            "version": version,
+            "license": license_guess(path, rel),
+        })
     elif lower.startswith("swiftpm/"):
         package = rel.split("/", 2)[1]
         pin = package_pin_meta.get(package.lower())
@@ -444,6 +770,9 @@ notice.append("|---|---|---|")
 for framework, identifier, version in framework_rows:
     notice.append(f"| {framework} | {identifier} | {version} |")
 notice.append("")
+notice.append(f"Display runtime source archives scanned: {display_runtime_source_archive_count}")
+notice.append(f"Display runtime license/notice files harvested: {display_runtime_license_count}")
+notice.append("")
 notice.append("Swift Package Pins")
 notice.append("------------------")
 notice.append("")
@@ -465,6 +794,8 @@ notice.append("The app-side AI web UI and router are not unmodified upstream lla
 notice.append("Release packages bundle the latest llama.cpp ARM64 runtime build available at vEGPU release time from openresearchtools/llama-cpp-arm64-builds. Additional llama.cpp and TurboQuant runtime versions remain user-managed through /core.")
 if llama_runtime_manifest_path is not None:
     notice.append(f"Bundled llama.cpp runtime manifest input: {llama_runtime_manifest_path}")
+notice.append(f"Bundled llama.cpp runtime archives scanned: {llama_runtime_archive_count}")
+notice.append(f"Bundled llama.cpp runtime license/notice files harvested: {llama_runtime_license_count}")
 notice.append("")
 notice.append("Included License/Notice Files")
 notice.append("-----------------------------")
@@ -509,6 +840,10 @@ manifest = {
     "licenses": "LICENSES",
     "notices": "NOTICES",
     "displayRuntimeSource": display_source_manifest_path,
+    "displayRuntimeSourceArchivesScanned": display_runtime_source_archive_count,
+    "displayRuntimeLicenseFiles": display_runtime_license_count,
+    "llamaRuntimeArchivesScanned": llama_runtime_archive_count,
+    "llamaRuntimeLicenseFiles": llama_runtime_license_count,
     "machineApp": str(machine_app),
     "machineNotices": str(machine_notice_file),
     "machineLicenses": str(machine_license_file),

@@ -673,6 +673,8 @@ jobs:
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-LICENSE.txt"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-SOURCE.md"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-IMPORT.txt"
+          test -d "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime"
+          test -d "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/llama-runtime"
           find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
           find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
           scripts/normalize-display-frameworks.sh --check "$APP/Contents/Frameworks"
@@ -687,6 +689,12 @@ jobs:
           find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-macos-arm64.tar.gz' -print -quit | grep -q .
           find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-cuda13-arm64.tar.gz' -print -quit | grep -q .
           find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-vulkan-arm64.tar.gz' -print -quit | grep -q .
+          test "$(find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime" -type f | wc -l | tr -d ' ')" -ge 20
+          test "$(find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/llama-runtime" -type f | wc -l | tr -d ' ')" -ge 3
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/glib-2.83.0/'
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/openssl-1.1.1b/'
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/gstreamer-1.19.1/'
+          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/llama-runtime" -type f | grep -F 'llama-b9500'
           if tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
             echo "generated app source tarball must not include scaling helper build artifacts" >&2
             exit 1
@@ -698,6 +706,14 @@ jobs:
           grep -F 'vEGPU Machine licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Display runtime: glib' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Display runtime: openssl' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Display runtime: gstreamer' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          if [ "$(grep -c '^Package/Dependency:' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES")" -lt 40 ]; then
+            echo "vEGPU.app LICENSES is missing harvested bundled dependency license blocks" >&2
+            exit 1
+          fi
           if grep -F 'Package/Dependency: QEMU' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"; then
             echo "vEGPU.app LICENSES must reference Machine/QEMU notices but not duplicate QEMU license blocks" >&2
             exit 1
