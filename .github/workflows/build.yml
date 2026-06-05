@@ -703,7 +703,8 @@ jobs:
             echo "legacy THIRD_PARTY notice files must not be bundled" >&2
             exit 1
           fi
-          grep -F 'vEGPU Machine licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'EXTERNAL vEGPU Machine Licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'ThirdPartyNotices/LICENSES' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
