@@ -28,12 +28,12 @@ The canonical generated app-side files are `NOTICES` and `LICENSES`.
 `GUEST-VM-INSTALL-NOTICES.md` is generated as a separate user-facing file.
 `NOTICES.md` is also generated as a compatibility copy for older tooling.
 
-The vEGPU app Help menu opens those generated files. It can also render
-external vEGPU Machine notices and licenses from the installed
-`vEGPU Machine.app` for convenience, without copying those Machine files into
-`vEGPU.app`. The Help menu has external vEGPU Machine legal buttons for those
-Machine-owned files. vEGPU Machine carries its own QEMU/VFIO/DriverKit
-notices, licenses, and source bundles inside `vEGPU Machine.app`.
+The vEGPU app Help menu opens those generated files. For convenience, it can
+also render external vEGPU Machine notices and licenses from the installed
+`vEGPU Machine.app`. The Help menu marks those Machine-owned rows as
+`EXTERNAL`, and vEGPU.app does not copy Machine legal text into its own bundle.
+vEGPU Machine carries its own QEMU/VFIO/DriverKit notices, licenses, and source
+bundles inside `vEGPU Machine.app`.
 
 `GUEST-VM-INSTALL-NOTICES.md` is the checked-in seed notice for software that
 vEGPU installs inside the Linux VM from Debian APT, NVIDIA APT repositories, or

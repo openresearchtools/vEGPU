@@ -25,10 +25,10 @@ The combined installer may place both applications in `/Applications`, but the
 installed apps, repositories, notices, and source archives keep this boundary
 visible.
 
-vEGPU.app Help can render external vEGPU Machine notices and licenses from the
-installed vEGPU Machine.app without copying those Machine files into vEGPU.app.
-vEGPU.app Help has external vEGPU Machine legal buttons that render those
-Machine files for convenience.
+For convenience, vEGPU.app Help can render external vEGPU Machine notices and
+licenses from the installed vEGPU Machine.app. The Help menu marks those
+Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into
+its own bundle.
 Those external files remain owned by vEGPU Machine.app:
 
 - `/Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/NOTICES`

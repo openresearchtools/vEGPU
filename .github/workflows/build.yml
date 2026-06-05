@@ -704,9 +704,15 @@ jobs:
             exit 1
           fi
           grep -F 'vEGPU Machine licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'vEGPU.app Help has external vEGPU Machine legal buttons' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'The app-side LICENSES file consolidates the full verbatim app-side license and notice text' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
+            echo "vEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory" >&2
+            exit 1
+          fi
           if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
             echo "vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status" >&2
             exit 1
@@ -982,8 +988,8 @@ jobs:
           test -f "$OUT"
           pkgutil --expand "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded"
           test -f "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -R -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
-          grep -R -F 'vEGPU.app Help has external vEGPU Machine legal buttons' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          grep -R -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          grep -R -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
           PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}

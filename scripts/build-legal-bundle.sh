@@ -716,7 +716,7 @@ license_lines.append("")
 license_lines.append("Each package/dependency block below contains the package name, version or revision when known, license metadata, source license file copied into this notice bundle, and the full license or notice text between BEGIN LICENSE and END LICENSE markers.")
 license_lines.append("")
 license_lines.append("This file covers vEGPU.app app-side components only. QEMU, VFIO, DriverKit, firmware, and guest-driver licenses are carried by vEGPU Machine.app in /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/.")
-license_lines.append("Machine/QEMU license text is not copied into this vEGPU.app LICENSES file. vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app without copying those Machine files into vEGPU.app. vEGPU.app Help has external vEGPU Machine legal buttons that render those Machine files for convenience.")
+license_lines.append("Machine/QEMU license text is not copied into this vEGPU.app LICENSES file. For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL, and vEGPU.app does not copy Machine legal text into its own bundle.")
 license_lines.append("")
 for meta, text in license_blocks:
     license_lines.append(f"Package/Dependency: {meta['name']}")
@@ -733,108 +733,113 @@ for meta, text in license_blocks:
 (out / "LICENSES").write_text("\n".join(license_lines))
 
 notice = []
-notice.append("vEGPU Notices")
-notice.append("=============")
-notice.append("")
-notice.append("This file covers vEGPU.app, the Swift/AppKit host application, app-side display client, AI/runtime control surface, local routing helpers, and app-side orchestration layer.")
-notice.append("")
-notice.append("vEGPU Machine.app is a separate application installed beside vEGPU.app. It owns the QEMU/VFIO/DriverKit/firmware/guest-driver runtime side and carries its own licenses, notices, and source bundles inside that app.")
-notice.append("")
-notice.append("Installed legal and source locations:")
-notice.append("")
-notice.append("- vEGPU.app notices: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/NOTICES")
-notice.append("- vEGPU.app licenses: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/LICENSES")
-notice.append("- vEGPU.app source: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz")
-notice.append("- vEGPU app-side display/ANGLE source: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz")
-notice.append("- vEGPU Machine notices: /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/NOTICES")
-notice.append("- vEGPU Machine licenses: /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/LICENSES")
-notice.append("- vEGPU Machine source bundles: /Applications/vEGPU Machine.app/Contents/Resources/SourceBundles/")
-notice.append("- vEGPU Machine guest source: /Applications/vEGPU Machine.app/Contents/Resources/guest-tools/source/")
-notice.append("- Guest VM install notices: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/GUEST-VM-INSTALL-NOTICES.md")
-notice.append("")
-notice.append("QEMU-side licenses and notices are inside vEGPU Machine.app, not duplicated in vEGPU.app.")
-notice.append("vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app without copying those Machine files into vEGPU.app. vEGPU.app Help has external vEGPU Machine legal buttons that render those Machine files for convenience.")
-notice.append("")
-notice.append(f"Generated at: {generated_at}")
-notice.append(f"vEGPU.app source revision: {source_revision}")
-notice.append("")
-notice.append("Scope")
-notice.append("-----")
-notice.append("")
-notice.append("- vEGPU.app is the Swift/AppKit application and app-side display client.")
-notice.append("- vEGPU Machine.app is the separate QEMU/VFIO/DriverKit runtime app.")
-notice.append("- vEGPU Machine carries its own notices and GPL/source bundles inside that app.")
-notice.append("- Legacy THIRD_PARTY_* notice files are not used by this generated bundle.")
-notice.append("- The vEGPU Help menu opens Notices, Licenses, Guest VM Install Notices, and external vEGPU Machine legal files.")
-notice.append("- The generated legal files list the installed source archive locations for vEGPU.app and vEGPU Machine.app.")
-notice.append("")
-notice.append("App-Side Bundled Display Runtime")
-notice.append("---------------------------------")
-notice.append("")
-notice.append("These frameworks are generated from the pinned UTM dependency recipe, copied into vEGPU.app/Contents/Frameworks during packaging, and loaded by the app-side SPICE/ANGLE display path.")
-notice.append("")
-notice.append("| Framework | Bundle identifier | Bundle version |")
-notice.append("|---|---|---|")
-for framework, identifier, version in framework_rows:
-    notice.append(f"| {framework} | {identifier} | {version} |")
-notice.append("")
-notice.append(f"Display runtime source archives scanned: {display_runtime_source_archive_count}")
-notice.append(f"Display runtime license/notice files harvested: {display_runtime_license_count}")
-notice.append("")
-notice.append("Swift Package Pins")
-notice.append("------------------")
-notice.append("")
-notice.extend(package_pins or ["- No remote Swift package pins found."])
-notice.append("")
-notice.append(f"SwiftPM license/notice files collected: {swift_license_count}")
-notice.append("")
-notice.append("Go Modules")
-notice.append("----------")
-notice.append("")
-notice.extend(go_modules or ["- No Go modules found."])
-notice.append("")
-notice.append(f"Go module license/notice files collected: {go_license_count}")
-notice.append("")
-notice.append("AI Web UI and Model Router Provenance")
-notice.append("-------------------------------------")
-notice.append("")
-notice.append("The app-side AI web UI and router are not unmodified upstream llama.cpp or llama-swap distributions. Directory-specific provenance is copied to `license-files/web-ui-app-NOTICE.txt`; upstream MIT license texts are copied to `license-files/llama.cpp-MIT.txt` and `license-files/llama-swap-MIT.txt`.")
-notice.append("Release packages bundle the latest llama.cpp ARM64 runtime build available at vEGPU release time from openresearchtools/llama-cpp-arm64-builds. Additional llama.cpp and TurboQuant runtime versions remain user-managed through /core.")
-if llama_runtime_manifest_path is not None:
-    notice.append(f"Bundled llama.cpp runtime manifest input: {llama_runtime_manifest_path}")
-notice.append(f"Bundled llama.cpp runtime archives scanned: {llama_runtime_archive_count}")
-notice.append(f"Bundled llama.cpp runtime license/notice files harvested: {llama_runtime_license_count}")
-notice.append("")
-notice.append("Included License/Notice Files")
-notice.append("-----------------------------")
-notice.append("")
-notice.append("- LICENSES: consolidated verbatim app-side license/notice text.")
-for path in sorted(license_dir.rglob("*")):
-    if path.is_file():
-        notice.append(f"- license-files/{path.relative_to(license_dir)}")
-notice.append("")
-notice.append("Source Archives")
-notice.append("---------------")
-notice.append("")
-notice.append("- source/vEGPU-app-source.tar.gz: generated from this vEGPU app source tree, excluding build products and runtime downloads.")
-if display_source is not None:
-    notice.append(f"- source/{display_source.name}: corresponding source/provenance supplied for generated display runtime frameworks, including ANGLE via the WebKit/ANGLE source snapshot.")
-else:
-    notice.append("- Display runtime corresponding source archive: missing in this checkout. Release builds should set VEGPU_REQUIRE_FULL_SOURCE=1 so this cannot be missed.")
-notice.append("")
-notice.append("vEGPU Machine Notices")
-notice.append("---------------------")
-notice.append("")
-notice.append("These are external installed paths owned by vEGPU Machine.app. They are resolved and read when the user opens the external Machine legal buttons in vEGPU.app Help; vEGPU.app does not copy these Machine files into its own bundle.")
-notice.append("")
-notice.append(f"- vEGPU Machine app: {machine_app}")
-notice.append(f"- vEGPU Machine notices: {machine_notice_file}")
-notice.append(f"- vEGPU Machine licenses: {machine_license_file}")
-notice.append(f"- vEGPU Machine source bundles: {machine_source_bundles}")
-notice.append(f"- vEGPU Machine guest source: {machine_guest_source}")
-notice.append("")
-notice.append("Machine legal files and source bundle locations are listed above. vEGPU.app Help opens Notices, Licenses, Guest VM Install Notices, and external vEGPU Machine Notices/Licenses.")
-notice.append("")
+notice.extend([
+    "vEGPU Notices",
+    "=============",
+    "",
+    "This is the canonical app-side NOTICES file installed inside vEGPU.app. It explains the vEGPU.app / vEGPU Machine.app split, where installed legal files and source bundles live, and how vEGPU.app Help exposes both app-side and external Machine-side legal files.",
+    "",
+    "vEGPU and vEGPU Machine are related applications, but they are distributed with a visible architecture, repository, license, notice, and source boundary. A combined installer may install both applications into /Applications, but the repositories, notices, source archives, runtime responsibilities, and license boundaries remain separate.",
+    "",
+    "Project website:",
+    "https://vegpu.com",
+    "",
+    "",
+    "1. vEGPU.app",
+    "------------",
+    "",
+    "vEGPU.app is the host-side macOS application. It provides the Swift/AppKit launcher, tray/menu UI, UTM-derived embedded SPICE display client, ANGLE/CocoaSpice display integration, local AI/runtime controls, model/runtime routing helpers, file/port/terminal UI, sidecar metrics, local networking helpers, VM orchestration, guest setup/repair scripts, and app-side legal/source payload.",
+    "",
+    "Repository:",
+    "https://github.com/openresearchtools/vEGPU",
+    "",
+    "The vEGPU.app application code is distributed under the Apache License, Version 2.0, except where an individual file or bundled component states a different license.",
+    "",
+    "vEGPU.app bundles, builds against, or ships app-side runtime components including SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work, Swift package dependencies, Go helper dependencies, local AI web UI/router materials, llama.cpp and llama-swap derived/provenance materials, bundled llama.cpp runtime archives, GOST-style local proxy materials, TurboQuant runtime provenance, Linux scaling helper packaging, guest setup/repair scripts, and related support libraries. Those components keep their own license terms, including permissive licenses and LGPL-family licenses where applicable. File-level and component-level notices remain authoritative.",
+    "",
+    "The app-side LICENSES file consolidates the full verbatim app-side license and notice text for those bundled app-side materials. It includes package/dependency blocks harvested from checked-in notices, Swift package checkouts, Go module caches, display/ANGLE/source archives, bundled llama runtime archives, and other app-side source/provenance inputs used by the release package. Detailed package/dependency blocks live in LICENSES, not in this NOTICES file.",
+    "",
+    "",
+    "2. vEGPU Machine.app",
+    "--------------------",
+    "",
+    "vEGPU Machine.app is the separate VM, DriverKit, VFIO, QEMU, firmware, and guest-tools runtime application used by vEGPU virtual machines. It owns the Machine-side passthrough mechanics and carries its own notices, license texts, and source bundles.",
+    "",
+    "Repository:",
+    "https://github.com/openresearchtools/vEGPU-machine",
+    "",
+    "vEGPU Machine includes and packages Machine-side components including patched QEMU, the Apple VFIO backend, the DriverKit host application, the VFIOUserPCIDriver DriverKit system extension, the embedded qemu-vfio-apple launcher/CLI, QEMU firmware and runtime payloads, bundled QEMU tools and libraries, QEMU-side SPICE/virgl visual-runtime adaptations, guest-driver packages, and guest-side apple_dma DKMS source materials where included by the release.",
+    "",
+    "Machine-side notices, licenses, and source bundles are external installed files owned by vEGPU Machine.app. vEGPU.app does not copy those Machine files into its own bundle.",
+    "",
+    "",
+    "3. Installed Legal And Source Files",
+    "-----------------------------------",
+    "",
+    "Installed app-side notices, license texts, source records, and corresponding source/provenance archives are available at:",
+    "",
+    "/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated",
+    "",
+    "Key installed vEGPU.app legal/source files:",
+    "",
+    "- NOTICES",
+    "- LICENSES",
+    "- GUEST-VM-INSTALL-NOTICES.md",
+    "- source/vEGPU-app-source.tar.gz",
+    "- source/display-runtime-source.tar.gz",
+    "",
+    "Installed Machine-side notices, license texts, and source bundles are available inside:",
+    "",
+    "/Applications/vEGPU Machine.app/Contents/Resources",
+    "",
+    "Key installed vEGPU Machine legal/source files:",
+    "",
+    "- ThirdPartyNotices/NOTICES",
+    "- ThirdPartyNotices/LICENSES",
+    "- SourceBundles/",
+    "- guest-tools/source/",
+    "",
+    "Guest VM Installation Notice",
+    "----------------------------",
+    "",
+    "GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, vEGPU guest scripts, vEGPU Machine guest packages, and optional NVIDIA/CUDA install activity inside the Linux VM.",
+    "",
+    "",
+    "Help Menu Access",
+    "----------------",
+    "",
+    "The vEGPU.app Help menu opens the installed legal files directly:",
+    "",
+    "- Notices",
+    "- Licenses",
+    "- VM Install Notices",
+    "- EXTERNAL vEGPU Machine Notices",
+    "- EXTERNAL vEGPU Machine Licenses",
+    "",
+    "For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL. They do not duplicate or embed Machine legal text into vEGPU.app.",
+    "",
+    "",
+    "License and architecture boundary",
+    "---------------------------------",
+    "",
+    "vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary between the host app and the VM runtime:",
+    "",
+    "- vEGPU.app contains the Apache-licensed launcher, GUI, app-side display client, AI/runtime controls, local routing helpers, guest setup/repair scripts, and orchestration code.",
+    "- vEGPU Machine.app contains the GPL-covered QEMU-derived VM runtime, Apple VFIO backend, DriverKit host extension, firmware/runtime payloads, and guest-driver packaging.",
+    "",
+    "GPL-covered QEMU-derived code stays on the Machine side. App-side launcher, display, AI, guest provisioning, and orchestration work stays in vEGPU.app unless an individual bundled component states otherwise. QEMU-side licenses and notices are inside vEGPU Machine.app, not duplicated in vEGPU.app. Machine/QEMU license text is not copied into the vEGPU.app LICENSES file.",
+    "",
+    "Generated Metadata",
+    "------------------",
+    "",
+    "Build-time legal harvesting details are kept in manifest.json and in the app-side LICENSES blocks for validation. This NOTICES file is intentionally a readable packaging and license-boundary explanation, not a raw inventory of every harvested license file.",
+    "",
+    "No Affiliation",
+    "--------------",
+    "",
+    "vEGPU and vEGPU Machine are not endorsed by, sponsored by, or affiliated with Apple, NVIDIA, Fabrice Bellard, the QEMU project, Scott J. Goldman, scottjg/qemu-vfio-apple, UTM, utmapp/qemu, utmapp/virglrenderer, llama.cpp, llama-swap, GOST, TurboQuant, or their maintainers.",
+    "",
+])
 
 (out / "NOTICES").write_text("\n".join(notice))
 (out / "NOTICES.md").write_text("\n".join(notice))

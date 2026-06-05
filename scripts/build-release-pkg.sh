@@ -94,8 +94,15 @@ test "$(find "$APP_LEGAL/license-files/llama-runtime" -type f | wc -l | tr -d ' 
 grep -F 'Package/Dependency: Display runtime: glib' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: Display runtime: openssl' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP_LEGAL/LICENSES" >/dev/null
-grep -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'The app-side LICENSES file consolidates the full verbatim app-side license and notice text' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
+if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP_LEGAL/NOTICES"; then
+  printf 'vEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory\n' >&2
+  exit 1
+fi
 if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP_LEGAL/NOTICES"; then
   printf 'vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status\n' >&2
   exit 1
@@ -424,7 +431,7 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
 
   <h2>Architecture and Source Boundary</h2>
   <p class="boundary">vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary: app-side launcher, display, AI, routing, and orchestration work stays in vEGPU.app. GPL-covered QEMU, VFIO, DriverKit, firmware, VM runtime, and guest-driver mechanics stay in vEGPU Machine.app.</p>
-  <p>vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app without copying those Machine files into vEGPU.app. vEGPU.app Help has external vEGPU Machine legal buttons that render those Machine files for convenience.</p>
+  <p>For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into its own bundle.</p>
   <p>The embedded display side is partially based on UTM app work. The Machine side builds on Scott J. Goldman's scottjg/qemu-vfio-apple as the main Apple VFIO/DriverKit/QEMU base, with additional QEMU-side visual-runtime work adapted from UTM QEMU and UTM virglrenderer.</p>
 
   <h2>Installation Behavior</h2>
@@ -461,8 +468,7 @@ Open vEGPU.app Help for app notices, app licenses, VM install notices, and
 external vEGPU Machine notices/licenses rendered from the installed
 vEGPU Machine.app. Those legal files list the installed source archive
 locations.
-vEGPU.app Help has external vEGPU Machine legal buttons for those Machine-owned
-files.
+The Help menu marks Machine-owned legal rows as EXTERNAL.
 TEXT
 
 cat > "$RESOURCES/LICENSE.txt" <<'TEXT'
@@ -519,10 +525,10 @@ GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, and optional
 NVIDIA/CUDA install activity inside the Linux VM.
 The vEGPU.app Help menu also opens the installed legal files, which list the
 bundled source/provenance archive locations.
-vEGPU.app Help can render external vEGPU Machine notices and licenses from the
-installed vEGPU Machine.app without copying those Machine files into vEGPU.app.
-vEGPU.app Help has external vEGPU Machine legal buttons that render those
-Machine files for convenience.
+For convenience, vEGPU.app Help can render external vEGPU Machine notices and
+licenses from the installed vEGPU Machine.app. The Help menu marks those
+Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into
+its own bundle.
 
 
 App-side provenance includes:
@@ -574,11 +580,10 @@ Key installed vEGPU Machine legal/source files:
 - SourceBundles/vEGPU-Machine-<version>-source.tar.gz
 - guest-tools/source/apple-dma-<version>.tar.gz
 
-vEGPU.app Help can render these external vEGPU Machine notices and licenses
-from the installed vEGPU Machine.app without copying those Machine files into
-vEGPU.app.
-vEGPU.app Help has external vEGPU Machine legal buttons that render those
-Machine files for convenience.
+For convenience, vEGPU.app Help can render these external vEGPU Machine notices
+and licenses from the installed vEGPU Machine.app. The Help menu marks those
+Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into
+its own bundle.
 
 vEGPU Machine is QEMU-derived and is distributed from a patch stack over
 recorded source layers. The source tree produced by that patch stack is
@@ -693,8 +698,7 @@ include vEGPU Machine.app and its separate QEMU/VFIO/DriverKit source bundles.
 When vEGPU Machine.app is installed, vEGPU.app Help can render external vEGPU
 Machine notices and licenses from the installed vEGPU Machine.app without
 copying those Machine files into vEGPU.app.
-vEGPU.app Help has external vEGPU Machine legal buttons that render those
-Machine files for convenience.
+The Help menu marks Machine-owned legal rows as EXTERNAL.
 
 Project links:
 
