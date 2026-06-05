@@ -514,7 +514,8 @@ textarea.input:focus {
 	min-width: 0;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
-	background: #f8f9fb;
+	background: var(--panel-soft);
+	color: var(--text);
 	padding: 8px 10px;
 }
 
@@ -530,6 +531,7 @@ textarea.input:focus {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	color: var(--text);
 	font-family:
 		ui-monospace,
 		SFMono-Regular,
