@@ -15,6 +15,8 @@ public struct GuestDriverStatus: Codable, Equatable, Sendable {
 }
 
 public final class MachineService: @unchecked Sendable {
+    private static let defaultRuntimeDiskSize = "2T"
+
     private let paths: AppPaths
     private let files: MachineFiles
     private let runner: ProcessRunner
@@ -75,8 +77,8 @@ public final class MachineService: @unchecked Sendable {
         let tools = try ToolResolver().resolve()
         if !FileManager.default.fileExists(atPath: files.disk.path) {
             try await downloadMachineDisk()
-            progress.report(ProgressEvent(stage: "disk", message: "Expanding runtime disk", detail: "qemu-img resize disk.qcow2 64G"))
-            _ = try await runner.runChecked(tools.qemuImg, ["resize", files.disk.path, "64G"])
+            progress.report(ProgressEvent(stage: "disk", message: "Expanding runtime disk", detail: "qemu-img resize disk.qcow2 \(Self.defaultRuntimeDiskSize)"))
+            _ = try await runner.runChecked(tools.qemuImg, ["resize", files.disk.path, Self.defaultRuntimeDiskSize])
         }
         if !FileManager.default.fileExists(atPath: files.efiVars.path) {
             progress.report(ProgressEvent(stage: "firmware", message: "Creating UEFI variable store"))
