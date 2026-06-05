@@ -116,8 +116,12 @@ grep -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$
 grep -F 'The app-visible LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'The legal records for those source archive contents are generated next to each archive' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
-if grep -E '^License: A?GPL$' "$APP_LEGAL/LICENSES"; then
+if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exit bad ? 0 : 1}' "$APP_LEGAL/LICENSES"; then
   printf 'vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks\n' >&2
+  exit 1
+fi
+if find "$APP_LEGAL/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
+  printf 'vEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files\n' >&2
   exit 1
 fi
 if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP_LEGAL/NOTICES"; then

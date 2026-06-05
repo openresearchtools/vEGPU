@@ -92,8 +92,12 @@ for legal_file in "${required_legal_sidecars[@]}"; do
     exit 1
   fi
 done
-if grep -E '^License: A?GPL$' "$LEGAL_BUILD_DIR/LICENSES" >/dev/null; then
+if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exit bad ? 0 : 1}' "$LEGAL_BUILD_DIR/LICENSES"; then
   printf 'vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks.\n' >&2
+  exit 1
+fi
+if find "$LEGAL_BUILD_DIR/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
+  printf 'vEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files.\n' >&2
   exit 1
 fi
 

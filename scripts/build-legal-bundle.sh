@@ -217,7 +217,30 @@ def safe_member_path(name: str) -> Path:
     ]
     return Path(*parts) if parts else Path("LICENSE")
 
-def copy_tar_license_member(tar: tarfile.TarFile, member: tarfile.TarInfo, dst_root: Path, member_filter=None) -> bool:
+def decode_text_lossy(data: bytes) -> str:
+    if not data:
+        return ""
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        text = data.decode("utf-16", errors="replace")
+    else:
+        text = data.decode("utf-8", errors="replace")
+    return text.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n").rstrip()
+
+def primary_gnu_license_from_text(text: str) -> str | None:
+    lower = text.lower()
+    for match in re.finditer(r"gnu\s+(affero\s+)?(lesser\s+|library\s+)?general\s+public\s+license", lower):
+        phrase = match.group(0)
+        if "affero" in phrase:
+            return "AGPL"
+        if "lesser" in phrase or "library" in phrase:
+            return "LGPL"
+        return "GPL"
+    return None
+
+def license_text_is_gpl_or_agpl(data: bytes) -> bool:
+    return primary_gnu_license_from_text(decode_text_lossy(data)) in {"GPL", "AGPL"}
+
+def copy_tar_license_member(tar: tarfile.TarFile, member: tarfile.TarInfo, dst_root: Path, member_filter=None, content_filter=None) -> bool:
     if not member.isfile() or not looks_like_license_path(member.name):
         return False
     if member_filter is not None and not member_filter(member.name):
@@ -225,16 +248,20 @@ def copy_tar_license_member(tar: tarfile.TarFile, member: tarfile.TarInfo, dst_r
     handle = tar.extractfile(member)
     if handle is None:
         return False
+    with handle:
+        data = handle.read()
+    if content_filter is not None and not content_filter(member.name, data):
+        return False
     dst = dst_root / safe_member_path(member.name)
     dst.parent.mkdir(parents=True, exist_ok=True)
-    with handle, dst.open("wb") as out_file:
-        shutil.copyfileobj(handle, out_file)
+    with dst.open("wb") as out_file:
+        out_file.write(data)
     return True
 
-def collect_tar_license_files_from_tar(tar: tarfile.TarFile, dst_root: Path, label: str, depth: int, member_filter=None) -> int:
+def collect_tar_license_files_from_tar(tar: tarfile.TarFile, dst_root: Path, label: str, depth: int, member_filter=None, content_filter=None) -> int:
     copied = 0
     for member in tar.getmembers():
-        if copy_tar_license_member(tar, member, dst_root, member_filter=member_filter):
+        if copy_tar_license_member(tar, member, dst_root, member_filter=member_filter, content_filter=content_filter):
             copied += 1
             continue
         if depth >= max_archive_scan_depth or not member.isfile() or not looks_like_archive(member.name):
@@ -251,24 +278,25 @@ def collect_tar_license_files_from_tar(tar: tarfile.TarFile, dst_root: Path, lab
             f"{label}!/{member.name}",
             depth + 1,
             member_filter=member_filter,
+            content_filter=content_filter,
         )
     return copied
 
-def collect_tar_license_files_from_file(archive: Path, dst_root: Path, depth: int = 0, member_filter=None) -> int:
+def collect_tar_license_files_from_file(archive: Path, dst_root: Path, depth: int = 0, member_filter=None, content_filter=None) -> int:
     copied = 0
     try:
         with tarfile.open(archive, mode="r:*") as tar:
-            copied += collect_tar_license_files_from_tar(tar, dst_root, str(archive), depth, member_filter=member_filter)
+            copied += collect_tar_license_files_from_tar(tar, dst_root, str(archive), depth, member_filter=member_filter, content_filter=content_filter)
     except (tarfile.TarError, OSError) as exc:
         if require_full_source:
             raise SystemExit(f"Unable to inspect legal source archive {archive}: {exc}") from exc
     return copied
 
-def collect_tar_license_files_from_bytes(data: bytes, dst_root: Path, label: str, depth: int = 0, member_filter=None) -> int:
+def collect_tar_license_files_from_bytes(data: bytes, dst_root: Path, label: str, depth: int = 0, member_filter=None, content_filter=None) -> int:
     copied = 0
     try:
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
-            copied += collect_tar_license_files_from_tar(tar, dst_root, label, depth, member_filter=member_filter)
+            copied += collect_tar_license_files_from_tar(tar, dst_root, label, depth, member_filter=member_filter, content_filter=content_filter)
     except (tarfile.TarError, OSError) as exc:
         if require_full_source:
             raise SystemExit(f"Unable to inspect nested legal source archive {label}: {exc}") from exc
@@ -323,6 +351,9 @@ def display_runtime_license_member_allowed(archive_id: str, member_name: str) ->
         return False
     return True
 
+def app_visible_display_license_content_allowed(member_name: str, data: bytes) -> bool:
+    return not license_text_is_gpl_or_agpl(data)
+
 def collect_display_runtime_licenses(display_source: Path | None) -> tuple[int, int]:
     if display_source is None or not display_source.is_file():
         return (0, 0)
@@ -339,6 +370,7 @@ def collect_display_runtime_licenses(display_source: Path | None) -> tuple[int, 
                         outer,
                         member,
                         license_dir / "display-runtime" / "source-bundle",
+                        content_filter=app_visible_display_license_content_allowed,
                     ) else 0
                     continue
                 if not looks_like_archive(name):
@@ -364,6 +396,7 @@ def collect_display_runtime_licenses(display_source: Path | None) -> tuple[int, 
                     license_dir / "display-runtime" / group / archive_id,
                     name,
                     member_filter=member_filter,
+                    content_filter=app_visible_display_license_content_allowed,
                 )
     except (tarfile.TarError, OSError) as exc:
         if require_full_source:
@@ -632,21 +665,13 @@ display_runtime_license_count, display_runtime_source_archive_count = collect_di
 llama_runtime_license_count, llama_runtime_archive_count = collect_llama_runtime_licenses(bootstrap_llama_path, llama_runtime_manifest)
 
 def read_text_lossy(path: Path) -> str:
-    data = path.read_bytes()
-    if not data:
-        return ""
-    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
-        text = data.decode("utf-16", errors="replace")
-    else:
-        text = data.decode("utf-8", errors="replace")
-    return text.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n").rstrip()
+    return decode_text_lossy(path.read_bytes())
 
 def guess_license_from_text(path: Path) -> str | None:
     lower = read_text_lossy(path).lower()
-    if "gnu lesser general public license" in lower or "gnu library general public license" in lower:
-        return "LGPL"
-    if "gnu general public license" in lower:
-        return "GPL"
+    gnu_license = primary_gnu_license_from_text(lower)
+    if gnu_license:
+        return gnu_license
     if "apache license" in lower and "version 2.0" in lower:
         return "Apache-2.0"
     if "mozilla public license" in lower:
@@ -1094,7 +1119,7 @@ def looks_like_license_path(name: str) -> bool:
                 return True
     return False
 
-def read_text_lossy(data: bytes) -> str:
+def decode_text_lossy(data: bytes) -> str:
     if not data:
         return ""
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
@@ -1103,15 +1128,23 @@ def read_text_lossy(data: bytes) -> str:
         text = data.decode("utf-8", errors="replace")
     return text.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n").rstrip()
 
+def primary_gnu_license_from_text(text: str) -> str | None:
+    lower = text.lower()
+    for match in re.finditer(r"gnu\s+(affero\s+)?(lesser\s+|library\s+)?general\s+public\s+license", lower):
+        phrase = match.group(0)
+        if "affero" in phrase:
+            return "AGPL"
+        if "lesser" in phrase or "library" in phrase:
+            return "LGPL"
+        return "GPL"
+    return None
+
 def guess_license(text: str, path: str) -> str:
     lower = text.lower()
     path_lower = path.lower()
-    if "gnu affero general public license" in lower:
-        return "AGPL"
-    if "gnu lesser general public license" in lower or "gnu library general public license" in lower:
-        return "LGPL"
-    if "gnu general public license" in lower:
-        return "GPL"
+    gnu_license = primary_gnu_license_from_text(lower)
+    if gnu_license:
+        return gnu_license
     if "apache license" in lower and "version 2.0" in lower:
         return "Apache-2.0"
     if "mozilla public license" in lower:
@@ -1143,7 +1176,7 @@ def collect_from_tar_bytes(data: bytes, label: str, depth: int = 0, max_depth: i
                     member_data = handle.read()
                 archive_path = f"{label}!/{name}" if label else name
                 if looks_like_license_path(name):
-                    text = read_text_lossy(member_data)
+                    text = decode_text_lossy(member_data)
                     records.append({
                         "archivePath": archive_path,
                         "license": guess_license(text, archive_path),

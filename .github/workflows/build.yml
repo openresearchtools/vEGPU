@@ -752,8 +752,12 @@ jobs:
           grep -F 'Package/Dependency: SwiftPM: swiftterm' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: SwiftPM: swift-argument-parser' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Component-Scope: Swift package used by vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          if grep -E '^License: A?GPL$' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"; then
+          if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exit bad ? 0 : 1}' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"; then
             echo "vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks" >&2
+            exit 1
+          fi
+          if find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
+            echo "vEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files" >&2
             exit 1
           fi
           if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
