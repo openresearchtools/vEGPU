@@ -708,6 +708,7 @@ jobs:
           grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'The app-side LICENSES file consolidates the full verbatim app-side license and notice text' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
@@ -991,6 +992,8 @@ jobs:
           test -f "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
           grep -R -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
           grep -R -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          grep -R -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          grep -R -F 'The installed license texts are the controlling terms' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
           PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}

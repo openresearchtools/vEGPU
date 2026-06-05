@@ -822,7 +822,7 @@ notice.extend([
     "License and architecture boundary",
     "---------------------------------",
     "",
-    "vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary between the host app and the VM runtime:",
+    "vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture: the frontend, AI/runtime control surface, display client, routing, and orchestration app is packaged separately from the GPL-covered Machine/QEMU VM/runtime stack. The two apps have separate repositories, notices, source archives, and runtime responsibilities.",
     "",
     "- vEGPU.app contains the Apache-licensed launcher, GUI, app-side display client, AI/runtime controls, local routing helpers, guest setup/repair scripts, and orchestration code.",
     "- vEGPU Machine.app contains the GPL-covered QEMU-derived VM runtime, Apple VFIO backend, DriverKit host extension, firmware/runtime payloads, and guest-driver packaging.",

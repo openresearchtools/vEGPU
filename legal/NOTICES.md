@@ -9,11 +9,14 @@ their GPL/source bundles.
 ## License Boundary
 
 vEGPU.app is distributed under the permissive Apache License, Version 2.0.
-Like UTM, the app bundles and loads components with their own licenses,
-including SPICE/GLib/GStreamer/ANGLE, CocoaSpice, UTM-derived GUI display
-work, and related support libraries. The installed app carries generated
-notices plus corresponding app/display-runtime source archives under
-`Contents/Resources/vEGPURoot/legal/generated`.
+vEGPU uses a split related to UTM's app/runtime separation, but goes a step
+further: the frontend, AI runtime control surface, display client, routing, and
+orchestration live in vEGPU.app, while the GPL-covered Machine/QEMU runtime
+lives in the separate vEGPU Machine.app. The app bundles and loads components
+with their own licenses, including SPICE/GLib/GStreamer/ANGLE, CocoaSpice,
+UTM-derived GUI display work, and related support libraries. The installed app
+carries generated notices plus corresponding app/display-runtime source
+archives under `Contents/Resources/vEGPURoot/legal/generated`.
 
 vEGPU Machine.app is distributed as the separate Machine/runtime application.
 It carries the QEMU/VFIO/DriverKit side, including QEMU-derived GPL-covered

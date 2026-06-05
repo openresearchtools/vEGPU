@@ -97,6 +97,7 @@ grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP_LEGAL/LICENSES" >/
 grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'The app-side LICENSES file consolidates the full verbatim app-side license and notice text' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
 if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP_LEGAL/NOTICES"; then
@@ -430,7 +431,7 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
   <p>Repository: <a href="https://github.com/openresearchtools/vEGPU-machine">https://github.com/openresearchtools/vEGPU-machine</a></p>
 
   <h2>Architecture and Source Boundary</h2>
-  <p class="boundary">vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary: app-side launcher, display, AI, routing, and orchestration work stays in vEGPU.app. GPL-covered QEMU, VFIO, DriverKit, firmware, VM runtime, and guest-driver mechanics stay in vEGPU Machine.app.</p>
+  <p class="boundary">vEGPU uses a stricter form of the UTM / UTM-QEMU-style separation: the frontend, AI/runtime control surface, display client, routing, and orchestration live in vEGPU.app, while the GPL-covered Machine/QEMU VM runtime, VFIO, DriverKit, firmware, and guest-driver mechanics live in the separate vEGPU Machine.app.</p>
   <p>For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into its own bundle.</p>
   <p>The embedded display side is partially based on UTM app work. The Machine side builds on Scott J. Goldman's scottjg/qemu-vfio-apple as the main Apple VFIO/DriverKit/QEMU base, with additional QEMU-side visual-runtime work adapted from UTM QEMU and UTM virglrenderer.</p>
 
@@ -626,8 +627,11 @@ https://gitlab.com/qemu-project/qemu
 License and architecture boundary
 ---------------------------------
 
-vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary between
-the host app and the VM runtime:
+vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture: the
+frontend, AI/runtime control surface, display client, routing, and
+orchestration app is packaged separately from the GPL-covered Machine/QEMU
+VM/runtime stack. The two apps have separate repositories, notices, source
+archives, and runtime responsibilities.
 
 - vEGPU.app contains the Apache-licensed launcher, GUI, app-side display
   client, AI/runtime controls, local routing helpers, and orchestration code.
@@ -640,6 +644,10 @@ the repositories, notices, source archives, and runtime responsibilities remain
 separate. GPL-covered QEMU-derived code stays on the Machine side. App-side
 launcher, display, AI, and orchestration work stays in vEGPU.app unless an
 individual bundled component states otherwise.
+
+The installed license texts are the controlling terms for each app and bundled
+component, including any disclaimer of warranty and limitation of liability
+stated in those licenses.
 
 
 No affiliation
@@ -699,6 +707,10 @@ When vEGPU Machine.app is installed, vEGPU.app Help can render external vEGPU
 Machine notices and licenses from the installed vEGPU Machine.app without
 copying those Machine files into vEGPU.app.
 The Help menu marks Machine-owned legal rows as EXTERNAL.
+
+The installed license texts are the controlling terms for vEGPU.app and bundled
+app-side components, including any disclaimer of warranty and limitation of
+liability stated in those licenses.
 
 Project links:
 
