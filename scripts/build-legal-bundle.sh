@@ -492,7 +492,7 @@ notice.append(f"- vEGPU Machine licenses: {machine_license_file} ({exists_status
 notice.append(f"- vEGPU Machine source bundles: {machine_source_bundles} ({exists_status(machine_source_bundles)})")
 notice.append(f"- vEGPU Machine guest source: {machine_guest_source} ({exists_status(machine_guest_source)})")
 notice.append("")
-notice.append("Use Help > Reveal vEGPU Machine Legal Files or Help > Export vEGPU Machine Sources in vEGPU.app.")
+notice.append("Machine legal files and source bundle locations are listed above. vEGPU.app Help exposes only Notices and Licenses.")
 notice.append("")
 
 (out / "NOTICES").write_text("\n".join(notice))

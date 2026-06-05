@@ -44,21 +44,11 @@ struct vEGPUApp: App {
                     appDelegate.installAvailableUpdate()
                 }
                 Divider()
-                Button("vEGPU Licenses and Notices...") {
+                Button("Notices") {
                     appDelegate.showLegalNotices()
                 }
-                Button("Reveal vEGPU Legal Files") {
-                    appDelegate.revealVEGPULegalFiles()
-                }
-                Button("Export vEGPU Sources...") {
-                    appDelegate.exportVEGPUSources()
-                }
-                Divider()
-                Button("Reveal vEGPU Machine Legal Files") {
-                    appDelegate.revealVEGPUMachineLegalFiles()
-                }
-                Button("Export vEGPU Machine Sources...") {
-                    appDelegate.exportVEGPUMachineSources()
+                Button("Licenses") {
+                    appDelegate.showLegalLicenses()
                 }
             }
         }

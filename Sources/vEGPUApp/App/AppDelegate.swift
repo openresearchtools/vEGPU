@@ -157,43 +157,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func showLegalNotices() {
-        legalController().show()
+        legalController().showNotices()
     }
 
-    @objc func revealVEGPUNotices() {
-        revealVEGPULegalFiles()
-    }
-
-    @objc func revealVEGPULegalFiles() {
-        legalController().revealVEGPULegalFiles()
-    }
-
-    @objc func revealVEGPUSource() {
-        legalController().revealVEGPUSource()
-    }
-
-    @objc func exportVEGPUSources() {
-        legalController().exportVEGPUSources()
-    }
-
-    @objc func openVEGPUMachine() {
-        legalController().openVEGPUMachine()
-    }
-
-    @objc func revealVEGPUMachineNotices() {
-        revealVEGPUMachineLegalFiles()
-    }
-
-    @objc func revealVEGPUMachineLegalFiles() {
-        legalController().revealVEGPUMachineLegalFiles()
-    }
-
-    @objc func revealVEGPUMachineSources() {
-        legalController().revealVEGPUMachineSources()
-    }
-
-    @objc func exportVEGPUMachineSources() {
-        legalController().exportVEGPUMachineSources()
+    @objc func showLegalLicenses() {
+        legalController().showLicenses()
     }
 
     @objc func checkForUpdates() {

@@ -1190,6 +1190,21 @@ set -u
 SHARE="${1:-/mnt/vegpu-share}"
 RECOVER=/usr/local/sbin/vegpu-mac-share-recover
 HOST="${VEGPU_MAC_SHARE_HOST:-172.29.253.1}"
+POLICY=/etc/vegpu/mac-share-policy
+EXPECTED=""
+
+if [ -r "$POLICY" ]; then
+  # shellcheck disable=SC1090
+  . "$POLICY"
+  SHARE="${VEGPU_MAC_SHARE_TARGET:-$SHARE}"
+  HOST="${VEGPU_MAC_SHARE_HOST:-$HOST}"
+  EXPECTED="${VEGPU_MAC_SHARE_SOURCE:-}"
+fi
+
+case "$SHARE" in
+  /mnt/vegpu-share|/mnt/vegpu-share/) ;;
+  *) exit 2 ;;
+esac
 
 notify_user() {
   if command -v notify-send >/dev/null 2>&1; then
@@ -1210,38 +1225,49 @@ mountinfo_type() {
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
-nfs_source_host() {
+mountinfo_source() {
   awk -v target="$SHARE" '$5 == target {
     for (i = 1; i <= NF; i++) {
       if ($i == "-") {
-        split($(i + 2), parts, ":")
-        print parts[1]
+        print $(i + 2)
         exit
       }
     }
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
+run_bounded() {
+  local seconds="$1"
+  shift
+  command -v timeout >/dev/null 2>&1 || return 1
+  timeout -k 1s "${seconds}s" "$@"
+}
+
 nfs_rpc_ready() {
   local host="${1:-$HOST}"
   if command -v rpcinfo >/dev/null 2>&1; then
-    timeout 3s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
+    run_bounded 3 rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
     return $?
   fi
   if command -v nc >/dev/null 2>&1; then
-    timeout 3s nc -z "$host" 2049 >/dev/null 2>&1
+    run_bounded 3 nc -z "$host" 2049 >/dev/null 2>&1
     return $?
   fi
-  timeout 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
+  run_bounded 3 bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
 }
 
-share_ready() {
-  local fstype host
+share_mounted_correctly() {
+  local fstype source
   fstype="$(mountinfo_type)"
   [ "$fstype" = "nfs" ] || [ "$fstype" = "nfs4" ] || return 1
-  host="$(nfs_source_host)"
-  [ -n "$host" ] || host="$HOST"
-  nfs_rpc_ready "$host"
+  source="$(mountinfo_source)"
+  [ -z "$EXPECTED" ] || [ "$source" = "$EXPECTED" ]
+}
+
+share_probe_ok() {
+  share_mounted_correctly || return 1
+  nfs_rpc_ready "$HOST" || return 1
+  run_bounded 4 stat "$SHARE/." >/dev/null 2>&1
 }
 
 launch_detached() {
@@ -1254,19 +1280,27 @@ launch_detached() {
   fi
 }
 
-schedule_recover() {
+recover_once() {
   [ -x "$RECOVER" ] || return 0
   command -v sudo >/dev/null 2>&1 || return 0
-  launch_detached sudo -n "$RECOVER" "$SHARE" "$HOST"
+  run_bounded 8 sudo -n "$RECOVER" "$SHARE" "$HOST" >/dev/null 2>&1 || true
+}
+
+wait_for_ready_share() {
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8; do
+    if share_probe_ok; then
+      return 0
+    fi
+    recover_once
+    sleep 1
+  done
+  return 1
 }
 
 open_file_manager() {
   if command -v thunar >/dev/null 2>&1; then
-    if command -v dbus-run-session >/dev/null 2>&1; then
-      launch_detached dbus-run-session -- thunar --new-window "$SHARE"
-    else
-      launch_detached thunar --new-window "$SHARE"
-    fi
+    launch_detached thunar --new-window "$SHARE"
     return 0
   fi
   if command -v xdg-open >/dev/null 2>&1; then
@@ -1276,19 +1310,12 @@ open_file_manager() {
   notify_user "No file manager is installed for Mac Share."
 }
 
-if share_ready; then
+if wait_for_ready_share; then
   open_file_manager
   exit 0
 fi
 
-schedule_recover
-sleep 0.5
-if share_ready; then
-  open_file_manager
-  exit 0
-fi
-
-notify_user "Mac Share is reconnecting. Try again in a moment if it does not open."
+notify_user "Mac Share is reconnecting. The file manager was not opened because the mount is not ready yet."
 exit 0
 EOS
   chmod 0755 /usr/local/libexec/vegpu/vegpu-open-mac-share-worker
