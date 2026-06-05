@@ -664,9 +664,17 @@ jobs:
           APP="$RUNNER_TEMP/vegpu-artifacts/app/vEGPU.app"
           codesign --verify --deep --strict "$APP"
           test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "com.vegpu.app"
+          test "$(plutil -extract CFBundleDisplayName raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
+          test "$(plutil -extract CFBundleName raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
+          test "$(plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
+          test "$(plutil -extract CFBundleIconFile raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
           test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "${RELEASE_VERSION}"
           test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "${BUILD_NUMBER}"
+          test -x "$APP/Contents/MacOS/vEGPU"
+          test ! -e "$APP/Contents/MacOS/vEGPUApp"
+          test -f "$APP/Contents/Resources/vEGPU.icns"
           plutil -extract NSLocalNetworkUsageDescription raw -o - "$APP/Contents/Info.plist" | grep -q 'SSH control'
+          plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_vegpu-preflight._tcp'
           plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_ssh._tcp'
           plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_http._tcp'
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
@@ -810,7 +818,11 @@ jobs:
           tar -czf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" \
             -C "$RUNNER_TEMP/vegpu-artifacts/app" \
             vEGPU.app
-          tar -tzf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" | grep -F 'vEGPU.app/Contents/MacOS/vEGPUApp'
+          tar -tzf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" | grep -F 'vEGPU.app/Contents/MacOS/vEGPU'
+          if tar -tzf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" | grep -F 'vEGPU.app/Contents/MacOS/vEGPUApp'; then
+            echo "vEGPU.app must not ship with the old vEGPUApp executable name" >&2
+            exit 1
+          fi
 
       - name: Upload vEGPU.app archive
         uses: actions/upload-artifact@v7

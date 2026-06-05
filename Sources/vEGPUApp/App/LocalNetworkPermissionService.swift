@@ -5,9 +5,11 @@ import vEGPUCore
 @MainActor
 final class LocalNetworkPermissionService {
     private let progress: ProgressCenter
-    private var browser: NWBrowser?
+    private var browsers: [NWBrowser] = []
+    private var listener: NWListener?
     private var started = false
     private var completed = false
+    private let queue = DispatchQueue(label: "com.vegpu.app.local-network-preflight", qos: .utility)
 
     init(progress: ProgressCenter) {
         self.progress = progress
@@ -17,44 +19,74 @@ final class LocalNetworkPermissionService {
         guard !started else { return }
         started = true
 
-        let parameters = NWParameters.tcp
-        parameters.includePeerToPeer = true
-        let browser = NWBrowser(for: .bonjour(type: "_ssh._tcp", domain: "local."), using: parameters)
-        self.browser = browser
-
         progress.report(ProgressEvent(
             stage: "network",
             message: "Checking macOS Local Network permission",
             detail: "Required for VM SSH, proxy routes, and runtime RPC"
         ))
 
-        browser.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
-                self?.handle(state)
-            }
-        }
-        browser.start(queue: DispatchQueue.global(qos: .utility))
+        startBonjourPublisher()
+        startBonjourBrowser(type: "_vegpu-preflight._tcp")
+        startBonjourBrowser(type: "_ssh._tcp")
 
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             await MainActor.run {
                 self?.reportPendingPromptIfNeeded()
             }
         }
+
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            await MainActor.run {
+                self?.finishPreflightIfNeeded()
+            }
+        }
     }
 
-    private func handle(_ state: NWBrowser.State) {
+    private func startBonjourPublisher() {
+        do {
+            let parameters = NWParameters.tcp
+            parameters.includePeerToPeer = true
+            let listener = try NWListener(using: parameters)
+            listener.service = NWListener.Service(name: "vEGPU", type: "_vegpu-preflight._tcp")
+            listener.newConnectionHandler = { connection in
+                connection.cancel()
+            }
+            listener.stateUpdateHandler = { [weak self] state in
+                Task { @MainActor in
+                    self?.handlePublisher(state)
+                }
+            }
+            self.listener = listener
+            listener.start(queue: queue)
+        } catch {
+            progress.report(ProgressEvent(
+                stage: "network",
+                message: "Local Network Bonjour preflight could not start",
+                detail: String(describing: error)
+            ))
+        }
+    }
+
+    private func startBonjourBrowser(type: String) {
+        let parameters = NWParameters.tcp
+        parameters.includePeerToPeer = true
+        let browser = NWBrowser(for: .bonjour(type: type, domain: "local."), using: parameters)
+        browser.stateUpdateHandler = { [weak self] state in
+            Task { @MainActor in
+                self?.handleBrowser(state, type: type)
+            }
+        }
+        browsers.append(browser)
+        browser.start(queue: queue)
+    }
+
+    private func handleBrowser(_ state: NWBrowser.State, type: String) {
         guard !completed else { return }
         switch state {
         case .ready:
-            completed = true
-            progress.report(ProgressEvent(
-                stage: "network",
-                message: "macOS Local Network access is available",
-                detail: "vEGPU can use VM SSH and local routing",
-                level: .success
-            ))
-            stop()
+            break
         case let .waiting(error):
             if isLocalNetworkDenied(error) {
                 completed = true
@@ -69,12 +101,44 @@ final class LocalNetworkPermissionService {
                 progress.report(ProgressEvent(
                     stage: "network",
                     message: "Local Network permission preflight did not finish",
+                    detail: "\(type): \(String(describing: error))"
+                ))
+            }
+            stop()
+        case .cancelled:
+            break
+        case .setup:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    private func handlePublisher(_ state: NWListener.State) {
+        guard !completed else { return }
+        switch state {
+        case .ready:
+            break
+        case let .waiting(error):
+            if isLocalNetworkDenied(error) {
+                completed = true
+                reportDenied(error)
+                stop()
+            }
+        case let .failed(error):
+            completed = true
+            if isLocalNetworkDenied(error) {
+                reportDenied(error)
+            } else {
+                progress.report(ProgressEvent(
+                    stage: "network",
+                    message: "Local Network Bonjour preflight did not finish",
                     detail: String(describing: error)
                 ))
             }
             stop()
         case .cancelled:
-            browser = nil
+            break
         case .setup:
             break
         @unknown default:
@@ -83,12 +147,24 @@ final class LocalNetworkPermissionService {
     }
 
     private func reportPendingPromptIfNeeded() {
-        guard !completed, browser != nil else { return }
+        guard !completed else { return }
         progress.report(ProgressEvent(
             stage: "network",
             message: "macOS Local Network permission prompt requested",
             detail: "If macOS asks, allow vEGPU. If it was denied, enable vEGPU in System Settings > Privacy & Security > Local Network."
         ))
+    }
+
+    private func finishPreflightIfNeeded() {
+        guard !completed else { return }
+        completed = true
+        progress.report(ProgressEvent(
+            stage: "network",
+            message: "macOS Local Network preflight completed",
+            detail: "vEGPU requested Local Network access for VM SSH and local routing.",
+            level: .success
+        ))
+        stop()
     }
 
     private func reportDenied(_ error: NWError) {
@@ -101,8 +177,12 @@ final class LocalNetworkPermissionService {
     }
 
     private func stop() {
-        browser?.cancel()
-        browser = nil
+        listener?.cancel()
+        listener = nil
+        for browser in browsers {
+            browser.cancel()
+        }
+        browsers.removeAll()
     }
 
     private func isLocalNetworkDenied(_ error: NWError) -> Bool {

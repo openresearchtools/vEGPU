@@ -104,9 +104,9 @@ fi
 rm -rf "$APP"
 mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS" "$BUNDLED_ROOT/tools/bin"
 
-cp "$SWIFT_BUILD_DIR/vEGPUApp" "$MACOS/vEGPUApp"
+cp "$SWIFT_BUILD_DIR/vEGPUApp" "$MACOS/vEGPU"
 cp "$SWIFT_BUILD_DIR/vegpu" "$BUNDLED_ROOT/tools/bin/vegpu"
-chmod +x "$MACOS/vEGPUApp" "$BUNDLED_ROOT/tools/bin/vegpu"
+chmod +x "$MACOS/vEGPU" "$BUNDLED_ROOT/tools/bin/vegpu"
 while IFS= read -r bundle; do
   rm -rf "$RESOURCES/$(basename "$bundle")"
   /usr/bin/ditto "$bundle" "$RESOURCES/$(basename "$bundle")"
@@ -233,7 +233,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key>
   <string>vEGPU</string>
   <key>CFBundleExecutable</key>
-  <string>vEGPUApp</string>
+  <string>vEGPU</string>
   <key>CFBundleIconFile</key>
   <string>vEGPU</string>
   <key>CFBundleIdentifier</key>
@@ -258,6 +258,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <string>vEGPU uses Local Network access for the private connection between this Mac and the Linux VM, including SSH control, web UI and proxy routes, runtime RPC, file sharing, and guest setup.</string>
   <key>NSBonjourServices</key>
   <array>
+    <string>_vegpu-preflight._tcp</string>
     <string>_ssh._tcp</string>
     <string>_http._tcp</string>
   </array>
