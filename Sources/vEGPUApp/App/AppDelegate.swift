@@ -295,8 +295,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             string: " EXTERNAL ",
             attributes: [
                 .font: NSFont.systemFont(ofSize: 9, weight: .semibold),
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .backgroundColor: NSColor(calibratedWhite: 0.88, alpha: 1.0),
+                .foregroundColor: externalBadgeForegroundColor(),
+                .backgroundColor: externalBadgeBackgroundColor(),
                 .baselineOffset: 1
             ]
         ))
@@ -308,6 +308,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             ]
         ))
         return attributedTitle
+    }
+
+    private func externalBadgeForegroundColor() -> NSColor {
+        NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return isDark
+                ? NSColor(calibratedWhite: 0.92, alpha: 1.0)
+                : NSColor(calibratedWhite: 0.28, alpha: 1.0)
+        } ?? NSColor.secondaryLabelColor
+    }
+
+    private func externalBadgeBackgroundColor() -> NSColor {
+        NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return isDark
+                ? NSColor(calibratedWhite: 0.24, alpha: 1.0)
+                : NSColor(calibratedWhite: 0.86, alpha: 1.0)
+        } ?? NSColor(calibratedWhite: 0.86, alpha: 1.0)
     }
 
     private func installAvailableUpdateFlow() async {

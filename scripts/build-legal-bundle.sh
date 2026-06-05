@@ -44,9 +44,6 @@ source_revision = os.environ.get("GITHUB_SHA") or subprocess.run(
 release_version = os.environ.get("VERSION") or os.environ.get("RELEASE_VERSION") or "unknown"
 utm_commit = os.environ.get("VEGPU_UTM_COMMIT") or "e4a4c34b671284263fc69f81b607de494d7e9b65"
 
-def exists_status(path: Path) -> str:
-    return "present" if path.exists() else "missing"
-
 def copy_license(rel: str, name: str | None = None) -> None:
     src = root / rel
     if not src.exists():
@@ -828,11 +825,13 @@ notice.append("")
 notice.append("vEGPU Machine Notices")
 notice.append("---------------------")
 notice.append("")
-notice.append(f"- vEGPU Machine app: {machine_app} ({exists_status(machine_app)})")
-notice.append(f"- vEGPU Machine notices: {machine_notice_file} ({exists_status(machine_notice_file)})")
-notice.append(f"- vEGPU Machine licenses: {machine_license_file} ({exists_status(machine_license_file)})")
-notice.append(f"- vEGPU Machine source bundles: {machine_source_bundles} ({exists_status(machine_source_bundles)})")
-notice.append(f"- vEGPU Machine guest source: {machine_guest_source} ({exists_status(machine_guest_source)})")
+notice.append("These are external installed paths owned by vEGPU Machine.app. They are resolved and read when the user opens the external Machine legal buttons in vEGPU.app Help; vEGPU.app does not copy these Machine files into its own bundle.")
+notice.append("")
+notice.append(f"- vEGPU Machine app: {machine_app}")
+notice.append(f"- vEGPU Machine notices: {machine_notice_file}")
+notice.append(f"- vEGPU Machine licenses: {machine_license_file}")
+notice.append(f"- vEGPU Machine source bundles: {machine_source_bundles}")
+notice.append(f"- vEGPU Machine guest source: {machine_guest_source}")
 notice.append("")
 notice.append("Machine legal files and source bundle locations are listed above. vEGPU.app Help opens Notices, Licenses, Guest VM Install Notices, and external vEGPU Machine Notices/Licenses.")
 notice.append("")

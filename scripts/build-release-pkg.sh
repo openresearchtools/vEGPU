@@ -96,6 +96,10 @@ grep -F 'Package/Dependency: Display runtime: openssl' "$APP_LEGAL/LICENSES" >/d
 grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
+if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP_LEGAL/NOTICES"; then
+  printf 'vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status\n' >&2
+  exit 1
+fi
 
 write_install_scripts() {
   local dir="$1"

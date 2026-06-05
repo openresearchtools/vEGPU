@@ -707,6 +707,10 @@ jobs:
           grep -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'vEGPU.app Help has external vEGPU Machine legal buttons' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
+            echo "vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status" >&2
+            exit 1
+          fi
           grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: Display runtime: glib' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
