@@ -15,6 +15,8 @@ The generated payload also collects:
 - UTM/CocoaSpice patch provenance
 - the display runtime corresponding source archive
 - the separate vEGPU Machine notices/source bundle locations
+- the guest VM installation notice for Debian APT, GUI, DMA driver, and
+  optional NVIDIA/CUDA install activity
 
 The generated output is installed under:
 
@@ -23,11 +25,17 @@ vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
 ```
 
 The canonical generated app-side files are `NOTICES` and `LICENSES`.
+`GUEST-VM-INSTALL-NOTICES.md` is generated as a separate user-facing file.
 `NOTICES.md` is also generated as a compatibility copy for older tooling.
 
 The vEGPU app Help menu opens those generated files. vEGPU Machine carries its
 own QEMU/VFIO/DriverKit notices, licenses, and source bundles inside
 `vEGPU Machine.app`.
+
+`GUEST-VM-INSTALL-NOTICES.md` is the checked-in seed notice for software that
+vEGPU installs inside the Linux VM from Debian APT, NVIDIA APT repositories, or
+local vEGPU/vEGPU Machine guest packages. It is not a substitute for the app or
+Machine legal bundles.
 
 The generated vEGPU Help window also exposes export buttons so users can copy
 the bundled source archives to a normal folder without having to inspect the

@@ -67,11 +67,16 @@ copy_license("legal/LICENSES/CocoaSpice-Apache-2.0.txt", "CocoaSpice-LICENSE.txt
 copy_license("legal/LICENSES", "vEGPU-LICENSES")
 copy_license("third_party/utm/README.md", "UTM-PATCH-README.md")
 copy_license("legal/NOTICES.md", "vEGPU-NOTICES.md")
+copy_license("legal/GUEST-VM-INSTALL-NOTICES.md", "GUEST-VM-INSTALL-NOTICES.md")
 copy_license("legal/LICENSES/llama-swap-MIT.txt", "llama-swap-MIT.txt")
 copy_license("legal/LICENSES/llama.cpp-MIT.txt", "llama.cpp-MIT.txt")
 copy_license("ai/web-ui-app/NOTICE", "web-ui-app-NOTICE.txt")
 copy_license("ai/gost-local-proxy/LICENSE", "gost-local-proxy-LICENSE.txt")
 copy_license("ai/gost-local-proxy/NOTICE", "gost-local-proxy-NOTICE.txt")
+
+guest_vm_install_notice = root / "legal" / "GUEST-VM-INSTALL-NOTICES.md"
+if guest_vm_install_notice.exists():
+    shutil.copy2(guest_vm_install_notice, out / "GUEST-VM-INSTALL-NOTICES.md")
 
 def safe_name(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in value)
@@ -632,6 +637,8 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
         meta.update({"name": "UTM/CocoaSpice patch provenance", "version": utm_commit, "license": "Notice/Provenance"})
     elif rel == "vEGPU-NOTICES.md":
         meta.update({"name": "vEGPU app notices seed", "version": source_revision, "license": "Notice/Provenance"})
+    elif rel == "GUEST-VM-INSTALL-NOTICES.md":
+        meta.update({"name": "vEGPU guest VM installation notices", "version": source_revision, "license": "Notice/Provenance"})
     elif "llama.cpp" in lower:
         meta.update({"name": "llama.cpp", "version": "bundled/runtime manifest", "license": "MIT"})
     elif "llama-swap" in lower:
@@ -745,6 +752,7 @@ notice.append("- vEGPU Machine notices: /Applications/vEGPU Machine.app/Contents
 notice.append("- vEGPU Machine licenses: /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/LICENSES")
 notice.append("- vEGPU Machine source bundles: /Applications/vEGPU Machine.app/Contents/Resources/SourceBundles/")
 notice.append("- vEGPU Machine guest source: /Applications/vEGPU Machine.app/Contents/Resources/guest-tools/source/")
+notice.append("- Guest VM install notices: /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/GUEST-VM-INSTALL-NOTICES.md")
 notice.append("")
 notice.append("QEMU-side licenses and notices are inside vEGPU Machine.app, not duplicated in vEGPU.app.")
 notice.append("")
@@ -823,7 +831,7 @@ notice.append(f"- vEGPU Machine licenses: {machine_license_file} ({exists_status
 notice.append(f"- vEGPU Machine source bundles: {machine_source_bundles} ({exists_status(machine_source_bundles)})")
 notice.append(f"- vEGPU Machine guest source: {machine_guest_source} ({exists_status(machine_guest_source)})")
 notice.append("")
-notice.append("Machine legal files and source bundle locations are listed above. vEGPU.app Help exposes only Notices and Licenses.")
+notice.append("Machine legal files and source bundle locations are listed above. vEGPU.app Help opens Notices, Licenses, and Guest VM Install Notices.")
 notice.append("")
 
 (out / "NOTICES").write_text("\n".join(notice))
@@ -839,6 +847,7 @@ manifest = {
     "goModules": go_modules,
     "licenses": "LICENSES",
     "notices": "NOTICES",
+    "guestVmInstallNotices": "GUEST-VM-INSTALL-NOTICES.md",
     "displayRuntimeSource": display_source_manifest_path,
     "displayRuntimeSourceArchivesScanned": display_runtime_source_archive_count,
     "displayRuntimeLicenseFiles": display_runtime_license_count,

@@ -95,6 +95,7 @@ if [ -n "$test_payloads" ]; then
 fi
 
 test -f legal/NOTICES.md
+test -f legal/GUEST-VM-INSTALL-NOTICES.md
 test -f legal/LICENSES/llama-swap-MIT.txt
 test -f legal/LICENSES/llama.cpp-MIT.txt
 test -f legal/LICENSES/UTM-Apache-2.0.txt

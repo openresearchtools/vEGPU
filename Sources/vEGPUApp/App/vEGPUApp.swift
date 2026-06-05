@@ -50,6 +50,9 @@ struct vEGPUApp: App {
                 Button("Licenses") {
                     appDelegate.showLegalLicenses()
                 }
+                Button("VM Install Notices") {
+                    appDelegate.showGuestVMInstallNotices()
+                }
             }
         }
     }

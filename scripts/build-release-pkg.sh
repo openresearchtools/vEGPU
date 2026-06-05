@@ -84,6 +84,7 @@ fi
 APP_LEGAL="$STAGE_APP/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated"
 test -f "$APP_LEGAL/NOTICES"
 test -f "$APP_LEGAL/LICENSES"
+test -f "$APP_LEGAL/GUEST-VM-INSTALL-NOTICES.md"
 test -f "$APP_LEGAL/source/vEGPU-app-source.tar.gz"
 test -f "$APP_LEGAL/source/display-runtime-source.tar.gz"
 test -d "$APP_LEGAL/license-files/display-runtime"
@@ -496,11 +497,14 @@ Key installed vEGPU.app legal/source files:
 
 - NOTICES
 - LICENSES
+- GUEST-VM-INSTALL-NOTICES.md
 - source/vEGPU-app-source.tar.gz
 - source/display-runtime-source.tar.gz
 
 NOTICES explains the app/Machine split and where each app's source archives
 live. LICENSES consolidates the full verbatim app-side license and notice text.
+GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, and optional
+NVIDIA/CUDA install activity inside the Linux VM.
 The vEGPU.app Help menu also opens the installed legal bundle and exposes the
 bundled source/provenance archives.
 
@@ -660,6 +664,7 @@ Canonical installed legal files:
 
 - NOTICES
 - LICENSES
+- GUEST-VM-INSTALL-NOTICES.md
 
 This artifact package does not include vEGPU Machine.app. Combined releases
 include vEGPU Machine.app and its separate QEMU/VFIO/DriverKit source bundles.

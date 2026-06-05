@@ -25,6 +25,15 @@ The combined installer may place both applications in `/Applications`, but the
 installed apps, repositories, notices, and source archives keep this boundary
 visible.
 
+## Guest VM Installation Notice
+
+`legal/GUEST-VM-INSTALL-NOTICES.md` documents software that vEGPU installs
+inside the Linux guest VM through Debian APT, local vEGPU/vEGPU Machine guest
+packages, GUI desktop setup, and optional NVIDIA/CUDA repository packages. It
+is intentionally separate from the app-side and Machine-side legal notices.
+Release builds install it as `GUEST-VM-INSTALL-NOTICES.md` in the generated
+legal folder so the Help menu can open it directly.
+
 ## UTM Patch Stack Display Work
 
 The committed repository does not carry a copied UTM source tree.

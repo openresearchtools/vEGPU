@@ -3,14 +3,16 @@ import vEGPUCore
 
 @MainActor
 final class LegalNoticesWindowController: NSWindowController {
-    private enum LegalDocument: Int, CaseIterable {
+    private enum LegalDocument {
         case notices
         case licenses
+        case guestVMInstallNotices
 
         var title: String {
             switch self {
             case .notices: return "Notices"
             case .licenses: return "Licenses"
+            case .guestVMInstallNotices: return "Guest VM Install Notices"
             }
         }
 
@@ -18,6 +20,7 @@ final class LegalNoticesWindowController: NSWindowController {
             switch self {
             case .notices: return generatedLegalURL.appendingPathComponent("NOTICES")
             case .licenses: return generatedLegalURL.appendingPathComponent("LICENSES")
+            case .guestVMInstallNotices: return generatedLegalURL.appendingPathComponent("GUEST-VM-INSTALL-NOTICES.md")
             }
         }
     }
@@ -25,16 +28,10 @@ final class LegalNoticesWindowController: NSWindowController {
     private let generatedLegalURL: URL
     private var selectedDocument: LegalDocument = .notices
 
-    private lazy var documentSelector: NSSegmentedControl = {
-        let selector = NSSegmentedControl(
-            labels: LegalDocument.allCases.map(\.title),
-            trackingMode: .selectOne,
-            target: self,
-            action: #selector(documentSelectionChanged)
-        )
-        selector.selectedSegment = selectedDocument.rawValue
-        selector.segmentStyle = .rounded
-        return selector
+    private lazy var titleLabel: NSTextField = {
+        let title = NSTextField(labelWithString: selectedDocument.title)
+        title.font = .boldSystemFont(ofSize: 20)
+        return title
     }()
 
     private lazy var documentTextView: NSTextView = {
@@ -57,7 +54,7 @@ final class LegalNoticesWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "vEGPU Legal"
+        window.title = selectedDocument.title
         window.minSize = NSSize(width: 620, height: 420)
         super.init(window: window)
         window.contentView = makeContentView()
@@ -76,9 +73,14 @@ final class LegalNoticesWindowController: NSWindowController {
         show(document: .licenses)
     }
 
+    func showGuestVMInstallNotices() {
+        show(document: .guestVMInstallNotices)
+    }
+
     private func show(document: LegalDocument) {
         selectedDocument = document
-        documentSelector.selectedSegment = document.rawValue
+        window?.title = document.title
+        titleLabel.stringValue = document.title
         loadSelectedDocument()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
@@ -94,11 +96,7 @@ final class LegalNoticesWindowController: NSWindowController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
 
-        let title = NSTextField(labelWithString: "vEGPU Legal")
-        title.font = .boldSystemFont(ofSize: 20)
-        stack.addArrangedSubview(title)
-
-        stack.addArrangedSubview(documentSelector)
+        stack.addArrangedSubview(titleLabel)
 
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
@@ -139,9 +137,4 @@ final class LegalNoticesWindowController: NSWindowController {
         }
     }
 
-    @objc private func documentSelectionChanged() {
-        guard let document = LegalDocument(rawValue: documentSelector.selectedSegment) else { return }
-        selectedDocument = document
-        loadSelectedDocument()
-    }
 }

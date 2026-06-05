@@ -164,6 +164,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         legalController().showLicenses()
     }
 
+    @objc func showGuestVMInstallNotices() {
+        legalController().showGuestVMInstallNotices()
+    }
+
     @objc func checkForUpdates() {
         Task {
             await model.updates.checkForUpdates(silent: false)
