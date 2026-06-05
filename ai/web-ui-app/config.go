@@ -274,32 +274,170 @@ func normalizeConfig(cfg *AppConfig, appDir string) {
 	if !cfg.Discovery.Enabled && cfg.Discovery.LastScan == "" {
 		cfg.Discovery.Enabled = true
 	}
-	for id, model := range cfg.Models {
-		if model.ID == "" {
-			model.ID = id
-		}
-		if model.Metadata == nil {
-			model.Metadata = map[string]string{}
-		}
-		model.Location = normalizeModelLocation(model.Location, model.ModelPath)
-		if model.Metadata["format"] == "" && strings.EqualFold(filepath.Ext(model.ModelPath), ".gguf") {
-			model.Metadata["format"] = "GGUF"
-		}
-		model.Available, model.MissingReason = modelAvailability(model)
-		if model.Available {
-			if reason := unsupportedLlamaServerArchitecture(model.Metadata); reason != "" {
-				model.Available = false
-				model.MissingReason = reason
-			}
-		}
-		if model.Available {
-			if split := parseGGUFSplitFile(model.ModelPath); split.Count > 1 && split.Index > 1 {
-				model.Available = false
-				model.MissingReason = "non-primary GGUF split shard; load the 00001 shard"
-			}
-		}
-		cfg.Models[id] = model
+	cfg.Models = normalizeModelRegistry(cfg.Models)
+}
+
+type normalizedModelCandidate struct {
+	oldID string
+	base  string
+	model ModelConfig
+}
+
+func normalizeModelRegistry(models map[string]ModelConfig) map[string]ModelConfig {
+	if len(models) == 0 {
+		return map[string]ModelConfig{}
 	}
+	ids := make([]string, 0, len(models))
+	for id := range models {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	candidates := make([]normalizedModelCandidate, 0, len(ids))
+	byBase := map[string][]int{}
+	for _, id := range ids {
+		model := normalizeModelConfigForRegistry(id, models[id])
+		base := publicModelKeyBase(id, model)
+		candidates = append(candidates, normalizedModelCandidate{
+			oldID: id,
+			base:  base,
+			model: model,
+		})
+		byBase[base] = append(byBase[base], len(candidates)-1)
+	}
+
+	out := make(map[string]ModelConfig, len(candidates))
+	used := map[string]bool{}
+	bases := make([]string, 0, len(byBase))
+	for base := range byBase {
+		bases = append(bases, base)
+	}
+	sort.Strings(bases)
+	for _, base := range bases {
+		indexes := byBase[base]
+		collides := len(indexes) > 1
+		for _, index := range indexes {
+			candidate := candidates[index]
+			key := candidate.base
+			if collides {
+				if suffix := modelSourceKeySuffix(candidate.model); suffix != "" {
+					key += "-" + suffix
+				}
+			}
+			key = uniquePublicModelKey(key, candidate, used)
+			model := candidate.model
+			model.ID = key
+			model.Name = key
+			out[key] = model
+			used[key] = true
+		}
+	}
+	return out
+}
+
+func normalizeModelConfigForRegistry(id string, model ModelConfig) ModelConfig {
+	if model.ID == "" {
+		model.ID = id
+	}
+	if model.Metadata == nil {
+		model.Metadata = map[string]string{}
+	}
+	model.Location = normalizeModelLocation(model.Location, model.ModelPath)
+	if model.Metadata["format"] == "" && strings.EqualFold(filepath.Ext(model.ModelPath), ".gguf") {
+		model.Metadata["format"] = "GGUF"
+	}
+	model.Available, model.MissingReason = modelAvailability(model)
+	if model.Available {
+		if reason := unsupportedLlamaServerArchitecture(model.Metadata); reason != "" {
+			model.Available = false
+			model.MissingReason = reason
+		}
+	}
+	if model.Available {
+		if split := parseGGUFSplitFile(model.ModelPath); split.Count > 1 && split.Index > 1 {
+			model.Available = false
+			model.MissingReason = "non-primary GGUF split shard; load the 00001 shard"
+		}
+	}
+	return model
+}
+
+func publicModelKeyBase(id string, model ModelConfig) string {
+	prefix := "MAC-"
+	if isVMModelLocation(model.Location) {
+		prefix = "VM-"
+	}
+	raw := firstNonEmpty(model.Name, model.ID, id, filepath.Base(model.ModelPath))
+	base := sanitizeID(stripModelStoragePrefix(raw))
+	return prefix + base
+}
+
+func stripModelStoragePrefix(value string) string {
+	value = strings.TrimSpace(value)
+	lower := strings.ToLower(value)
+	switch {
+	case strings.HasPrefix(lower, "mac-"):
+		return strings.TrimSpace(value[4:])
+	case strings.HasPrefix(lower, "vm-"):
+		return strings.TrimSpace(value[3:])
+	default:
+		return value
+	}
+}
+
+func modelSourceKeySuffix(model ModelConfig) string {
+	haystack := strings.ToLower(strings.Join([]string{model.Provider, model.Source}, " "))
+	switch {
+	case strings.Contains(haystack, "huggingface"):
+		return "hf"
+	case strings.Contains(haystack, "lmstudio"), strings.Contains(haystack, "lm-studio"), strings.Contains(haystack, "lm studio"):
+		return "lm"
+	}
+	raw := firstNonEmpty(model.Source, model.Provider)
+	if raw == "" {
+		return ""
+	}
+	suffix := sanitizeID(raw)
+	if len(suffix) > 16 {
+		suffix = suffix[:16]
+	}
+	return suffix
+}
+
+func uniquePublicModelKey(key string, candidate normalizedModelCandidate, used map[string]bool) string {
+	if !used[key] {
+		return key
+	}
+	stable := shortStableModelKeySuffix(candidate)
+	if stable != "" {
+		withStable := key + "-" + stable
+		if !used[withStable] {
+			return withStable
+		}
+		for i := 2; ; i++ {
+			next := fmt.Sprintf("%s-%s-%d", key, stable, i)
+			if !used[next] {
+				return next
+			}
+		}
+	}
+	for i := 2; ; i++ {
+		next := fmt.Sprintf("%s-%d", key, i)
+		if !used[next] {
+			return next
+		}
+	}
+}
+
+func shortStableModelKeySuffix(candidate normalizedModelCandidate) string {
+	suffix := sanitizeID(firstNonEmpty(candidate.oldID, candidate.model.ID, candidate.model.ModelPath))
+	if suffix == "" {
+		return ""
+	}
+	if len(suffix) > 12 {
+		suffix = suffix[:12]
+	}
+	return suffix
 }
 
 func unsupportedLlamaServerArchitecture(metadata map[string]string) string {
@@ -468,6 +606,21 @@ func modelVisibleInRouter(model ModelConfig) bool {
 	return true
 }
 
+func modelIDForComparableKey(models map[string]ModelConfig, comparable string) string {
+	ids := make([]string, 0, len(models))
+	for id := range models {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		model := models[id]
+		if modelComparableKey(model.Location, model.ModelPath) == comparable {
+			return id
+		}
+	}
+	return ""
+}
+
 func modelAvailability(model ModelConfig) (bool, string) {
 	if strings.TrimSpace(model.ModelPath) == "" {
 		return false, "modelPath is empty"
@@ -494,14 +647,18 @@ const (
 )
 
 func normalizeModelLocation(location, modelPath string) string {
+	cleanPath := filepath.ToSlash(strings.TrimSpace(modelPath))
+	if strings.HasPrefix(cleanPath, "/home/vegpu/") {
+		return modelLocationVM
+	}
+	if cleanPath != "" {
+		return modelLocationMac
+	}
 	switch strings.ToLower(strings.TrimSpace(location)) {
 	case modelLocationVM:
 		return modelLocationVM
 	case modelLocationMac:
 		return modelLocationMac
-	}
-	if strings.HasPrefix(filepath.ToSlash(modelPath), "/home/vegpu/") {
-		return modelLocationVM
 	}
 	return modelLocationMac
 }

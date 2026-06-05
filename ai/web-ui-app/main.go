@@ -487,6 +487,7 @@ func (a *App) handleModelByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, err)
 			return
 		}
+		updatedComparable := ""
 		if err := a.store.Update(func(next *AppConfig) error {
 			current, ok := next.Models[id]
 			if !ok {
@@ -516,6 +517,7 @@ func (a *App) handleModelByID(w http.ResponseWriter, r *http.Request) {
 			}
 			incoming.Location = normalizeModelLocation(incoming.Location, incoming.ModelPath)
 			incoming.Available, incoming.MissingReason = modelAvailability(incoming)
+			updatedComparable = modelComparableKey(incoming.Location, incoming.ModelPath)
 			next.Models[id] = incoming
 			return nil
 		}); err != nil {
@@ -523,7 +525,17 @@ func (a *App) handleModelByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = a.processes.StopModel(id, false)
-		respondJSON(w, http.StatusOK, a.store.Get().Models[id])
+		cfg := a.store.Get()
+		updatedID := modelIDForComparableKey(cfg.Models, updatedComparable)
+		if updatedID == "" {
+			updatedID = id
+		}
+		model, ok := cfg.Models[updatedID]
+		if !ok {
+			respondError(w, http.StatusInternalServerError, fmt.Errorf("model %s was saved but could not be reloaded", id))
+			return
+		}
+		respondJSON(w, http.StatusOK, model)
 	case http.MethodDelete:
 		cfg := a.store.Get()
 		model, ok := cfg.Models[id]
@@ -1133,8 +1145,12 @@ func (a *App) handleModelsLoad(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, fmt.Errorf("model is required"))
 		return
 	}
+	if _, ok := a.store.Get().Models[req.Model]; !ok {
+		respondError(w, http.StatusNotFound, fmt.Errorf("model %s not found", req.Model))
+		return
+	}
 	if len(req.Extra) > 0 {
-		_ = a.store.Update(func(next *AppConfig) error {
+		if err := a.store.Update(func(next *AppConfig) error {
 			model, ok := next.Models[req.Model]
 			if !ok {
 				return fmt.Errorf("model %s not found", req.Model)
@@ -1142,7 +1158,10 @@ func (a *App) handleModelsLoad(w http.ResponseWriter, r *http.Request) {
 			model.Launch.ExtraArgs = append(model.Launch.ExtraArgs, req.Extra...)
 			next.Models[req.Model] = model
 			return nil
-		})
+		}); err != nil {
+			respondError(w, http.StatusNotFound, err)
+			return
+		}
 	}
 	if _, err := a.processes.EnsureModel(r.Context(), req.Model); err != nil {
 		respondError(w, http.StatusBadGateway, err)
@@ -1169,6 +1188,10 @@ func (a *App) handleModelsUnload(w http.ResponseWriter, r *http.Request) {
 	if req.Model == "" {
 		a.processes.StopAll(false)
 	} else {
+		if _, ok := a.store.Get().Models[req.Model]; !ok {
+			respondError(w, http.StatusNotFound, fmt.Errorf("model %s not found", req.Model))
+			return
+		}
 		_ = a.processes.StopModel(req.Model, false)
 	}
 	respondJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -1226,6 +1249,10 @@ func (a *App) handleSlots(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []any{})
 		return
 	}
+	if _, ok := a.store.Get().Models[modelID]; !ok {
+		respondError(w, http.StatusNotFound, fmt.Errorf("model %s not found", modelID))
+		return
+	}
 	if proc := a.processes.Process(modelID); proc != nil && proc.CurrentState() == ProcessReady {
 		proc.Proxy(w, stripRouterQuery(r))
 		return
@@ -1246,6 +1273,10 @@ func (a *App) handleTools(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			respondJSON(w, http.StatusOK, []any{})
+			return
+		}
+		if _, ok := a.store.Get().Models[modelID]; !ok {
+			respondError(w, http.StatusNotFound, fmt.Errorf("model %s not found", modelID))
 			return
 		}
 		if proc := a.processes.Process(modelID); proc != nil && proc.CurrentState() == ProcessReady {
@@ -1270,6 +1301,10 @@ func (a *App) handleTools(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			respondError(w, http.StatusBadRequest, fmt.Errorf("model is required for built-in tool execution"))
+			return
+		}
+		if _, ok := a.store.Get().Models[modelID]; !ok {
+			respondError(w, http.StatusNotFound, fmt.Errorf("model %s not found", modelID))
 			return
 		}
 		proc, err := a.processes.EnsureModel(r.Context(), modelID)

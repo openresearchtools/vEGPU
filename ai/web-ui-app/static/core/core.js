@@ -952,6 +952,7 @@
 				body: JSON.stringify(cleanModel(state.draft))
 			});
 			state.models = state.models.map((model) => (model.id === state.selectedId ? saved : model));
+			state.selectedId = saved.id;
 			state.draft = clone(saved);
 			state.draft.launch ||= {};
 			state.draft.generation ||= {};

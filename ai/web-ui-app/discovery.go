@@ -149,7 +149,7 @@ func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	added := []string{}
+	addedPaths := []string{}
 	err = store.Update(func(next *AppConfig) error {
 		if next.Models == nil {
 			next.Models = map[string]ModelConfig{}
@@ -197,13 +197,24 @@ func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
 				DiscoveredAt: nowRFC3339(),
 				Metadata:     metadata,
 			}
-			added = append(added, id)
-			existingByPath[modelComparableKey(location, dm.ModelPath)] = id
+			comparable := modelComparableKey(location, dm.ModelPath)
+			addedPaths = append(addedPaths, comparable)
+			existingByPath[comparable] = id
 		}
 		next.Discovery.LastScan = nowRFC3339()
 		return nil
 	})
-	return added, err
+	if err != nil {
+		return nil, err
+	}
+	added := make([]string, 0, len(addedPaths))
+	cfg = store.Get()
+	for _, comparable := range addedPaths {
+		if id := modelIDForComparableKey(cfg.Models, comparable); id != "" {
+			added = append(added, id)
+		}
+	}
+	return added, nil
 }
 
 func scanRootForGGUF(root, provider, location string) ([]DiscoveredModel, error) {
