@@ -95,6 +95,7 @@ public final class MachineService: @unchecked Sendable {
         guard let pid = currentPid() else {
             throw RuntimeError.message("Runtime is not running")
         }
+        await ensureHostAwakeAssertion(for: pid)
         try networkStore.write(networkStore.read())
         try await ssh.waitForSSH()
         try await ssh.waitForCloudInit()
@@ -312,6 +313,7 @@ public final class MachineService: @unchecked Sendable {
 
     private func startMachineInner() async throws {
         if let existingPid = currentPid() {
+            await ensureHostAwakeAssertion(for: existingPid)
             try networkStore.write(networkStore.read())
             do {
                 try await ssh.waitForSSH()
@@ -378,7 +380,11 @@ public final class MachineService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "qemu", message: "Launching runtime through \(VfioApp.displayName)", detail: config.launchMode.label))
         try networkStore.write(network.state)
         let child = try runner.spawnDetached(network.launchCommand, args, stdout: files.stdoutLog, stderr: files.stderrLog)
+        await ensureHostAwakeAssertion(for: child.processIdentifier)
         try await waitForQmp(socket: files.qmp, timeout: 20, child: child)
+        if let pid = currentPid() {
+            await ensureHostAwakeAssertion(for: pid)
+        }
         progress.report(ProgressEvent(stage: "qmp", message: "QEMU monitor is ready"))
         try await ssh.waitForSSH()
         progress.report(ProgressEvent(stage: "ssh", message: "SSH is reachable"))
@@ -478,6 +484,22 @@ public final class MachineService: @unchecked Sendable {
             let detail = firstLine(String(describing: error))
             progress.report(ProgressEvent(stage: "audio", message: "PipeWire RTP audio needs attention", detail: detail))
         }
+    }
+
+    private func ensureHostAwakeAssertion(for pid: Int32) async {
+        guard pid > 0 else { return }
+        let script = """
+        set -eu
+        PID=\(pid)
+        if ! /bin/kill -0 "$PID" 2>/dev/null; then
+          exit 0
+        fi
+        if /usr/bin/pgrep -fq "caffeinate .* -w $PID"; then
+          exit 0
+        fi
+        /usr/bin/caffeinate -i -m -s -w "$PID" >/dev/null 2>&1 &
+        """
+        _ = try? await runner.run("/bin/sh", ["-lc", script], timeout: 2)
     }
 
     private func downloadMachineDisk() async throws {

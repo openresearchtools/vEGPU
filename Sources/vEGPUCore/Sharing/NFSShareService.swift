@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Darwin
 
@@ -12,6 +13,7 @@ public struct NFSShareState: Codable, Equatable, Sendable {
     public var guestPath: String = guestShareRoot
     public var guestHost: String = VMNet.guestIP
     public var gateway: String = VMNet.gateway
+    public var generation: String = ""
 }
 
 public struct GuestMountInfo: Equatable, Sendable {
@@ -84,7 +86,7 @@ public final class NFSShareService: @unchecked Sendable {
             }
             return .ready(share: share, expectedSource: expected, remounted: false)
         }
-        if mounted.state == "busy" || mounted.state == "unknown" || mounted.state == "stale" {
+        if mounted.state == "unknown" || mounted.state == "unavailable" {
             let settled = await waitForGuestNFSShare(share: share, mode: .extended)
             if settled.state == "ready" {
                 do {
@@ -96,13 +98,13 @@ public final class NFSShareService: @unchecked Sendable {
                 }
                 return .ready(share: share, expectedSource: expected, remounted: false)
             }
-            if settled.state == "unknown" {
+            if settled.state == "unknown" || settled.state == "unavailable" {
                 return .busy(share: share, expectedSource: expected, detail: describe(settled))
             }
         }
         do {
             progress.report(ProgressEvent(stage: "share", message: "Mounting Mac share in Linux", detail: "\(expected) -> \(guestShareRoot)"))
-            _ = try await ssh.agent(["mount-nfs-share", VMNet.gateway, share.exportPath, guestShareRoot], timeout: 45)
+            _ = try await ssh.agent(["mount-nfs-share", VMNet.gateway, share.exportPath, guestShareRoot, share.generation], timeout: 45)
             let verified = await waitForGuestNFSShare(share: share, mode: .extended)
             if verified.state != "ready" {
                 throw RuntimeError.message("Mac share mount did not verify in Linux. Expected \(expected); saw \(describe(verified)).")
@@ -117,7 +119,7 @@ public final class NFSShareService: @unchecked Sendable {
 
     private func reconcileGuestNFSSharePolicy(_ share: NFSShareState) async throws {
         progress.report(ProgressEvent(stage: "share", message: "Refreshing Mac share policy in Linux", detail: share.exportPath))
-        _ = try await ssh.agent(["mount-nfs-share", VMNet.gateway, share.exportPath, guestShareRoot], timeout: 45)
+        _ = try await ssh.agent(["mount-nfs-share", VMNet.gateway, share.exportPath, guestShareRoot, share.generation], timeout: 45)
     }
 
     public func ensureBidirectional(macShareRoot: String, linuxHomeMountPath: String, linuxHomeEnabled: Bool = true) async throws -> BidirectionalShareResult {
@@ -176,14 +178,16 @@ public final class NFSShareService: @unchecked Sendable {
     public func ensureHostShare(_ rawRoot: String) async throws -> NFSShareState {
         let hostPath = normalizeShareRoot(rawRoot)
         try FileManager.default.createDirectory(atPath: hostPath, withIntermediateDirectories: true)
-        let exportPath = URL(fileURLWithPath: hostPath).resolvingSymlinksInPath().path
-        let share = NFSShareState(hostPath: hostPath, exportPath: exportPath)
+        let exportPath = try resolvedExportRoot(for: hostPath)
+        let generation = shareGeneration(hostPath: hostPath, exportPath: exportPath)
+        let share = NFSShareState(hostPath: hostPath, exportPath: exportPath, generation: generation)
         let line = try nfsExportLine(exportPath)
         if await hostNfsExportIsReady(exportLine: line) {
             try writeState(share)
             return share
         }
-        progress.report(ProgressEvent(stage: "share", message: "Configuring Mac NFS share", detail: "\(exportPath) -> \(VMNet.guestIP)"))
+        let detail = hostPath == exportPath ? "\(exportPath) -> \(VMNet.guestIP)" : "\(hostPath) via \(exportPath) -> \(VMNet.guestIP)"
+        progress.report(ProgressEvent(stage: "share", message: "Configuring Mac NFS share", detail: detail))
         _ = try await runner.runAdminScript(nfsSetupScript(exportLine: line), prompt: [
             "vEGPU needs your Mac password to share the selected folder",
             "with the local Linux VM over private vmnet.",
@@ -194,10 +198,17 @@ public final class NFSShareService: @unchecked Sendable {
     }
 
     public func mapHostPathToGuest(_ value: String, shareRoot rawRoot: String, createIfMissing: Bool = false) throws -> String? {
-        guard isHostSharePathSource(value) else { return nil }
+        let raw = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let explicitHostSource = isHostSharePathSource(raw)
+        guard explicitHostSource || raw.hasPrefix("/") else { return nil }
         let root = normalizeShareRoot(rawRoot)
-        let hostPath = resolveAgainstShareRoot(value, root: root)
-        guard isInside(root: root, candidate: hostPath) else {
+        let hostPath = resolveAgainstShareRoot(raw, root: root)
+        let exportRoot = (try? resolvedExportRoot(for: root)) ?? URL(fileURLWithPath: root).resolvingSymlinksInPath().standardizedFileURL.path
+        let acceptedRoots = uniquePaths([root, exportRoot])
+        guard let matchedRoot = acceptedRoots.first(where: { isInside(root: $0, candidate: hostPath) }) else {
+            if !explicitHostSource {
+                return nil
+            }
             throw RuntimeError.message("Host path is outside the configured vEGPU share root.\nshare root: \(root)\npath: \(hostPath)")
         }
         if createIfMissing, !FileManager.default.fileExists(atPath: hostPath) {
@@ -206,9 +217,9 @@ public final class NFSShareService: @unchecked Sendable {
         guard FileManager.default.fileExists(atPath: hostPath) else {
             throw RuntimeError.message("Host share path does not exist under the configured vEGPU share root: \(hostPath)")
         }
-        let rel = URL(fileURLWithPath: root).standardizedFileURL.path == URL(fileURLWithPath: hostPath).standardizedFileURL.path
+        let rel = URL(fileURLWithPath: matchedRoot).standardizedFileURL.path == URL(fileURLWithPath: hostPath).standardizedFileURL.path
             ? ""
-            : String(hostPath.dropFirst(root.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            : String(hostPath.dropFirst(matchedRoot.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         return rel.isEmpty ? guestShareRoot : "\(guestShareRoot)/\(rel)"
     }
 
@@ -260,6 +271,46 @@ public final class NFSShareService: @unchecked Sendable {
         guard let text = try? String(contentsOfFile: "/etc/nfs.conf") else { return false }
         guard let begin = text.range(of: configBegin), let end = text.range(of: configEnd), begin.lowerBound < end.lowerBound else { return false }
         return text[begin.lowerBound..<end.upperBound].contains("nfs.server.mount.require_resv_port = 0")
+    }
+
+    private func resolvedExportRoot(for hostPath: String) throws -> String {
+        let stable = URL(fileURLWithPath: hostPath).standardizedFileURL.path
+        guard !stable.contains("\n"), !stable.contains("\r") else {
+            throw RuntimeError.message("Share path cannot contain line breaks")
+        }
+        var isDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(atPath: stable, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw RuntimeError.message("Share root must be an existing directory: \(stable)")
+        }
+        let resolved = URL(fileURLWithPath: stable).resolvingSymlinksInPath().standardizedFileURL.path
+        guard !resolved.contains("\n"), !resolved.contains("\r") else {
+            throw RuntimeError.message("Resolved NFS export path cannot contain line breaks")
+        }
+        var resolvedIsDirectory = ObjCBool(false)
+        guard FileManager.default.fileExists(atPath: resolved, isDirectory: &resolvedIsDirectory), resolvedIsDirectory.boolValue else {
+            throw RuntimeError.message("Resolved NFS export root must be an existing directory: \(resolved)")
+        }
+        return resolved
+    }
+
+    private func shareGeneration(hostPath: String, exportPath: String) -> String {
+        var hasher = SHA256()
+        hasher.update(data: Data(hostPath.utf8))
+        hasher.update(data: Data([0]))
+        hasher.update(data: Data(exportPath.utf8))
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func uniquePaths(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for value in values {
+            let path = URL(fileURLWithPath: value).standardizedFileURL.path
+            guard !seen.contains(path) else { continue }
+            seen.insert(path)
+            out.append(path)
+        }
+        return out
     }
 
     private func nfsExportLine(_ exportPath: String) throws -> String {
@@ -327,7 +378,7 @@ public final class NFSShareService: @unchecked Sendable {
         var last = (state: "unknown", fstype: Optional<String>.none, source: Optional<String>.none, detail: Optional("not checked"))
         repeat {
             last = await readGuestNFSShareStatus(share: share)
-            if ["ready", "missing", "wrong"].contains(last.state) { return last }
+            if ["ready", "missing", "wrong", "unavailable"].contains(last.state) { return last }
             if Date() < deadline {
                 try? await Task.sleep(nanoseconds: delay)
                 delay = min(2_000_000_000, delay + delay / 2)
@@ -342,6 +393,7 @@ public final class NFSShareService: @unchecked Sendable {
         set -u
         TARGET=\(shellQuote(guestShareRoot))
         EXPECTED=\(shellQuote(expected))
+        HOST=\(shellQuote(VMNet.gateway))
         read_mount_line() {
           awk -v target="$TARGET" '$5 == target {
             for (i = 1; i <= NF; i++) {
@@ -364,10 +416,6 @@ public final class NFSShareService: @unchecked Sendable {
           }' /proc/self/mountinfo 2>/dev/null || true
         }
         line=$(read_mount_line)
-        if [ -n "$line" ] && [ "$(printf '%s' "$line" | cut -f1)" = "autofs" ]; then
-          /usr/bin/timeout 3 /bin/sh -c 'stat "$1" >/dev/null && ls -ld "$1/." >/dev/null' sh "$TARGET" >/dev/null 2>&1 || true
-          line=$(read_mount_line)
-        fi
         if [ -z "$line" ]; then
           printf 'missing\\t\\t\\t\\n'
           exit 0
@@ -378,16 +426,18 @@ public final class NFSShareService: @unchecked Sendable {
           printf 'wrong\\t%s\\t%s\\t\\n' "$fstype" "$source"
           exit 0
         fi
-        probe=$(/usr/bin/timeout 3 /bin/sh -c 'stat "$1" >/dev/null && ls -ld "$1/." >/dev/null' sh "$TARGET" 2>&1)
-        rc=$?
-        if [ "$rc" -eq 0 ]; then
-          printf 'ready\\t%s\\t%s\\t\\n' "$fstype" "$source"
-        elif [ "$rc" -eq 124 ]; then
-          printf 'busy\\t%s\\t%s\\tmetadata probe timed out\\n' "$fstype" "$source"
-        else
-          probe=$(printf '%s' "$probe" | tr '\\n' ' ' | cut -c 1-300)
-          printf 'stale\\t%s\\t%s\\tmetadata probe failed: %s\\n' "$fstype" "$source" "$probe"
+        if command -v rpcinfo >/dev/null 2>&1; then
+          if ! /usr/bin/timeout 3 rpcinfo -t "$HOST" nfs 3 >/dev/null 2>&1; then
+            printf 'unavailable\\t%s\\t%s\\tNFS RPC service is not reachable at %s\\n' "$fstype" "$source" "$HOST"
+            exit 0
+          fi
+        elif command -v nc >/dev/null 2>&1; then
+          if ! /usr/bin/timeout 3 nc -z "$HOST" 2049 >/dev/null 2>&1; then
+            printf 'unavailable\\t%s\\t%s\\tNFS TCP port is not reachable at %s\\n' "$fstype" "$source" "$HOST"
+            exit 0
+          fi
         fi
+        printf 'ready\\t%s\\t%s\\t\\n' "$fstype" "$source"
         """
         let result = try? await runner.run("/usr/bin/ssh", ssh.args(command: script), timeout: 8)
         let raw = ((result?.stdout.isEmpty == false ? result?.stdout : result?.stderr) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -401,20 +451,17 @@ public final class NFSShareService: @unchecked Sendable {
         if result?.code == 0, parts.first == "wrong" {
             return ("wrong", parts.count > 1 ? parts[1] : nil, parts.count > 2 ? parts[2] : nil, nil)
         }
-        if result?.code == 0, parts.first == "busy" {
-            return ("busy", parts.count > 1 ? parts[1] : nil, parts.count > 2 ? parts[2] : nil, parts.count > 3 ? parts[3] : "metadata probe timed out")
+        if result?.code == 0, parts.first == "unavailable" {
+            return ("unavailable", parts.count > 1 ? parts[1] : nil, parts.count > 2 ? parts[2] : nil, parts.count > 3 ? parts[3] : "NFS service is not reachable")
         }
-        if result?.code == 0, parts.first == "stale" {
-            return ("stale", parts.count > 1 ? parts[1] : nil, parts.count > 2 ? parts[2] : nil, parts.count > 3 ? parts[3] : "metadata probe failed")
-        }
-        return ("unknown", nil, nil, result?.code == 124 ? "share probe timed out" : (raw.isEmpty ? "share probe failed" : raw))
+        return ("unknown", nil, nil, result?.code == 124 ? "share status check timed out" : (raw.isEmpty ? "share status check failed" : raw))
     }
 
     private func describe(_ status: (state: String, fstype: String?, source: String?, detail: String?)) -> String {
         if status.state == "ready" { return "ready" }
         if status.state == "missing" { return "missing mount" }
         if status.state == "wrong" { return "wrong source \(status.fstype ?? "unknown") \(status.source ?? "unknown")" }
-        if status.state == "stale" { return status.detail ?? "stale mount" }
+        if status.state == "unavailable" { return status.detail ?? "NFS service is not reachable" }
         return status.detail ?? status.state
     }
 
@@ -578,6 +625,7 @@ public func isHostSharePathSource(_ value: String) -> Bool {
     if raw.isEmpty { return false }
     if raw == "~" || raw.hasPrefix("~/") || raw.hasPrefix("./") || raw.hasPrefix("../") { return true }
     if raw.hasPrefix("/Users/") || raw.hasPrefix("/Volumes/") { return true }
+    if raw == "/System/Volumes/Data/Users" || raw.hasPrefix("/System/Volumes/Data/Users/") { return true }
     return !raw.hasPrefix("/") && raw.contains("/")
 }
 

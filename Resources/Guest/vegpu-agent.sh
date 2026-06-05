@@ -1000,6 +1000,20 @@ nfs_mount_source() {
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
+nfs_rpc_ready() {
+  local host="$1"
+  local seconds="${2:-3}"
+  if command -v rpcinfo >/dev/null 2>&1; then
+    timeout "$seconds"s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    timeout "$seconds"s nc -z "$host" 2049 >/dev/null 2>&1
+    return $?
+  fi
+  timeout "$seconds"s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
+}
+
 remove_managed_mac_share_path() {
   local path="$1"
   if [ -L "$path" ] || [ -f "$path" ]; then
@@ -1081,20 +1095,44 @@ install_mac_share_recover_helper() {
 set -u
 
 SHARE="${1:-/mnt/vegpu-share}"
+HOST="${2:-172.29.253.1}"
+POLICY=/etc/vegpu/mac-share-policy
+EXPECTED=""
+
+if [ -r "$POLICY" ]; then
+  . "$POLICY"
+  SHARE="${VEGPU_MAC_SHARE_TARGET:-$SHARE}"
+  HOST="${VEGPU_MAC_SHARE_HOST:-$HOST}"
+  EXPECTED="${VEGPU_MAC_SHARE_SOURCE:-}"
+fi
+
 case "$SHARE" in
   /mnt/vegpu-share|/mnt/vegpu-share/) ;;
   *) exit 2 ;;
 esac
 
-mountinfo_type() {
+mountinfo_line() {
   awk -v target="$SHARE" '$5 == target {
     for (i = 1; i <= NF; i++) {
       if ($i == "-") {
-        print $(i + 1)
+        print $(i + 1) "\t" $(i + 2)
         exit
       }
     }
   }' /proc/self/mountinfo 2>/dev/null || true
+}
+
+nfs_rpc_ready() {
+  local host="${1:-$HOST}"
+  if command -v rpcinfo >/dev/null 2>&1; then
+    timeout 3s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    timeout 3s nc -z "$host" 2049 >/dev/null 2>&1
+    return $?
+  fi
+  timeout 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
 }
 
 if command -v flock >/dev/null 2>&1; then
@@ -1103,9 +1141,12 @@ if command -v flock >/dev/null 2>&1; then
 fi
 
 mount_unit="$(systemd-escape --path --suffix=mount "$SHARE" 2>/dev/null || true)"
-automount_unit="$(systemd-escape --path --suffix=automount "$SHARE" 2>/dev/null || true)"
-fstype="$(mountinfo_type)"
-if [ "$fstype" = "nfs" ] || [ "$fstype" = "nfs4" ]; then
+line="$(mountinfo_line)"
+current_fstype="$(printf '%s' "$line" | cut -f1)"
+current_source="$(printf '%s' "$line" | cut -f2)"
+if { [ "$current_fstype" = "nfs" ] || [ "$current_fstype" = "nfs4" ]; } &&
+   [ -n "$EXPECTED" ] &&
+   [ "$current_source" != "$EXPECTED" ]; then
   umount_cmd="$(command -v umount 2>/dev/null || true)"
   if [ -n "$umount_cmd" ]; then
     if command -v timeout >/dev/null 2>&1; then
@@ -1114,14 +1155,15 @@ if [ "$fstype" = "nfs" ] || [ "$fstype" = "nfs4" ]; then
       "$umount_cmd" -l "$SHARE" >/dev/null 2>&1 || true
     fi
   fi
+elif [ "$current_fstype" = "nfs" ] || [ "$current_fstype" = "nfs4" ]; then
+  nfs_rpc_ready "$HOST" || exit 0
 fi
 
-if command -v systemctl >/dev/null 2>&1 && [ -n "$automount_unit" ]; then
-  systemctl reset-failed "$mount_unit" "$automount_unit" >/dev/null 2>&1 || true
-  systemctl start --no-block "$automount_unit" >/dev/null 2>&1 ||
-    systemctl start "$automount_unit" >/dev/null 2>&1 || true
-  [ -n "$mount_unit" ] &&
-    systemctl start --no-block "$mount_unit" >/dev/null 2>&1 || true
+if command -v systemctl >/dev/null 2>&1 && [ -n "$mount_unit" ]; then
+  systemctl reset-failed "$mount_unit" >/dev/null 2>&1 || true
+  nfs_rpc_ready "$HOST" || exit 0
+  systemctl start --no-block "$mount_unit" >/dev/null 2>&1 ||
+    systemctl start "$mount_unit" >/dev/null 2>&1 || true
 fi
 EOS
   chmod 0755 /usr/local/sbin/vegpu-mac-share-recover
@@ -1147,7 +1189,7 @@ set -u
 
 SHARE="${1:-/mnt/vegpu-share}"
 RECOVER=/usr/local/sbin/vegpu-mac-share-recover
-PROBE_SECONDS="${VEGPU_MAC_SHARE_OPEN_PROBE_SECONDS:-6}"
+HOST="${VEGPU_MAC_SHARE_HOST:-172.29.253.1}"
 
 notify_user() {
   if command -v notify-send >/dev/null 2>&1; then
@@ -1168,38 +1210,38 @@ mountinfo_type() {
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
-bounded_probe() {
-  local seconds="${1:-6}"
-  local result pid deadline state
-  result="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/vegpu-share-probe.XXXXXX" 2>/dev/null || mktemp /tmp/vegpu-share-probe.XXXXXX)" || return 1
-  rm -f "$result"
-  (
-    if /usr/bin/stat "$SHARE/." >/dev/null 2>&1 &&
-       /usr/bin/find "$SHARE/." -maxdepth 1 -mindepth 1 -print -quit >/dev/null 2>&1; then
-      printf ok >"$result"
-    else
-      printf fail >"$result"
-    fi
-  ) </dev/null >/dev/null 2>&1 &
-  pid=$!
-  deadline=$(( $(date +%s) + seconds ))
-  while :; do
-    if [ -s "$result" ]; then
-      state="$(cat "$result" 2>/dev/null || true)"
-      wait "$pid" 2>/dev/null || true
-      rm -f "$result"
-      [ "$state" = ok ]
-      return $?
-    fi
-    if [ "$(date +%s)" -ge "$deadline" ]; then
-      kill "$pid" 2>/dev/null || true
-      sleep 0.1
-      kill -9 "$pid" 2>/dev/null || true
-      rm -f "$result"
-      return 124
-    fi
-    sleep 0.2
-  done
+nfs_source_host() {
+  awk -v target="$SHARE" '$5 == target {
+    for (i = 1; i <= NF; i++) {
+      if ($i == "-") {
+        split($(i + 2), parts, ":")
+        print parts[1]
+        exit
+      }
+    }
+  }' /proc/self/mountinfo 2>/dev/null || true
+}
+
+nfs_rpc_ready() {
+  local host="${1:-$HOST}"
+  if command -v rpcinfo >/dev/null 2>&1; then
+    timeout 3s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    timeout 3s nc -z "$host" 2049 >/dev/null 2>&1
+    return $?
+  fi
+  timeout 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
+}
+
+share_ready() {
+  local fstype host
+  fstype="$(mountinfo_type)"
+  [ "$fstype" = "nfs" ] || [ "$fstype" = "nfs4" ] || return 1
+  host="$(nfs_source_host)"
+  [ -n "$host" ] || host="$HOST"
+  nfs_rpc_ready "$host"
 }
 
 launch_detached() {
@@ -1215,7 +1257,7 @@ launch_detached() {
 schedule_recover() {
   [ -x "$RECOVER" ] || return 0
   command -v sudo >/dev/null 2>&1 || return 0
-  launch_detached sudo -n "$RECOVER" "$SHARE"
+  launch_detached sudo -n "$RECOVER" "$SHARE" "$HOST"
 }
 
 open_file_manager() {
@@ -1234,19 +1276,14 @@ open_file_manager() {
   notify_user "No file manager is installed for Mac Share."
 }
 
-case "$(mountinfo_type)" in
-  nfs|nfs4|autofs) ;;
-  *) schedule_recover ;;
-esac
-
-if bounded_probe "$PROBE_SECONDS"; then
+if share_ready; then
   open_file_manager
   exit 0
 fi
 
 schedule_recover
 sleep 0.5
-if bounded_probe 3; then
+if share_ready; then
   open_file_manager
   exit 0
 fi
@@ -1278,69 +1315,84 @@ EOS
 
 install_mac_share_keepalive() {
   local target="$1"
+  local host="${2:-172.29.253.1}"
   install -d /usr/local/libexec/vegpu /etc/systemd/system
-  install_mac_share_recover_helper
 
   cat >/usr/local/libexec/vegpu/vegpu-mac-share-keepalive <<'EOS'
 #!/usr/bin/env bash
 set -u
 
 SHARE="${1:-/mnt/vegpu-share}"
-RECOVER=/usr/local/sbin/vegpu-mac-share-recover
+HOST="${2:-172.29.253.1}"
+POLICY=/etc/vegpu/mac-share-policy
+EXPECTED=""
 
-mountinfo_type() {
+if [ -r "$POLICY" ]; then
+  . "$POLICY"
+  SHARE="${VEGPU_MAC_SHARE_TARGET:-$SHARE}"
+  HOST="${VEGPU_MAC_SHARE_HOST:-$HOST}"
+  EXPECTED="${VEGPU_MAC_SHARE_SOURCE:-}"
+fi
+
+case "$SHARE" in
+  /mnt/vegpu-share|/mnt/vegpu-share/) ;;
+  *) exit 0 ;;
+esac
+
+mountinfo_line() {
   awk -v target="$SHARE" '$5 == target {
     for (i = 1; i <= NF; i++) {
       if ($i == "-") {
-        print $(i + 1)
+        print $(i + 1) "\t" $(i + 2)
         exit
       }
     }
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
-bounded_probe() {
-  local seconds="${1:-4}"
-  local result pid deadline state
-  result="$(mktemp /run/vegpu-share-keepalive.XXXXXX 2>/dev/null || mktemp /tmp/vegpu-share-keepalive.XXXXXX)" || return 1
-  rm -f "$result"
-  (
-    if /usr/bin/stat "$SHARE/." >/dev/null 2>&1 &&
-       /usr/bin/find "$SHARE/." -maxdepth 1 -mindepth 1 -print -quit >/dev/null 2>&1; then
-      printf ok >"$result"
-    else
-      printf fail >"$result"
-    fi
-  ) </dev/null >/dev/null 2>&1 &
-  pid=$!
-  deadline=$(( $(date +%s) + seconds ))
-  while :; do
-    if [ -s "$result" ]; then
-      state="$(cat "$result" 2>/dev/null || true)"
-      wait "$pid" 2>/dev/null || true
-      rm -f "$result"
-      [ "$state" = ok ]
-      return $?
-    fi
-    if [ "$(date +%s)" -ge "$deadline" ]; then
-      kill "$pid" 2>/dev/null || true
-      sleep 0.1
-      kill -9 "$pid" 2>/dev/null || true
-      rm -f "$result"
-      return 124
-    fi
-    sleep 0.2
-  done
+nfs_rpc_ready() {
+  local host="${1:-$HOST}"
+  if command -v rpcinfo >/dev/null 2>&1; then
+    timeout 3s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    timeout 3s nc -z "$host" 2049 >/dev/null 2>&1
+    return $?
+  fi
+  timeout 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
 }
 
-case "$(mountinfo_type)" in
-  nfs|nfs4) ;;
-  *) exit 0 ;;
-esac
-
-bounded_probe 4 || {
-  [ -x "$RECOVER" ] && "$RECOVER" "$SHARE" >/dev/null 2>&1 || true
+lazy_unmount_share() {
+  local umount_cmd
+  umount_cmd="$(command -v umount 2>/dev/null || true)"
+  [ -n "$umount_cmd" ] || return 0
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 3s "$umount_cmd" -l "$SHARE" >/dev/null 2>&1 || true
+  else
+    "$umount_cmd" -l "$SHARE" >/dev/null 2>&1 || true
+  fi
 }
+
+line="$(mountinfo_line)"
+current_fstype="$(printf '%s' "$line" | cut -f1)"
+current_source="$(printf '%s' "$line" | cut -f2)"
+mount_unit="$(systemd-escape --path --suffix=mount "$SHARE" 2>/dev/null || true)"
+
+if [ "$current_fstype" = "nfs" ] || [ "$current_fstype" = "nfs4" ]; then
+  if [ -z "$EXPECTED" ] || [ "$current_source" = "$EXPECTED" ]; then
+    nfs_rpc_ready "$HOST" || exit 0
+    exit 0
+  fi
+  lazy_unmount_share
+fi
+
+nfs_rpc_ready "$HOST" || exit 0
+if command -v systemctl >/dev/null 2>&1 && [ -n "$mount_unit" ]; then
+  systemctl reset-failed "$mount_unit" >/dev/null 2>&1 || true
+  systemctl start --no-block "$mount_unit" >/dev/null 2>&1 ||
+    systemctl start "$mount_unit" >/dev/null 2>&1 || true
+fi
 EOS
   chmod 0755 /usr/local/libexec/vegpu/vegpu-mac-share-keepalive
 
@@ -1353,7 +1405,7 @@ Type=oneshot
 Nice=19
 IOSchedulingClass=idle
 TimeoutStartSec=8
-ExecStart=/usr/local/libexec/vegpu/vegpu-mac-share-keepalive $target
+ExecStart=/usr/local/libexec/vegpu/vegpu-mac-share-keepalive $target $host
 EOS
 
   cat >/etc/systemd/system/vegpu-mac-share-keepalive.timer <<'EOS'
@@ -1371,58 +1423,11 @@ WantedBy=timers.target
 EOS
 }
 
-bounded_share_probe() {
-  local target="$1"
-  local seconds="${2:-6}"
-  local result pid deadline state
-  result="$(mktemp /run/vegpu-share-probe.XXXXXX 2>/dev/null || mktemp /tmp/vegpu-share-probe.XXXXXX)" || return 1
-  rm -f "$result"
-  (
-    if /usr/bin/stat "$target/." >/dev/null 2>&1 &&
-       /usr/bin/find "$target/." -maxdepth 1 -mindepth 1 -print -quit >/dev/null 2>&1; then
-      printf ok >"$result"
-    else
-      printf fail >"$result"
-    fi
-  ) </dev/null >/dev/null 2>&1 &
-  pid=$!
-  deadline=$(( $(date +%s) + seconds ))
-  while :; do
-    if [ -s "$result" ]; then
-      state="$(cat "$result" 2>/dev/null || true)"
-      wait "$pid" 2>/dev/null || true
-      rm -f "$result"
-      [ "$state" = ok ]
-      return $?
-    fi
-    if [ "$(date +%s)" -ge "$deadline" ]; then
-      kill "$pid" 2>/dev/null || true
-      sleep 0.1
-      kill -9 "$pid" 2>/dev/null || true
-      rm -f "$result"
-      return 124
-    fi
-    sleep 0.2
-  done
-}
-
 repair_share_user_access() {
   local desktop_file app_file
   local target="$1"
-  local group_name=""
   usermod -aG dialout vegpu 2>/dev/null || true
   usermod -aG dialout vegpuctl 2>/dev/null || true
-  if [ -e "$target" ]; then
-    local gid
-    gid="$(stat -c '%g' "$target" 2>/dev/null || true)"
-    if [ -n "$gid" ]; then
-      group_name="$(getent group "$gid" 2>/dev/null | cut -d: -f1 || true)"
-    fi
-  fi
-  if [ -n "$group_name" ]; then
-    usermod -aG "$group_name" vegpu 2>/dev/null || true
-    usermod -aG "$group_name" vegpuctl 2>/dev/null || true
-  fi
   if id vegpu >/dev/null 2>&1; then
     install -d -o vegpu -g vegpu /home/vegpu/Desktop /home/vegpu/.config/gtk-3.0 /home/vegpu/.local/share/applications
     install_mac_share_launcher "$target"
@@ -1460,14 +1465,16 @@ mount_nfs_share() {
   local host="$1"
   local export_path="$2"
   local target="$3"
+  local generation="${4:-}"
   local source="$host:$export_path"
   local opts="vers=3,tcp,nolock,noatime,soft,timeo=50,retrans=2,rsize=65536,wsize=65536"
   local mount_unit automount_unit current
   ensure_nfs_client
   mount_unit="$(systemd-escape --path --suffix=mount "$target")"
   automount_unit="$(systemd-escape --path --suffix=automount "$target")"
-  mkdir -p "$target" /etc/systemd/system
-  install_mac_share_keepalive "$target"
+  [ -n "$generation" ] || generation="$(printf '%s' "$source" | sha256sum | awk '{print $1}')"
+  mkdir -p "$target" /etc/systemd/system /etc/vegpu
+  install_mac_share_keepalive "$target" "$host"
 
   cat >"/etc/systemd/system/$mount_unit" <<EOS
 [Unit]
@@ -1486,50 +1493,41 @@ TimeoutSec=8
 WantedBy=multi-user.target
 EOS
 
-  cat >"/etc/systemd/system/$automount_unit" <<EOS
-[Unit]
-Description=vEGPU Mac share automount
-After=network-online.target
-Wants=network-online.target
+  {
+    printf 'VEGPU_MAC_SHARE_HOST=%q\n' "$host"
+    printf 'VEGPU_MAC_SHARE_EXPORT=%q\n' "$export_path"
+    printf 'VEGPU_MAC_SHARE_TARGET=%q\n' "$target"
+    printf 'VEGPU_MAC_SHARE_SOURCE=%q\n' "$source"
+    printf 'VEGPU_MAC_SHARE_GENERATION=%q\n' "$generation"
+  } >/etc/vegpu/mac-share-policy
 
-[Automount]
-Where=$target
-
-[Install]
-WantedBy=multi-user.target
-EOS
-
+  systemctl disable --now "$automount_unit" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/$automount_unit"
   systemctl daemon-reload || true
-  systemctl enable "$automount_unit" >/dev/null 2>&1 || true
+  systemctl enable "$mount_unit" >/dev/null 2>&1 || true
   systemctl enable --now vegpu-mac-share-keepalive.timer >/dev/null 2>&1 || true
   current="$(nfs_mount_source "$target")"
   if [ -n "$current" ]; then
-    if [ "$current" = "$source" ] &&
-       bounded_share_probe "$target" 6; then
+    if [ "$current" = "$source" ]; then
       repair_share_user_access "$target"
       return 0
     else
-      log "Replacing stale or wrong NFS share mount at $target (current: $current, expected: $source)"
-      /usr/local/sbin/vegpu-mac-share-recover "$target" >/dev/null 2>&1 ||
+      log "Replacing wrong NFS share mount at $target (current: $current, expected: $source)"
+      /usr/local/sbin/vegpu-mac-share-recover "$target" "$host" >/dev/null 2>&1 ||
         timeout 8 umount -l "$target" 2>/dev/null || true
     fi
   fi
 
-  systemctl reset-failed "$automount_unit" "$mount_unit" >/dev/null 2>&1 || true
-  systemctl start "$automount_unit" >/dev/null 2>&1 || true
-  if bounded_share_probe "$target" 6 &&
-     [ "$(nfs_mount_source "$target")" = "$source" ]; then
+  if ! nfs_rpc_ready "$host" 3; then
+    log "Mac NFS RPC service is not reachable at $host"
     repair_share_user_access "$target"
-    return 0
+    return 1
   fi
 
-  log "Automount probe failed for $target; trying direct NFS mount"
-  systemctl reset-failed "$automount_unit" "$mount_unit" >/dev/null 2>&1 || true
+  systemctl reset-failed "$mount_unit" >/dev/null 2>&1 || true
   systemctl start "$mount_unit" || timeout 12 mount -t nfs -o "$opts" "$source" "$target"
   current="$(nfs_mount_source "$target")"
   [ "$current" = "$source" ] || { log "NFS share mount verification failed: expected $source, saw ${current:-missing}"; return 1; }
-  bounded_share_probe "$target" 6 ||
-    { log "NFS share metadata verification failed for $target"; return 1; }
   repair_share_user_access "$target"
 }
 

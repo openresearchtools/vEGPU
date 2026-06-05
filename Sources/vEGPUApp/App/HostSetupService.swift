@@ -6,7 +6,7 @@ final class HostSetupService: @unchecked Sendable {
     private let configStore: MachineConfigStore
     private let share: NFSShareService
     private let progress: ProgressCenter
-    private let version = "2026-05-15-core-sidebar-metrics"
+    private let version = "2026-06-05-stable-nfs-share"
 
     init(paths: AppPaths, progress: ProgressCenter) {
         self.paths = paths
@@ -48,4 +48,3 @@ final class HostSetupService: @unchecked Sendable {
         return raw["version"] as? String == version && raw["shareRoot"] as? String == shareRoot
     }
 }
-

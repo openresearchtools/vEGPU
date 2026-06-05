@@ -85,32 +85,9 @@ install_scaling_app() {
   fi
 }
 
-share_is_nfs_mounted() {
-  local target="$1"
-  awk -v target="$target" '$5 == target {
-    for (i = 1; i <= NF; i++) {
-      if ($i == "-") {
-        if ($(i + 1) == "nfs" || $(i + 1) == "nfs4") {
-          found = 1
-        }
-        exit
-      }
-    }
-  }
-  END { exit(found ? 0 : 1) }' /proc/self/mountinfo 2>/dev/null
-}
-
 repair_share_access() {
   usermod -aG dialout "$HUMAN_USER" 2>/dev/null || true
   usermod -aG dialout vegpuctl 2>/dev/null || true
-  if share_is_nfs_mounted "$SHARE"; then
-    share_gid="$(/usr/bin/timeout 2s stat -c '%g' "$SHARE" 2>/dev/null || true)"
-    share_group="$(getent group "$share_gid" 2>/dev/null | cut -d: -f1 || true)"
-    if [ -n "$share_group" ]; then
-      usermod -aG "$share_group" "$HUMAN_USER" 2>/dev/null || true
-      usermod -aG "$share_group" vegpuctl 2>/dev/null || true
-    fi
-  fi
 }
 
 install_desktop_mount_policy() {
@@ -311,20 +288,44 @@ install_mac_share_recover_helper() {
 set -u
 
 SHARE="${1:-/mnt/vegpu-share}"
+HOST="${2:-172.29.253.1}"
+POLICY=/etc/vegpu/mac-share-policy
+EXPECTED=""
+
+if [ -r "$POLICY" ]; then
+  . "$POLICY"
+  SHARE="${VEGPU_MAC_SHARE_TARGET:-$SHARE}"
+  HOST="${VEGPU_MAC_SHARE_HOST:-$HOST}"
+  EXPECTED="${VEGPU_MAC_SHARE_SOURCE:-}"
+fi
+
 case "$SHARE" in
   /mnt/vegpu-share|/mnt/vegpu-share/) ;;
   *) exit 2 ;;
 esac
 
-mountinfo_type() {
+mountinfo_line() {
   awk -v target="$SHARE" '$5 == target {
     for (i = 1; i <= NF; i++) {
       if ($i == "-") {
-        print $(i + 1)
+        print $(i + 1) "\t" $(i + 2)
         exit
       }
     }
   }' /proc/self/mountinfo 2>/dev/null || true
+}
+
+nfs_rpc_ready() {
+  local host="${1:-$HOST}"
+  if command -v rpcinfo >/dev/null 2>&1; then
+    timeout 3s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    timeout 3s nc -z "$host" 2049 >/dev/null 2>&1
+    return $?
+  fi
+  timeout 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
 }
 
 if command -v flock >/dev/null 2>&1; then
@@ -333,9 +334,12 @@ if command -v flock >/dev/null 2>&1; then
 fi
 
 mount_unit="$(systemd-escape --path --suffix=mount "$SHARE" 2>/dev/null || true)"
-automount_unit="$(systemd-escape --path --suffix=automount "$SHARE" 2>/dev/null || true)"
-fstype="$(mountinfo_type)"
-if [ "$fstype" = "nfs" ] || [ "$fstype" = "nfs4" ]; then
+line="$(mountinfo_line)"
+current_fstype="$(printf '%s' "$line" | cut -f1)"
+current_source="$(printf '%s' "$line" | cut -f2)"
+if { [ "$current_fstype" = "nfs" ] || [ "$current_fstype" = "nfs4" ]; } &&
+   [ -n "$EXPECTED" ] &&
+   [ "$current_source" != "$EXPECTED" ]; then
   umount_cmd="$(command -v umount 2>/dev/null || true)"
   if [ -n "$umount_cmd" ]; then
     if command -v timeout >/dev/null 2>&1; then
@@ -344,14 +348,15 @@ if [ "$fstype" = "nfs" ] || [ "$fstype" = "nfs4" ]; then
       "$umount_cmd" -l "$SHARE" >/dev/null 2>&1 || true
     fi
   fi
+elif [ "$current_fstype" = "nfs" ] || [ "$current_fstype" = "nfs4" ]; then
+  nfs_rpc_ready "$HOST" || exit 0
 fi
 
-if command -v systemctl >/dev/null 2>&1 && [ -n "$automount_unit" ]; then
-  systemctl reset-failed "$mount_unit" "$automount_unit" >/dev/null 2>&1 || true
-  systemctl start --no-block "$automount_unit" >/dev/null 2>&1 ||
-    systemctl start "$automount_unit" >/dev/null 2>&1 || true
-  [ -n "$mount_unit" ] &&
-    systemctl start --no-block "$mount_unit" >/dev/null 2>&1 || true
+if command -v systemctl >/dev/null 2>&1 && [ -n "$mount_unit" ]; then
+  systemctl reset-failed "$mount_unit" >/dev/null 2>&1 || true
+  nfs_rpc_ready "$HOST" || exit 0
+  systemctl start --no-block "$mount_unit" >/dev/null 2>&1 ||
+    systemctl start "$mount_unit" >/dev/null 2>&1 || true
 fi
 EOS
   chmod 0755 /usr/local/sbin/vegpu-mac-share-recover
@@ -376,7 +381,7 @@ set -u
 
 SHARE="${1:-/mnt/vegpu-share}"
 RECOVER=/usr/local/sbin/vegpu-mac-share-recover
-PROBE_SECONDS="${VEGPU_MAC_SHARE_OPEN_PROBE_SECONDS:-6}"
+HOST="${VEGPU_MAC_SHARE_HOST:-172.29.253.1}"
 
 notify_user() {
   if command -v notify-send >/dev/null 2>&1; then
@@ -397,38 +402,38 @@ mountinfo_type() {
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
-bounded_probe() {
-  local seconds="${1:-6}"
-  local result pid deadline state
-  result="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/vegpu-share-probe.XXXXXX" 2>/dev/null || mktemp /tmp/vegpu-share-probe.XXXXXX)" || return 1
-  rm -f "$result"
-  (
-    if /usr/bin/stat "$SHARE/." >/dev/null 2>&1 &&
-       /usr/bin/find "$SHARE/." -maxdepth 1 -mindepth 1 -print -quit >/dev/null 2>&1; then
-      printf ok >"$result"
-    else
-      printf fail >"$result"
-    fi
-  ) </dev/null >/dev/null 2>&1 &
-  pid=$!
-  deadline=$(( $(date +%s) + seconds ))
-  while :; do
-    if [ -s "$result" ]; then
-      state="$(cat "$result" 2>/dev/null || true)"
-      wait "$pid" 2>/dev/null || true
-      rm -f "$result"
-      [ "$state" = ok ]
-      return $?
-    fi
-    if [ "$(date +%s)" -ge "$deadline" ]; then
-      kill "$pid" 2>/dev/null || true
-      sleep 0.1
-      kill -9 "$pid" 2>/dev/null || true
-      rm -f "$result"
-      return 124
-    fi
-    sleep 0.2
-  done
+nfs_source_host() {
+  awk -v target="$SHARE" '$5 == target {
+    for (i = 1; i <= NF; i++) {
+      if ($i == "-") {
+        split($(i + 2), parts, ":")
+        print parts[1]
+        exit
+      }
+    }
+  }' /proc/self/mountinfo 2>/dev/null || true
+}
+
+nfs_rpc_ready() {
+  local host="${1:-$HOST}"
+  if command -v rpcinfo >/dev/null 2>&1; then
+    timeout 3s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    timeout 3s nc -z "$host" 2049 >/dev/null 2>&1
+    return $?
+  fi
+  timeout 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
+}
+
+share_ready() {
+  local fstype host
+  fstype="$(mountinfo_type)"
+  [ "$fstype" = "nfs" ] || [ "$fstype" = "nfs4" ] || return 1
+  host="$(nfs_source_host)"
+  [ -n "$host" ] || host="$HOST"
+  nfs_rpc_ready "$host"
 }
 
 launch_detached() {
@@ -444,7 +449,7 @@ launch_detached() {
 schedule_recover() {
   [ -x "$RECOVER" ] || return 0
   command -v sudo >/dev/null 2>&1 || return 0
-  launch_detached sudo -n "$RECOVER" "$SHARE"
+  launch_detached sudo -n "$RECOVER" "$SHARE" "$HOST"
 }
 
 open_file_manager() {
@@ -463,19 +468,14 @@ open_file_manager() {
   notify_user "No file manager is installed for Mac Share."
 }
 
-case "$(mountinfo_type)" in
-  nfs|nfs4|autofs) ;;
-  *) schedule_recover ;;
-esac
-
-if bounded_probe "$PROBE_SECONDS"; then
+if share_ready; then
   open_file_manager
   exit 0
 fi
 
 schedule_recover
 sleep 0.5
-if bounded_probe 3; then
+if share_ready; then
   open_file_manager
   exit 0
 fi

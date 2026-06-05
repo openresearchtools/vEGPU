@@ -802,12 +802,6 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         guard case .ready = mounted else {
             throw RuntimeError.message("Mac share is not ready for VM llama.cpp runtime.")
         }
-        let paths = guestShareProbePaths(spec, shareRoot: shareRoot)
-        guard !paths.isEmpty else { return }
-        let probe = await probeGuestSharePaths(paths)
-        guard probe.ok else {
-            throw RuntimeError.message("Mac share is mounted but model files are not readable in Linux: \(probe.detail ?? "probe failed")")
-        }
     }
 
     private func specUsesHostShare(_ spec: LlmsRuntimeSpec, shareRoot: String) -> Bool {
@@ -822,34 +816,6 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             if isMacPathArg(value) {
                 _ = try share.mapHostPathToGuest(value, shareRoot: shareRoot)
             }
-        }
-    }
-
-    private func guestShareProbePaths(_ spec: LlmsRuntimeSpec, shareRoot: String) -> [String] {
-        var seen = Set<String>()
-        for value in (spec.modelPaths ?? []) + (spec.mountPaths ?? []) + (spec.args ?? []) where isMacPathArg(value) {
-            if let mapped = try? share.mapHostPathToGuest(value, shareRoot: shareRoot), mapped.hasPrefix("\(guestShareRoot)/") {
-                seen.insert(mapped)
-            }
-        }
-        return Array(seen).sorted()
-    }
-
-    private func probeGuestSharePaths(_ paths: [String]) async -> (ok: Bool, detail: String?) {
-        let script = ([
-            "set -u",
-            "probe_path() {",
-            "  p=\"$1\"",
-            "  if [ -d \"$p\" ]; then timeout 8s ls -ld \"$p\" >/dev/null; return $?; fi",
-            "  if [ -f \"$p\" ]; then timeout 12s dd if=\"$p\" of=/dev/null bs=65536 count=1 iflag=fullblock status=none; return $?; fi",
-            "  return 2",
-            "}"
-        ] + paths.map { "probe_path \(shellQuote($0)) || { code=$?; printf '%s failed with %s\\n' \(shellQuote($0)) \"$code\" >&2; exit \"$code\"; }" }).joined(separator: "\n")
-        do {
-            _ = try await runGuestScript(script, timeout: 20)
-            return (true, nil)
-        } catch {
-            return (false, firstLine(String(describing: error)))
         }
     }
 
@@ -868,7 +834,12 @@ public final class LlmsRuntimeService: @unchecked Sendable {
 
     private func isMacPathArg(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed == "~" || trimmed.hasPrefix("~/") || trimmed.hasPrefix("/Users/") || trimmed.hasPrefix("/Volumes/")
+        return trimmed == "~" ||
+            trimmed.hasPrefix("~/") ||
+            trimmed.hasPrefix("/Users/") ||
+            trimmed.hasPrefix("/Volumes/") ||
+            trimmed == "/System/Volumes/Data/Users" ||
+            trimmed.hasPrefix("/System/Volumes/Data/Users/")
     }
 
     private func ensureBindArgs(args: [String], port: Int) -> [String] {
