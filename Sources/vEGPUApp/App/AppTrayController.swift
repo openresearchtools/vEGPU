@@ -6,6 +6,7 @@ final class AppTrayController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private weak var appDelegate: AppDelegate?
     private weak var model: NativeAppModel?
+    private var globalHotkeys: DisplayGlobalHotkeyService?
     private var statusText = "checking"
     private var timer: Timer?
 
@@ -25,6 +26,11 @@ final class AppTrayController: NSObject {
 
     func configure(model: NativeAppModel) {
         self.model = model
+        if globalHotkeys == nil {
+            let globalHotkeys = DisplayGlobalHotkeyService(displayControl: model.displayControlMenu)
+            globalHotkeys.start()
+            self.globalHotkeys = globalHotkeys
+        }
         updateMenu()
         refreshStatus()
         timer?.invalidate()
@@ -38,6 +44,8 @@ final class AppTrayController: NSObject {
     func invalidate() {
         timer?.invalidate()
         timer = nil
+        globalHotkeys?.invalidate()
+        globalHotkeys = nil
         model?.stopHostSleepGuardForShutdown()
         NSStatusBar.system.removeStatusItem(statusItem)
     }

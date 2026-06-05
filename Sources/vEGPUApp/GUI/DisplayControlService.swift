@@ -442,6 +442,15 @@ final class DisplayControlMenuModel: ObservableObject {
         }
     }
 
+    func handleExternalSessionShortcut(digit: Int) {
+        guard (1...9).contains(digit) else { return }
+        if digit == 1 {
+            releaseSession()
+        } else {
+            enterOrderedSession(number: digit - 1)
+        }
+    }
+
     func reload() {
         performEmbedded {
             try await self.service.reload()

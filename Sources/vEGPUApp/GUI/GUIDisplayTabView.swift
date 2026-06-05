@@ -37,10 +37,12 @@ struct GUIDisplayTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .vegpuExternalSessionShortcut)) { notification in
             guard let digit = notification.object as? Int else { return }
             if digit == 1 {
-                releaseExternalInput()
-            } else {
-                displayControl.enterOrderedSession(number: digit - 1)
+                session.setExternalInputCapture(false)
             }
+            displayControl.handleExternalSessionShortcut(digit: digit)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .vegpuReleaseExternalInputCapture)) { _ in
+            session.setExternalInputCapture(false)
         }
     }
 
@@ -59,7 +61,6 @@ struct GUIDisplayTabView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-        .background(ExternalSessionShortcutMonitor(model: displayControl, session: session))
     }
 
     private func syncExternalCapture(_ activeSessionID: String?) {
@@ -75,85 +76,6 @@ struct GUIDisplayTabView: View {
         }
     }
 
-    private func releaseExternalInput() {
-        session.setExternalInputCapture(false)
-        displayControl.releaseSession()
-    }
-}
-
-private struct ExternalSessionShortcutMonitor: NSViewRepresentable {
-    @ObservedObject var model: DisplayControlMenuModel
-    @ObservedObject var session: SpiceSessionController
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(model: model, session: session)
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        context.coordinator.install()
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.model = model
-        context.coordinator.session = session
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.uninstall()
-    }
-
-    @MainActor
-    final class Coordinator {
-        var model: DisplayControlMenuModel
-        var session: SpiceSessionController
-        private var localMonitor: Any?
-        private var globalMonitor: Any?
-
-        init(model: DisplayControlMenuModel, session: SpiceSessionController) {
-            self.model = model
-            self.session = session
-        }
-
-        func install() {
-            guard localMonitor == nil, globalMonitor == nil else { return }
-            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                self?.handle(event, consume: true) ?? event
-            }
-            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                _ = self?.handle(event, consume: false)
-            }
-        }
-
-        func uninstall() {
-            if let localMonitor {
-                NSEvent.removeMonitor(localMonitor)
-            }
-            if let globalMonitor {
-                NSEvent.removeMonitor(globalMonitor)
-            }
-            localMonitor = nil
-            globalMonitor = nil
-        }
-
-        private func handle(_ event: NSEvent, consume: Bool) -> NSEvent? {
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard flags == [.command, .option],
-                  let text = event.charactersIgnoringModifiers,
-                  let digit = Int(text),
-                  (1...9).contains(digit) else {
-                return event
-            }
-            if digit == 1 {
-                session.setExternalInputCapture(false)
-                model.releaseSession()
-            } else {
-                model.enterOrderedSession(number: digit - 1)
-            }
-            return consume ? nil : event
-        }
-    }
 }
 
 private extension String {
