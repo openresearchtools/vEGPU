@@ -28,6 +28,14 @@ The canonical generated app-side files are `NOTICES` and `LICENSES`.
 `GUEST-VM-INSTALL-NOTICES.md` is generated as a separate user-facing file.
 `NOTICES.md` is also generated as a compatibility copy for older tooling.
 
+`LICENSES` is the app-visible distribution license bundle for installed
+vEGPU.app runtime payloads, helper programs, framework dependencies, and
+app-managed runtime archives. Source archives under `source/` are accompanied by
+adjacent generated `.NOTICES`, `.LICENSES`, and `.manifest.json` sidecars. Those
+sidecars are the exhaustive legal records for the contents of each source
+archive, including source-only build tools, tests, examples, backend source
+trees, and provenance inputs used to reproduce app-side artifacts.
+
 The vEGPU app Help menu opens those generated files. For convenience, it can
 also render external vEGPU Machine notices and licenses from the installed
 `vEGPU Machine.app`. The Help menu marks those Machine-owned rows as
@@ -40,6 +48,6 @@ vEGPU installs inside the Linux VM from Debian APT, NVIDIA APT repositories, or
 local vEGPU/vEGPU Machine guest packages. It is not a substitute for the app or
 Machine legal bundles.
 
-The generated legal files list the installed source archive locations for
-vEGPU.app and vEGPU Machine.app so users do not have to inspect the installer
-package by hand.
+The generated legal files list the installed source archive locations and
+source-archive sidecars for vEGPU.app and vEGPU Machine.app so users do not
+have to inspect the installer package by hand.

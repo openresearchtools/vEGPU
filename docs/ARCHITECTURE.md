@@ -75,10 +75,13 @@ package into `vEGPU.app`, and cloud-init/SSH install it in the guest.
 ## Model Routing
 
 The app includes a Go router and web UI under `ai/web-ui-app`. Runtime binaries
-such as `llama-server`, `rpc-server`, and llama.cpp dylibs are not committed and
-are not bundled in this source repository. Users install matched macOS/Linux
-runtime pairs through the Core UI, and those runtime artifacts carry their own
-license files.
+such as `llama-server`, `rpc-server`, and llama.cpp dylibs are not committed to
+this source repository. Release packages can bundle managed macOS/Linux
+llama.cpp runtime archives under the app bootstrap runtime directory; additional
+runtime pairs remain user-managed through the Core UI. Bundled runtime archives
+are covered by the app-visible distribution `LICENSES` file, while source
+archives installed under `legal/generated/source/` have adjacent legal sidecars
+for their archive contents.
 
 Mutable router config lives in app data:
 

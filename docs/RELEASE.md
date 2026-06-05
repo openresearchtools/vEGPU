@@ -3,6 +3,11 @@
 This repo builds `vEGPU.app`, the Apache-side Swift/AppKit application. It does
 not vendor QEMU, firmware, VFIO DriverKit code, or guest GPL source. Those live
 in the separate `vEGPU Machine.app` build.
+The installed `vEGPU.app` legal bundle has two surfaces. `LICENSES` is the
+app-visible distribution license bundle for installed runtime payloads, helper
+programs, framework dependencies, and app-managed runtime archives. Source
+archives under `legal/generated/source/` have adjacent generated `.NOTICES`,
+`.LICENSES`, and `.manifest.json` sidecars for the files inside those archives.
 
 ## Repositories
 
@@ -42,8 +47,15 @@ The generated folder contains:
 - `LICENSES`
 - `NOTICES.md` compatibility copy
 - `manifest.json`
-- copied app-side license inputs under `license-files/`
+- copied scoped app distribution license inputs under `license-files/`
 - `source/vEGPU-app-source.tar.gz`
+- `source/vEGPU-app-source.NOTICES`
+- `source/vEGPU-app-source.LICENSES`
+- `source/vEGPU-app-source.manifest.json`
+- `source/display-runtime-source.tar.gz`
+- `source/display-runtime-source.NOTICES`
+- `source/display-runtime-source.LICENSES`
+- `source/display-runtime-source.manifest.json`
 
 Legacy `THIRD_PARTY_*` files are not copied into the app bundle.
 
@@ -64,8 +76,11 @@ $RUNNER_TEMP/vegpu-input/display-runtime-source/display-runtime-source.tar.gz
 
 This is deliberately strict: the current app bundles SPICE/GLib/GStreamer/etc
 frameworks copied from the UTM display runtime, so the public release must carry
-the matching source/provenance bundle instead of relying on stale legacy
-notices.
+the matching app-side display source/provenance bundle instead of relying on
+stale legacy notices. The installed vEGPU.app display source archive may include
+build/source inputs needed to reproduce the app-side display runtime. Its
+adjacent source-archive sidecars carry the exhaustive license/notice records for
+the archive contents.
 
 ## Source-Built Display Runtime
 
@@ -184,7 +199,8 @@ scripts/build-release-pkg.sh
 ```
 
 The package license screen should mention that the install contains two apps
-with separate notices:
+with separate notices and that vEGPU.app `LICENSES` is a scoped distribution
+license bundle:
 
 - vEGPU app notices/licenses: `vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/NOTICES`
   and `vEGPU.app/Contents/Resources/vEGPURoot/legal/generated/LICENSES`

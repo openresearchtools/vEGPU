@@ -20,14 +20,16 @@ separate.
 
 ## License And Source Boundary
 
-vEGPU.app is distributed under the permissive Apache License, Version 2.0.
+vEGPU.app's own application source code is distributed under the permissive
+Apache License, Version 2.0.
 vEGPU uses a split related to UTM's app/runtime separation, but goes a step
 further: the frontend, AI runtime control surface, display client, routing, and
 orchestration live in vEGPU.app, while the GPL-covered Machine/QEMU runtime
 lives in the separate vEGPU Machine.app. The app-side display runtime includes
 SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work, and
-related support libraries. Release packages carry notices and corresponding
-source/provenance archives inside:
+related support libraries. Release packages carry the installed vEGPU.app
+distribution legal bundle, including scoped license blocks and corresponding
+source/provenance archives, inside:
 
 ```text
 /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
@@ -53,8 +55,15 @@ embedded GUI display integration is partially based on the main
 pinned UTM base plus the vEGPU patch stack in `third_party/utm/patches`.
 
 GPL-covered QEMU-derived code stays on the Machine side. Apache-side
-launcher/display/AI code stays in this repository. File-level and component
-license notices remain authoritative.
+launcher/display/AI code stays in this repository. The generated vEGPU.app
+`LICENSES` file is the app-visible distribution license bundle for installed
+vEGPU.app runtime payloads, helper programs, framework dependencies, and
+app-managed runtime archives. Source archives installed under
+`legal/generated/source/` have adjacent generated `.NOTICES`, `.LICENSES`, and
+`.manifest.json` sidecars that cover the files inside those archives, including
+source-only build tools, tests, examples, backend source trees, and provenance
+inputs used to reproduce app-side artifacts. File-level and component license
+notices remain authoritative.
 
 ## Runtime And Routing Provenance
 

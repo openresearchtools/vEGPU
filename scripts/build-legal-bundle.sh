@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
 BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 OUT="${1:-${VEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}}"
-REQUIRE_FULL_SOURCE="${VEGPU_REQUIRE_FULL_SOURCE:-0}"
+REQUIRE_FULL_SOURCE="${VEGPU_REQUIRE_FULL_SOURCE:-1}"
 
 rm -rf "$OUT"
 mkdir -p "$OUT/license-files" "$OUT/source"
@@ -217,8 +217,10 @@ def safe_member_path(name: str) -> Path:
     ]
     return Path(*parts) if parts else Path("LICENSE")
 
-def copy_tar_license_member(tar: tarfile.TarFile, member: tarfile.TarInfo, dst_root: Path) -> bool:
+def copy_tar_license_member(tar: tarfile.TarFile, member: tarfile.TarInfo, dst_root: Path, member_filter=None) -> bool:
     if not member.isfile() or not looks_like_license_path(member.name):
+        return False
+    if member_filter is not None and not member_filter(member.name):
         return False
     handle = tar.extractfile(member)
     if handle is None:
@@ -229,10 +231,10 @@ def copy_tar_license_member(tar: tarfile.TarFile, member: tarfile.TarInfo, dst_r
         shutil.copyfileobj(handle, out_file)
     return True
 
-def collect_tar_license_files_from_tar(tar: tarfile.TarFile, dst_root: Path, label: str, depth: int) -> int:
+def collect_tar_license_files_from_tar(tar: tarfile.TarFile, dst_root: Path, label: str, depth: int, member_filter=None) -> int:
     copied = 0
     for member in tar.getmembers():
-        if copy_tar_license_member(tar, member, dst_root):
+        if copy_tar_license_member(tar, member, dst_root, member_filter=member_filter):
             copied += 1
             continue
         if depth >= max_archive_scan_depth or not member.isfile() or not looks_like_archive(member.name):
@@ -248,28 +250,78 @@ def collect_tar_license_files_from_tar(tar: tarfile.TarFile, dst_root: Path, lab
             nested_root,
             f"{label}!/{member.name}",
             depth + 1,
+            member_filter=member_filter,
         )
     return copied
 
-def collect_tar_license_files_from_file(archive: Path, dst_root: Path, depth: int = 0) -> int:
+def collect_tar_license_files_from_file(archive: Path, dst_root: Path, depth: int = 0, member_filter=None) -> int:
     copied = 0
     try:
         with tarfile.open(archive, mode="r:*") as tar:
-            copied += collect_tar_license_files_from_tar(tar, dst_root, str(archive), depth)
+            copied += collect_tar_license_files_from_tar(tar, dst_root, str(archive), depth, member_filter=member_filter)
     except (tarfile.TarError, OSError) as exc:
         if require_full_source:
             raise SystemExit(f"Unable to inspect legal source archive {archive}: {exc}") from exc
     return copied
 
-def collect_tar_license_files_from_bytes(data: bytes, dst_root: Path, label: str, depth: int = 0) -> int:
+def collect_tar_license_files_from_bytes(data: bytes, dst_root: Path, label: str, depth: int = 0, member_filter=None) -> int:
     copied = 0
     try:
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
-            copied += collect_tar_license_files_from_tar(tar, dst_root, label, depth)
+            copied += collect_tar_license_files_from_tar(tar, dst_root, label, depth, member_filter=member_filter)
     except (tarfile.TarError, OSError) as exc:
         if require_full_source:
             raise SystemExit(f"Unable to inspect nested legal source archive {label}: {exc}") from exc
     return copied
+
+display_runtime_archive_allowlist = {
+    "WebKit-source",
+    "libepoxy-source",
+    "libucontext-source",
+    "gettext-0.22.5",
+    "glib-2.83.0",
+    "gst-plugins-base-1.19.1",
+    "gst-plugins-good-1.19.1",
+    "gstreamer-1.19.1",
+    "json-glib-1.10.0",
+    "libffi-3.5.0",
+    "libgcrypt-1.8.4",
+    "libgpg-error-1.38",
+    "libiconv-1.16",
+    "libjpeg-turbo-1.5.3",
+    "libpng-1.6.48",
+    "libsoup-3.6.0",
+    "libusb-1.0.25",
+    "libxml2-2.9.12",
+    "openssl-1.1.1b",
+    "opus-1.3",
+    "phodav-3.0",
+    "pixman-0.38.0",
+    "spice-gtk-0.42",
+    "spice-protocol-0.14.4",
+    "usbredir-0.14.0",
+    "utm-base-e4a4c34b671284263fc69f81b607de494d7e9b65",
+    "zstd-1.5.2",
+}
+
+def display_runtime_archive_allowed(archive_id: str) -> bool:
+    return archive_id in display_runtime_archive_allowlist
+
+def display_runtime_license_member_allowed(archive_id: str, member_name: str) -> bool:
+    normalized = member_name.replace("\\", "/").lower()
+    if archive_id == "WebKit-source" and "/tools/flex-bison/" in normalized:
+        return False
+    if archive_id == "gettext-0.22.5":
+        return "/gettext-runtime/intl/copying.lib" in normalized
+    if archive_id == "libiconv-1.16":
+        return normalized.endswith("/copying.lib")
+    if archive_id in {"libgcrypt-1.8.4", "libgpg-error-1.38"}:
+        return normalized.endswith("/copying.lib")
+    if archive_id == "libpng-1.6.48":
+        return normalized.endswith("/libpng-1.6.48/license")
+    if archive_id == "spice-gtk-0.42" and "/common/recorder/scope/" in normalized:
+        return False
+    return True
 
 def collect_display_runtime_licenses(display_source: Path | None) -> tuple[int, int]:
     if display_source is None or not display_source.is_file():
@@ -304,10 +356,14 @@ def collect_display_runtime_licenses(display_source: Path | None) -> tuple[int, 
                 with handle:
                     data = handle.read()
                 archives += 1
+                if not display_runtime_archive_allowed(archive_id):
+                    continue
+                member_filter = lambda member_name, archive_id=archive_id: display_runtime_license_member_allowed(archive_id, member_name)
                 copied += collect_tar_license_files_from_bytes(
                     data,
                     license_dir / "display-runtime" / group / archive_id,
                     name,
+                    member_filter=member_filter,
                 )
     except (tarfile.TarError, OSError) as exc:
         if require_full_source:
@@ -438,6 +494,19 @@ for gomod in sorted((root / "ai").glob("*/go.mod")):
             license_dir / "go" / safe_name(module_path),
         )
 
+app_excluded_display_frameworks = {
+    "asprintf.0.framework",
+    "charset.1.framework",
+    "gettextlib-0.22.5.framework",
+    "gettextpo.0.framework",
+    "gettextsrc-0.22.5.framework",
+    "girepository-2.0.0.framework",
+    "gstcheck-1.0.0.framework",
+    "gstcontroller-1.0.0.framework",
+    "textstyle.0.framework",
+    "turbojpeg.0.framework",
+}
+
 framework_rows: list[tuple[str, str, str]] = []
 framework_dir = Path(
     os.environ.get(
@@ -447,6 +516,8 @@ framework_dir = Path(
 )
 for info in sorted(framework_dir.glob("*.framework/Versions/A/Resources/Info.plist")):
     framework = info.parents[3].name
+    if framework in app_excluded_display_frameworks:
+        continue
     try:
         with info.open("rb") as handle:
             plist = plistlib.load(handle)
@@ -495,10 +566,13 @@ display_source_candidates = [
 ]
 display_source = next((item for item in display_source_candidates if item is not None and item.exists()), None)
 display_source_manifest_path = None
+display_source_for_legal = display_source
 if display_source is not None:
+    (out / "source").mkdir(parents=True, exist_ok=True)
     if display_source.is_file():
-        shutil.copy2(display_source, out / "source" / display_source.name)
-        display_source_manifest_path = f"source/{display_source.name}"
+        shutil.copy2(display_source, out / "source" / "display-runtime-source.tar.gz")
+        display_source_for_legal = out / "source" / "display-runtime-source.tar.gz"
+        display_source_manifest_path = "source/display-runtime-source.tar.gz"
     else:
         (out / "source" / "DISPLAY_RUNTIME_SOURCE_DIRECTORY.txt").write_text(
             f"Display runtime source directory is present in source tree at: {display_source}\n"
@@ -511,8 +585,8 @@ if display_source is not None:
 elif require_full_source:
     raise SystemExit(
         "Missing display runtime corresponding source archive. Set VEGPU_DISPLAY_SOURCE_OUT "
-        "to the downloaded display-runtime-source artifact, or set VEGPU_REQUIRE_FULL_SOURCE=0 "
-        "for non-release local builds."
+        "to the downloaded display-runtime-source artifact. vEGPU.app package and artifact "
+        "builds must always include this source archive and its generated legal sidecars."
     )
 
 machine_app = Path(os.environ.get("VEGPU_MACHINE_APP", "/Applications/vEGPU Machine.app"))
@@ -554,7 +628,7 @@ if bootstrap_llama:
             if require_full_source:
                 raise SystemExit(f"Bundled llama runtime manifest is invalid JSON: {exc}") from exc
 
-display_runtime_license_count, display_runtime_source_archive_count = collect_display_runtime_licenses(display_source)
+display_runtime_license_count, display_runtime_source_archive_count = collect_display_runtime_licenses(display_source_for_legal)
 llama_runtime_license_count, llama_runtime_archive_count = collect_llama_runtime_licenses(bootstrap_llama_path, llama_runtime_manifest)
 
 def read_text_lossy(path: Path) -> str:
@@ -569,7 +643,7 @@ def read_text_lossy(path: Path) -> str:
 
 def guess_license_from_text(path: Path) -> str | None:
     lower = read_text_lossy(path).lower()
-    if "gnu lesser general public license" in lower:
+    if "gnu lesser general public license" in lower or "gnu library general public license" in lower:
         return "LGPL"
     if "gnu general public license" in lower:
         return "GPL"
@@ -620,32 +694,35 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
         "name": re.sub(r"[-_]+", " ", base).strip() or rel,
         "version": "unknown",
         "license": license_guess(path, rel),
+        "scope": "vEGPU.app distribution",
         "source": f"license-files/{rel}",
     }
     if rel == "vEGPU-App-Apache-2.0.txt":
-        meta.update({"name": "vEGPU.app", "version": f"{release_version} ({source_revision})", "license": "Apache-2.0"})
+        meta.update({"name": "vEGPU.app", "version": f"{release_version} ({source_revision})", "license": "Apache-2.0", "scope": "vEGPU.app source code"})
     elif rel == "ANGLE-LICENSE.txt":
-        meta.update({"name": "ANGLE", "version": angle_meta["version"], "license": angle_meta["license"]})
+        meta.update({"name": "ANGLE", "version": angle_meta["version"], "license": angle_meta["license"], "scope": "Bundled app-side ANGLE runtime/source"})
     elif rel in {"ANGLE-SOURCE.md", "ANGLE-IMPORT.txt"}:
-        meta.update({"name": "ANGLE source provenance", "version": angle_meta["version"], "license": "Notice/Provenance"})
+        meta.update({"name": "ANGLE source provenance", "version": angle_meta["version"], "license": "Notice/Provenance", "scope": "App-side source provenance"})
     elif rel == "CocoaSpice-LICENSE.txt":
-        meta.update({"name": "CocoaSpice", "version": f"UTM {utm_commit}", "license": "Apache-2.0"})
+        meta.update({"name": "CocoaSpice", "version": f"UTM {utm_commit}", "license": "Apache-2.0", "scope": "Bundled app-side display package"})
     elif rel == "UTM-PATCH-README.md":
-        meta.update({"name": "UTM/CocoaSpice patch provenance", "version": utm_commit, "license": "Notice/Provenance"})
+        meta.update({"name": "UTM/CocoaSpice patch provenance", "version": utm_commit, "license": "Notice/Provenance", "scope": "App-side display patch provenance"})
     elif rel == "vEGPU-NOTICES.md":
-        meta.update({"name": "vEGPU app notices seed", "version": source_revision, "license": "Notice/Provenance"})
+        meta.update({"name": "vEGPU app notices seed", "version": source_revision, "license": "Notice/Provenance", "scope": "App-side notice seed"})
     elif rel == "GUEST-VM-INSTALL-NOTICES.md":
-        meta.update({"name": "vEGPU guest VM installation notices", "version": source_revision, "license": "Notice/Provenance"})
+        meta.update({"name": "vEGPU guest VM installation notices", "version": source_revision, "license": "Notice/Provenance", "scope": "Guest VM install notice"})
+    elif rel == "web-ui-app-NOTICE.txt":
+        meta.update({"name": "AI web UI/router provenance", "version": source_revision, "license": "Notice/Provenance", "scope": "Bundled app-side AI web UI/router"})
     elif "llama.cpp" in lower:
-        meta.update({"name": "llama.cpp", "version": "bundled/runtime manifest", "license": "MIT"})
+        meta.update({"name": "llama.cpp", "version": "bundled/runtime manifest", "license": "MIT", "scope": "App-side llama.cpp runtime/provenance"})
     elif "llama-swap" in lower:
-        meta.update({"name": "llama-swap routing provenance", "version": "modified app-side routing", "license": "MIT"})
+        meta.update({"name": "llama-swap routing provenance", "version": "modified app-side routing", "license": "MIT", "scope": "App-side routing provenance"})
     elif "gost" in lower:
-        meta.update({"name": "GOST/local proxy provenance", "version": "modified app-side local proxy", "license": "MIT" if "license" in lower or "mit" in lower else "Notice/Provenance"})
+        meta.update({"name": "GOST/local proxy provenance", "version": "modified app-side local proxy", "license": "MIT" if "license" in lower or "mit" in lower else "Notice/Provenance", "scope": "Bundled app-side local proxy"})
     elif "vegpu-scaling" in lower:
-        meta.update({"name": "vEGPU Linux scaling helper", "version": release_version, "license": "MIT"})
+        meta.update({"name": "vEGPU Linux scaling helper", "version": release_version, "license": "MIT", "scope": "Bundled guest-side scaling helper package"})
     elif "utm-apache" in lower:
-        meta.update({"name": "UTM app-side display provenance", "version": utm_commit, "license": "Apache-2.0"})
+        meta.update({"name": "UTM app-side display provenance", "version": utm_commit, "license": "Apache-2.0", "scope": "App-side display provenance"})
     elif lower.startswith("display-runtime/"):
         parts = rel.split("/")
         archive_id = parts[2] if len(parts) > 2 else Path(rel).stem
@@ -654,6 +731,7 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
             "name": f"Display runtime: {package_name}",
             "version": package_version,
             "license": license_guess(path, rel),
+            "scope": "Bundled app-side display runtime dependency",
         })
     elif lower.startswith("llama-runtime/"):
         parts = rel.split("/")
@@ -667,6 +745,7 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
             "name": f"Bundled llama.cpp runtime: {archive_id}",
             "version": version,
             "license": license_guess(path, rel),
+            "scope": "Bundled app-managed llama.cpp runtime archive",
         })
     elif lower.startswith("swiftpm/"):
         package = rel.split("/", 2)[1]
@@ -676,9 +755,10 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
                 "name": f"SwiftPM: {pin['name']}",
                 "version": f"{pin['version']} ({pin['revision']})",
                 "license": pin["license"],
+                "scope": "Swift package used by vEGPU.app",
             })
         else:
-            meta.update({"name": f"SwiftPM: {package}"})
+            meta.update({"name": f"SwiftPM: {package}", "scope": "Swift package used by vEGPU.app"})
     elif lower.startswith("go/"):
         module = rel.split("/", 2)[1]
         gometa = go_module_meta.get(module)
@@ -687,9 +767,10 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
                 "name": f"Go module: {gometa['path']}",
                 "version": gometa["version"],
                 "license": gometa["license"],
+                "scope": "Go module used by bundled app-side helper",
             })
         else:
-            meta.update({"name": f"Go module: {module}"})
+            meta.update({"name": f"Go module: {module}", "scope": "Go module used by bundled app-side helper"})
     return meta
 
 license_blocks = []
@@ -710,18 +791,21 @@ for path in sorted(license_dir.rglob("*")):
     license_blocks.append((meta, text))
 
 license_lines = []
-license_lines.append("vEGPU App Third-Party Licenses")
-license_lines.append("================================")
+license_lines.append("vEGPU.app Distribution Licenses")
+license_lines.append("===============================")
 license_lines.append("")
-license_lines.append("Each package/dependency block below contains the package name, version or revision when known, license metadata, source license file copied into this notice bundle, and the full license or notice text between BEGIN LICENSE and END LICENSE markers.")
+license_lines.append("Each package/dependency block below contains the package name, version or revision when known, license metadata, component scope, source license file copied into this notice bundle, and the full license or notice text between BEGIN LICENSE and END LICENSE markers.")
 license_lines.append("")
-license_lines.append("This file covers vEGPU.app app-side components only. QEMU, VFIO, DriverKit, firmware, and guest-driver licenses are carried by vEGPU Machine.app in /Applications/vEGPU Machine.app/Contents/Resources/ThirdPartyNotices/.")
+license_lines.append("This LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution. It covers vEGPU.app's own application source license and the third-party software, runtime payloads, helper programs, framework dependencies, and app-managed runtime archives distributed as part of vEGPU.app.")
+license_lines.append("vEGPU.app also installs corresponding source and provenance archives under legal/generated/source/. Those archives are provided to document and reproduce the app-side components they describe, and may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are not loaded by vEGPU.app at runtime.")
+license_lines.append("Each source archive has generated legal sidecars next to the archive: <archive>.NOTICES, <archive>.LICENSES, and <archive>.manifest.json. Those sidecars are the license and notice records for the files contained in the corresponding source archive. This app-visible LICENSES file does not flatten every source-archive license block into the runtime license view unless the same component is also distributed as an installed vEGPU.app runtime payload.")
 license_lines.append("Machine/QEMU license text is not copied into this vEGPU.app LICENSES file. For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL, and vEGPU.app does not copy Machine legal text into its own bundle.")
 license_lines.append("")
 for meta, text in license_blocks:
     license_lines.append(f"Package/Dependency: {meta['name']}")
     license_lines.append(f"Version/Revision: {meta['version']}")
     license_lines.append(f"License: {meta['license']}")
+    license_lines.append(f"Component-Scope: {meta['scope']}")
     license_lines.append(f"Source-License-File: {meta['source']}")
     license_lines.append("----")
     license_lines.append("BEGIN LICENSE")
@@ -757,7 +841,11 @@ notice.extend([
     "",
     "vEGPU.app bundles, builds against, or ships app-side runtime components including SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work, Swift package dependencies, Go helper dependencies, local AI web UI/router materials, llama.cpp and llama-swap derived/provenance materials, bundled llama.cpp runtime archives, GOST-style local proxy materials, TurboQuant runtime provenance, Linux scaling helper packaging, guest setup/repair scripts, and related support libraries. Those components keep their own license terms, including permissive licenses and LGPL-family licenses where applicable. File-level and component-level notices remain authoritative.",
     "",
-    "The app-side LICENSES file consolidates the full verbatim app-side license and notice text for those bundled app-side materials. It includes package/dependency blocks harvested from checked-in notices, Swift package checkouts, Go module caches, display/ANGLE/source archives, bundled llama runtime archives, and other app-side source/provenance inputs used by the release package. Detailed package/dependency blocks live in LICENSES, not in this NOTICES file.",
+    "The app-visible LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution. It covers vEGPU.app's own application source license and the third-party software, runtime payloads, helper programs, framework dependencies, and app-managed runtime archives distributed as part of vEGPU.app.",
+    "",
+    "vEGPU.app also installs corresponding source and provenance archives under legal/generated/source/. Those archives are provided to document and reproduce the app-side components they describe. Source archives are intentionally broader than the installed runtime closure: they may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are present for provenance or reproducible-build purposes but are not loaded by vEGPU.app at runtime.",
+    "",
+    "The legal records for those source archive contents are generated next to each archive, not mixed into the main app runtime license view. For each archive, use the adjacent NOTICES, LICENSES, and manifest sidecars listed below.",
     "",
     "",
     "2. vEGPU Machine.app",
@@ -786,7 +874,13 @@ notice.extend([
     "- LICENSES",
     "- GUEST-VM-INSTALL-NOTICES.md",
     "- source/vEGPU-app-source.tar.gz",
+    "- source/vEGPU-app-source.NOTICES",
+    "- source/vEGPU-app-source.LICENSES",
+    "- source/vEGPU-app-source.manifest.json",
     "- source/display-runtime-source.tar.gz",
+    "- source/display-runtime-source.NOTICES",
+    "- source/display-runtime-source.LICENSES",
+    "- source/display-runtime-source.manifest.json",
     "",
     "Installed Machine-side notices, license texts, and source bundles are available inside:",
     "",
@@ -832,7 +926,7 @@ notice.extend([
     "Generated Metadata",
     "------------------",
     "",
-    "Build-time legal harvesting details are kept in manifest.json and in the app-side LICENSES blocks for validation. This NOTICES file is intentionally a readable packaging and license-boundary explanation, not a raw inventory of every harvested license file.",
+    "Build-time legal harvesting details are kept in manifest.json, in the app-visible LICENSES blocks, and in the source-archive sidecar manifests for validation. This NOTICES file is intentionally a readable packaging and license-boundary explanation, not a raw inventory of every harvested license file.",
     "",
     "No Affiliation",
     "--------------",
@@ -895,5 +989,252 @@ tar -czf "$OUT/source/vEGPU-app-source.tar.gz" \
   --exclude='tools/bin' \
   --exclude='THIRD_PARTY_*' \
   "${source_items[@]}"
+
+python3 - "$OUT" <<'PY'
+import hashlib
+import io
+import json
+import os
+import re
+import sys
+import tarfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+out = Path(sys.argv[1])
+source_dir = out / "source"
+generated_at = datetime.now(timezone.utc).isoformat()
+
+archive_suffixes = (".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar")
+license_name_prefixes = (
+    "license",
+    "licenses",
+    "licence",
+    "licences",
+    "notice",
+    "notices",
+    "copying",
+    "copyings",
+    "copyright",
+    "copyrights",
+    "third_party_license",
+    "third_party_licenses",
+    "third-party-license",
+    "third-party-licenses",
+    "third_party_notice",
+    "third_party_notices",
+    "third-party-notice",
+    "third-party-notices",
+)
+license_suffix_terms = {
+    "agpl",
+    "apache",
+    "apl",
+    "bsd",
+    "buildtools",
+    "exception",
+    "gpl",
+    "gpl2",
+    "gpl3",
+    "isc",
+    "lgpl",
+    "lgpl2",
+    "lgpl21",
+    "lgpl3",
+    "lib",
+    "lesser",
+    "mit",
+    "mpl",
+    "new",
+    "old",
+    "openssl",
+    "unlicense",
+    "zlib",
+}
+license_text_extensions = {"adoc", "html", "htm", "md", "plist", "rst", "rtf", "text", "txt"}
+
+def archive_base(path: Path) -> str:
+    name = path.name
+    lower = name.lower()
+    for suffix in archive_suffixes:
+        if lower.endswith(suffix):
+            return name[: -len(suffix)]
+    return path.stem
+
+def looks_like_archive(name: str) -> bool:
+    lower = name.lower()
+    return any(lower.endswith(suffix) for suffix in archive_suffixes)
+
+def looks_like_license_path(name: str) -> bool:
+    normalized = name.replace("\\", "/")
+    parts = [part for part in normalized.split("/") if part and part not in {".", ".."}]
+    if not parts:
+        return False
+    base = parts[-1].lower()
+    for prefix in license_name_prefixes:
+        if base == prefix:
+            return True
+        for separator in (".", "-", "_"):
+            marker = prefix + separator
+            if not base.startswith(marker):
+                continue
+            suffix = base[len(marker):]
+            tokens = [token for token in re.split(r"[-_.]+", suffix) if token]
+            if not tokens:
+                return True
+            if tokens[-1] in license_text_extensions:
+                return True
+            if any(
+                token in license_suffix_terms
+                or token.startswith("gpl")
+                or token.startswith("lgpl")
+                or token.startswith("agpl")
+                for token in tokens
+            ):
+                return True
+    return False
+
+def read_text_lossy(data: bytes) -> str:
+    if not data:
+        return ""
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        text = data.decode("utf-16", errors="replace")
+    else:
+        text = data.decode("utf-8", errors="replace")
+    return text.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n").rstrip()
+
+def guess_license(text: str, path: str) -> str:
+    lower = text.lower()
+    path_lower = path.lower()
+    if "gnu affero general public license" in lower:
+        return "AGPL"
+    if "gnu lesser general public license" in lower or "gnu library general public license" in lower:
+        return "LGPL"
+    if "gnu general public license" in lower:
+        return "GPL"
+    if "apache license" in lower and "version 2.0" in lower:
+        return "Apache-2.0"
+    if "mozilla public license" in lower:
+        return "MPL"
+    if "permission is hereby granted, free of charge" in lower:
+        return "MIT"
+    if "redistribution and use in source and binary forms" in lower:
+        return "BSD"
+    if "isc license" in lower:
+        return "ISC"
+    if "zlib license" in lower or "zlib/libpng license" in lower:
+        return "Zlib"
+    if "notice" in path_lower:
+        return "Notice"
+    return "See text"
+
+def collect_from_tar_bytes(data: bytes, label: str, depth: int = 0, max_depth: int = 8):
+    records = []
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
+            for member in tar.getmembers():
+                name = member.name.replace("\\", "/")
+                if not member.isfile():
+                    continue
+                handle = tar.extractfile(member)
+                if handle is None:
+                    continue
+                with handle:
+                    member_data = handle.read()
+                archive_path = f"{label}!/{name}" if label else name
+                if looks_like_license_path(name):
+                    text = read_text_lossy(member_data)
+                    records.append({
+                        "archivePath": archive_path,
+                        "license": guess_license(text, archive_path),
+                        "sha256": hashlib.sha256(member_data).hexdigest(),
+                        "size": len(member_data),
+                        "text": text,
+                    })
+                if depth < max_depth and looks_like_archive(name):
+                    records.extend(collect_from_tar_bytes(member_data, archive_path, depth + 1, max_depth))
+    except (tarfile.TarError, OSError):
+        return records
+    return records
+
+def write_source_sidecars(archive: Path, title: str, description: str) -> None:
+    if not archive.is_file():
+        return
+    data = archive.read_bytes()
+    records = collect_from_tar_bytes(data, archive.name)
+    prefix = source_dir / archive_base(archive)
+    rel_archive = f"source/{archive.name}"
+    notice_lines = [
+        f"{title} Notices",
+        "=" * (len(title) + len(" Notices")),
+        "",
+        f"Archive: {rel_archive}",
+        f"Generated: {generated_at}",
+        "",
+        description,
+        "",
+        "This sidecar belongs to the source/provenance archive named above. The archive is distributed so the corresponding app-side artifacts can be inspected, audited, and reproduced from their recorded source inputs.",
+        "",
+        "Source archives are intentionally broader than the installed runtime closure. They may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are present for provenance or reproducible-build purposes but are not loaded by vEGPU.app at runtime.",
+        "",
+        "Use this sidecar together with the adjacent LICENSES and manifest files for the archive contents:",
+        "",
+        f"- {prefix.name}.NOTICES",
+        f"- {prefix.name}.LICENSES",
+        f"- {prefix.name}.manifest.json",
+        "",
+    ]
+    (prefix.with_suffix(".NOTICES")).write_text("\n".join(notice_lines))
+
+    license_lines = [
+        f"{title} Source Archive Licenses",
+        "=" * (len(title) + len(" Source Archive Licenses")),
+        "",
+        f"Archive: {rel_archive}",
+        f"Generated: {generated_at}",
+        "",
+        "This LICENSES sidecar contains license and notice text harvested from the source/provenance archive named above, including nested source archives where they are present. It governs the files contained in that source archive. It is separate from the main app-visible vEGPU.app LICENSES file, which covers the installed application/runtime distribution.",
+        "",
+    ]
+    for record in records:
+        license_lines.append(f"Archive-Path: {record['archivePath']}")
+        license_lines.append(f"Detected-License: {record['license']}")
+        license_lines.append(f"SHA256: {record['sha256']}")
+        license_lines.append("----")
+        license_lines.append("BEGIN LICENSE")
+        license_lines.append("----")
+        license_lines.append(record["text"])
+        license_lines.append("----")
+        license_lines.append("END LICENSE")
+        license_lines.append("")
+    (prefix.with_suffix(".LICENSES")).write_text("\n".join(license_lines))
+
+    manifest = {
+        "archive": rel_archive,
+        "generatedAt": generated_at,
+        "licenseRecordCount": len(records),
+        "records": [
+            {
+                "archivePath": record["archivePath"],
+                "detectedLicense": record["license"],
+                "sha256": record["sha256"],
+                "size": record["size"],
+            }
+            for record in records
+        ],
+    }
+    (prefix.with_suffix(".manifest.json")).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+write_source_sidecars(
+    source_dir / "vEGPU-app-source.tar.gz",
+    "vEGPU.app",
+    "This archive contains the vEGPU.app source tree used for the release, excluding generated build products, runtime downloads, local model files, VM disks, and other non-source artifacts.",
+)
+write_source_sidecars(
+    source_dir / "display-runtime-source.tar.gz",
+    "vEGPU.app Display Runtime",
+    "This archive contains app-side display runtime source and provenance inputs used for the packaged SPICE/GLib/GStreamer/ANGLE display stack.",
+)
+PY
 
 echo "$OUT"

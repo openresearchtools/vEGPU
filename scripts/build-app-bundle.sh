@@ -25,6 +25,18 @@ GOST_BIN="$APP_BUILD_DIR/gost-local-proxy"
 AUDIO_HOST_BIN="$APP_BUILD_DIR/tools/bin/vegpu-audio-host"
 LOCAL_PROXY_BIN="$APP_BUILD_DIR/tools/bin/vegpu-local-proxy"
 ANGLE_REQUIRED_FRAMEWORKS=(EGL GLESv2)
+APP_EXCLUDED_DISPLAY_FRAMEWORKS=(
+  asprintf.0
+  charset.1
+  gettextlib-0.22.5
+  gettextpo.0
+  gettextsrc-0.22.5
+  girepository-2.0.0
+  gstcheck-1.0.0
+  gstcontroller-1.0.0
+  textstyle.0
+  turbojpeg.0
+)
 
 cd "$ROOT"
 
@@ -64,7 +76,26 @@ SDKROOT="$(xcrun --show-sdk-path)"
   "$ROOT/Helpers/AudioBridge/vegpu-audio-host.c"
 cp "$GOST_BIN" "$LOCAL_PROXY_BIN"
 chmod +x "$WEB_UI_BIN" "$GOST_BIN" "$LOCAL_PROXY_BIN" "$AUDIO_HOST_BIN"
+export VEGPU_REQUIRE_FULL_SOURCE="${VEGPU_REQUIRE_FULL_SOURCE:-1}"
 "$ROOT/scripts/build-legal-bundle.sh" "$LEGAL_BUILD_DIR" >/dev/null
+required_legal_sidecars=(
+  "$LEGAL_BUILD_DIR/source/vEGPU-app-source.NOTICES"
+  "$LEGAL_BUILD_DIR/source/vEGPU-app-source.LICENSES"
+  "$LEGAL_BUILD_DIR/source/vEGPU-app-source.manifest.json"
+  "$LEGAL_BUILD_DIR/source/display-runtime-source.NOTICES"
+  "$LEGAL_BUILD_DIR/source/display-runtime-source.LICENSES"
+  "$LEGAL_BUILD_DIR/source/display-runtime-source.manifest.json"
+)
+for legal_file in "${required_legal_sidecars[@]}"; do
+  if [ ! -f "$legal_file" ]; then
+    printf 'Missing generated source archive legal sidecar: %s\n' "$legal_file" >&2
+    exit 1
+  fi
+done
+if grep -E '^License: A?GPL$' "$LEGAL_BUILD_DIR/LICENSES" >/dev/null; then
+  printf 'vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks.\n' >&2
+  exit 1
+fi
 
 rm -rf "$APP"
 mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS" "$BUNDLED_ROOT/tools/bin"
@@ -181,6 +212,10 @@ fi
 
 if [ -d "$DISPLAY_FRAMEWORKS" ]; then
   rsync -a --delete --include='*.framework/***' --include='*.framework' --exclude='*' "$DISPLAY_FRAMEWORKS/" "$FRAMEWORKS/"
+  # The display artifact carries build, test, and gettext tool libraries. vEGPU.app ships only the runtime closure it loads.
+  for framework in "${APP_EXCLUDED_DISPLAY_FRAMEWORKS[@]}"; do
+    rm -rf "$FRAMEWORKS/$framework.framework"
+  done
   "$ROOT/scripts/normalize-display-frameworks.sh" "$FRAMEWORKS"
 fi
 
@@ -238,11 +273,47 @@ for framework in "${ANGLE_REQUIRED_FRAMEWORKS[@]}"; do
 done
 
 if command -v otool >/dev/null 2>&1; then
-  otool_targets=("$MACOS/vEGPUApp")
-  while IFS= read -r framework; do
-    binary="$framework/$(basename "$framework" .framework)"
-    [ -e "$binary" ] && otool_targets+=("$binary")
-  done < <(find "$FRAMEWORKS" -maxdepth 1 -type d -name '*.framework' | sort)
+  otool_targets=()
+  while IFS= read -r binary; do
+    otool_targets+=("$binary")
+  done < <(python3 - "$MACOS" "$FRAMEWORKS" "$BUNDLED_ROOT/tools/bin" <<'PY'
+from pathlib import Path
+import os
+import sys
+
+roots = [Path(arg) for arg in sys.argv[1:]]
+mach_o_magics = {
+    b"\xfe\xed\xfa\xce",
+    b"\xfe\xed\xfa\xcf",
+    b"\xce\xfa\xed\xfe",
+    b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe",
+    b"\xbe\xba\xfe\xca",
+    b"\xca\xfe\xd0\x0d",
+}
+seen = set()
+for root in roots:
+    if not root.exists():
+        continue
+    candidates = [root] if root.is_file() else sorted(path for path in root.rglob("*") if path.is_file())
+    for path in candidates:
+        try:
+            real = os.path.realpath(path)
+            if real in seen:
+                continue
+            with path.open("rb") as handle:
+                magic = handle.read(4)
+        except OSError:
+            continue
+        if magic in mach_o_magics:
+            seen.add(real)
+            print(path)
+PY
+  )
+  if [ "${#otool_targets[@]}" -eq 0 ]; then
+    printf 'Refusing bundle with no Mach-O executables or framework binaries to validate.\n' >&2
+    exit 1
+  fi
   bad_refs="$(otool -L "${otool_targets[@]}" | grep -E '/Applications/UTM\\.app|/opt/homebrew|/usr/local/Cellar' || true)"
   if [ -n "$bad_refs" ]; then
     printf 'Refusing bundle with non-standalone display references:\\n%s\\n' "$bad_refs" >&2

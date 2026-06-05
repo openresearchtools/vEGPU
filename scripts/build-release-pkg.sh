@@ -87,6 +87,12 @@ test -f "$APP_LEGAL/LICENSES"
 test -f "$APP_LEGAL/GUEST-VM-INSTALL-NOTICES.md"
 test -f "$APP_LEGAL/source/vEGPU-app-source.tar.gz"
 test -f "$APP_LEGAL/source/display-runtime-source.tar.gz"
+test -f "$APP_LEGAL/source/vEGPU-app-source.NOTICES"
+test -f "$APP_LEGAL/source/vEGPU-app-source.LICENSES"
+test -f "$APP_LEGAL/source/vEGPU-app-source.manifest.json"
+test -f "$APP_LEGAL/source/display-runtime-source.NOTICES"
+test -f "$APP_LEGAL/source/display-runtime-source.LICENSES"
+test -f "$APP_LEGAL/source/display-runtime-source.manifest.json"
 test -d "$APP_LEGAL/license-files/display-runtime"
 test -d "$APP_LEGAL/license-files/llama-runtime"
 test "$(find "$APP_LEGAL/license-files/display-runtime" -type f | wc -l | tr -d ' ')" -ge 20
@@ -94,18 +100,36 @@ test "$(find "$APP_LEGAL/license-files/llama-runtime" -type f | wc -l | tr -d ' 
 grep -F 'Package/Dependency: Display runtime: glib' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: Display runtime: openssl' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: llama-swap routing provenance' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: llama.cpp' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: GOST/local proxy provenance' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: AI web UI/router provenance' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: Go module: web-ui-app' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: Go module: gopkg.in/yaml.v3' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: SwiftPM: swiftterm' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Package/Dependency: SwiftPM: swift-argument-parser' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Component-Scope: Swift package used by vEGPU.app' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP_LEGAL/NOTICES" >/dev/null
-grep -F 'The app-side LICENSES file consolidates the full verbatim app-side license and notice text' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'The app-visible LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'The legal records for those source archive contents are generated next to each archive' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
+if grep -E '^License: A?GPL$' "$APP_LEGAL/LICENSES"; then
+  printf 'vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks\n' >&2
+  exit 1
+fi
 if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP_LEGAL/NOTICES"; then
   printf 'vEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory\n' >&2
   exit 1
 fi
 if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP_LEGAL/NOTICES"; then
   printf 'vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status\n' >&2
+  exit 1
+fi
+if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier|records found' "$APP_LEGAL/source/"*.NOTICES; then
+  printf 'source archive NOTICES sidecars must be user-facing legal/source prose, not raw generated audit inventories\n' >&2
   exit 1
 fi
 
@@ -507,8 +531,8 @@ libraries. Those components keep their own license terms, including
 permissive licenses and LGPL-family licenses where applicable. File-level
 and component-level notices remain authoritative.
 
-Installed app-side notices, license texts, source records, and corresponding
-source/provenance archives are available at:
+Installed app-side notices, runtime/distribution license records, source
+archives, and source-archive legal sidecars are available at:
 
 /Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
 
@@ -518,10 +542,22 @@ Key installed vEGPU.app legal/source files:
 - LICENSES
 - GUEST-VM-INSTALL-NOTICES.md
 - source/vEGPU-app-source.tar.gz
+- source/vEGPU-app-source.NOTICES
+- source/vEGPU-app-source.LICENSES
+- source/vEGPU-app-source.manifest.json
 - source/display-runtime-source.tar.gz
+- source/display-runtime-source.NOTICES
+- source/display-runtime-source.LICENSES
+- source/display-runtime-source.manifest.json
 
-NOTICES explains the app/Machine split and where each app's source archives
-live. LICENSES consolidates the full verbatim app-side license and notice text.
+NOTICES explains the app/Machine split and where each app's legal and source
+records live. LICENSES is the consolidated license record for the installed
+vEGPU.app application/runtime distribution. Source archives are broader than
+the runtime closure: they can include upstream source trees, build recipes,
+backend implementations, generated inputs, tests, examples, and source-only
+build tools used for provenance or reproducible builds. The legal records for
+those archive contents are generated next to each archive as NOTICES, LICENSES,
+and manifest sidecars.
 GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, and optional
 NVIDIA/CUDA install activity inside the Linux VM.
 The vEGPU.app Help menu also opens the installed legal files, which list the

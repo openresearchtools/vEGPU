@@ -283,7 +283,10 @@
           <div class="section-kicker">license reality</div>
           <h3 id="license-title">GPL stuff stays GPL. The launcher side stays separate.</h3>
           <p>
-            vEGPU follows the UTM and UTM-QEMU style split, just with a harder boundary: vEGPU Machine handles the GPL DriverKit/QEMU/VM mechanics, while vEGPU handles the launcher, GUI, and AI runtime layers. The annoying part is that GPL-derived QEMU code and more permissive app-side code do not become magically compatible just because the final user experience wants both. That is how open-source projects end up with separate binaries, separate repos, and long forum arguments about what is linked to what. So the rule here is boring on purpose: GPL side stays GPL, Apache-side launcher work stays separate, and the boundary stays visible.
+            vEGPU follows the UTM and UTM-QEMU style split, just with a harder boundary: vEGPU Machine handles the GPL DriverKit/QEMU/VM mechanics, while vEGPU handles the launcher, GUI, and AI runtime layers. The package keeps that boundary visible in the installed apps, Help menu, notices, source archives, and license files.
+          </p>
+          <p>
+            vEGPU.app ships an app-visible distribution LICENSES file for the installed runtime payloads, helper programs, framework dependencies, and app-managed runtime archives. Source archives installed with the app have adjacent NOTICES, LICENSES, and manifest sidecars for the files inside those archives, including source-only build inputs used to reproduce app-side artifacts. vEGPU Machine.app carries its own external Machine/QEMU notices, licenses, and source bundles.
           </p>
           <div class="license-mini">
             <span><strong>vEGPU Machine:</strong> QEMU patch stack, Scott's VFIO/DriverKit base, UTM/QEMU display-session mechanics, guest driver mechanics.</span>

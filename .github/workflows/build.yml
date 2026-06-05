@@ -678,12 +678,38 @@ jobs:
           find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
           find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
           scripts/normalize-display-frameworks.sh --check "$APP/Contents/Frameworks"
+          for framework in \
+            asprintf.0 \
+            charset.1 \
+            gettextlib-0.22.5 \
+            gettextpo.0 \
+            gettextsrc-0.22.5 \
+            girepository-2.0.0 \
+            gstcheck-1.0.0 \
+            gstcontroller-1.0.0 \
+            textstyle.0 \
+            turbojpeg.0
+          do
+            if [ -d "$APP/Contents/Frameworks/$framework.framework" ]; then
+              echo "unused display build/test/tool framework must not be bundled in vEGPU.app: $framework.framework" >&2
+              exit 1
+            fi
+          done
           otool -D "$APP/Contents/Frameworks/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
           otool -D "$APP/Contents/Frameworks/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
           test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
-          tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
-          tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz" | grep -F 'display-runtime-source/git-sources/libucontext.git/libucontext-source.tar.gz'
+          DISPLAY_SOURCE="$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
+          tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
+          tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/git-sources/libucontext.git/libucontext-source.tar.gz'
+          tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/upstream-sources/gettext-0.22.5.tar.gz'
+          tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/upstream-sources/pkg-config-0.29.2.tar.gz'
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.NOTICES"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.LICENSES"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.manifest.json"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.NOTICES"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.LICENSES"
+          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.manifest.json"
           test -f "$APP/Contents/Resources/vEGPURoot/Resources/Guest/reconcile-llama-runtimes.sh"
           find "$APP/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit | grep -q .
           test -f "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json"
@@ -710,14 +736,36 @@ jobs:
           grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'The app-side LICENSES file consolidates the full verbatim app-side license and notice text' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'The app-visible LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'The legal records for those source archive contents are generated next to each archive' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
           grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'This LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: vEGPU.app source code' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: Bundled app-side display runtime dependency' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: Bundled app-managed llama.cpp runtime archive' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: llama-swap routing provenance' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: llama.cpp' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: GOST/local proxy provenance' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: AI web UI/router provenance' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Go module: web-ui-app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Go module: gopkg.in/yaml.v3' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: SwiftPM: swiftterm' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: SwiftPM: swift-argument-parser' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: Swift package used by vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          if grep -E '^License: A?GPL$' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"; then
+            echo "vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks" >&2
+            exit 1
+          fi
           if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
             echo "vEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory" >&2
             exit 1
           fi
           if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
             echo "vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status" >&2
+            exit 1
+          fi
+          if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier|records found' "$APP/Contents/Resources/vEGPURoot/legal/generated/source/"*.NOTICES; then
+            echo "source archive NOTICES sidecars must be user-facing legal/source prose, not raw generated audit inventories" >&2
             exit 1
           fi
           grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"

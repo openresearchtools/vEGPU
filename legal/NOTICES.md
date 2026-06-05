@@ -15,8 +15,18 @@ orchestration live in vEGPU.app, while the GPL-covered Machine/QEMU runtime
 lives in the separate vEGPU Machine.app. The app bundles and loads components
 with their own licenses, including SPICE/GLib/GStreamer/ANGLE, CocoaSpice,
 UTM-derived GUI display work, and related support libraries. The installed app
-carries generated notices plus corresponding app/display-runtime source
-archives under `Contents/Resources/vEGPURoot/legal/generated`.
+carries generated notices, an app-visible distribution `LICENSES` file, and
+corresponding app/display-runtime source archives under
+`Contents/Resources/vEGPURoot/legal/generated`.
+
+The app-visible `LICENSES` file covers the installed vEGPU.app
+application/runtime distribution: app source license, shipped frameworks,
+helpers, app-managed runtime archives, and other installed runtime payloads.
+Source archives under `legal/generated/source/` carry adjacent generated
+`.NOTICES`, `.LICENSES`, and `.manifest.json` sidecars. Those sidecars cover the
+contents of their corresponding source archives, including source-only build
+tools, tests, examples, backend source trees, and provenance inputs used to
+reproduce app-side artifacts.
 
 vEGPU Machine.app is distributed as the separate Machine/runtime application.
 It carries the QEMU/VFIO/DriverKit side, including QEMU-derived GPL-covered
