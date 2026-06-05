@@ -315,17 +315,13 @@ mountinfo_line() {
   }' /proc/self/mountinfo 2>/dev/null || true
 }
 
-nfs_rpc_ready() {
+nfs_port_ready() {
   local host="${1:-$HOST}"
-  if command -v rpcinfo >/dev/null 2>&1; then
-    timeout 3s rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
-    return $?
-  fi
   if command -v nc >/dev/null 2>&1; then
-    timeout 3s nc -z "$host" 2049 >/dev/null 2>&1
+    timeout -k 1s 3s nc -z -w 3 "$host" 2049 >/dev/null 2>&1
     return $?
   fi
-  timeout 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
+  timeout -k 1s 3s bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
 }
 
 if command -v flock >/dev/null 2>&1; then
@@ -349,12 +345,12 @@ if { [ "$current_fstype" = "nfs" ] || [ "$current_fstype" = "nfs4" ]; } &&
     fi
   fi
 elif [ "$current_fstype" = "nfs" ] || [ "$current_fstype" = "nfs4" ]; then
-  nfs_rpc_ready "$HOST" || exit 0
+  exit 0
 fi
 
 if command -v systemctl >/dev/null 2>&1 && [ -n "$mount_unit" ]; then
   systemctl reset-failed "$mount_unit" >/dev/null 2>&1 || true
-  nfs_rpc_ready "$HOST" || exit 0
+  nfs_port_ready "$HOST" || exit 0
   systemctl start --no-block "$mount_unit" >/dev/null 2>&1 ||
     systemctl start "$mount_unit" >/dev/null 2>&1 || true
 fi
@@ -435,19 +431,6 @@ run_bounded() {
   timeout -k 1s "${seconds}s" "$@"
 }
 
-nfs_rpc_ready() {
-  local host="${1:-$HOST}"
-  if command -v rpcinfo >/dev/null 2>&1; then
-    run_bounded 3 rpcinfo -t "$host" nfs 3 >/dev/null 2>&1
-    return $?
-  fi
-  if command -v nc >/dev/null 2>&1; then
-    run_bounded 3 nc -z "$host" 2049 >/dev/null 2>&1
-    return $?
-  fi
-  run_bounded 3 bash -c ':</dev/tcp/"$1"/2049' bash "$host" >/dev/null 2>&1
-}
-
 share_mounted_correctly() {
   local fstype source
   fstype="$(mountinfo_type)"
@@ -458,7 +441,6 @@ share_mounted_correctly() {
 
 share_probe_ok() {
   share_mounted_correctly || return 1
-  nfs_rpc_ready "$HOST" || return 1
   run_bounded 4 stat "$SHARE/." >/dev/null 2>&1
 }
 
@@ -492,7 +474,7 @@ wait_for_ready_share() {
 
 open_file_manager() {
   if command -v thunar >/dev/null 2>&1; then
-    launch_detached thunar --new-window "$SHARE"
+    launch_detached thunar "$SHARE"
     return 0
   fi
   if command -v xdg-open >/dev/null 2>&1; then
