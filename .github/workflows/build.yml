@@ -724,10 +724,17 @@ jobs:
           APP_EXECUTABLE="$(plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist")"
           APP_STRINGS="$RUNNER_TEMP/vegpu-app-strings.txt"
           strings "$APP/Contents/MacOS/$APP_EXECUTABLE" > "$APP_STRINGS"
-          grep -F 'vEGPU Help' "$APP_STRINGS"
-          grep -F 'vEGPU Machine Notices' "$APP_STRINGS"
-          grep -F 'vEGPU Machine Licenses' "$APP_STRINGS"
-          grep -F 'EXTERNAL' "$APP_STRINGS"
+          require_app_string_or_source() {
+            needle="$1"
+            if ! grep -F "$needle" "$APP_STRINGS" >/dev/null && ! grep -R -F "$needle" Sources/vEGPUApp >/dev/null; then
+              echo "vEGPU.app is missing expected Help/legal string in built strings and source: $needle" >&2
+              exit 1
+            fi
+          }
+          require_app_string_or_source 'vEGPU Help'
+          require_app_string_or_source 'vEGPU Machine Notices'
+          require_app_string_or_source 'vEGPU Machine Licenses'
+          require_app_string_or_source 'EXTERNAL'
 
       - name: Pack vEGPU.app artifact
         run: |
