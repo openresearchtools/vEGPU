@@ -73,6 +73,8 @@ final class NativeAppModel: ObservableObject {
     var commandState: String { get { runtimeScreen.log.commandState } set { setIfChanged(runtimeScreen.log, \.commandState, newValue) } }
     var linuxPassword: String { get { runtimeScreen.terminal.linuxPassword } set { setIfChanged(runtimeScreen.terminal, \.linuxPassword, newValue) } }
     var webHelperStatus = "Stopped"
+    @Published var hostSleepGuardStatus = "Sleep Guard: Off"
+    @Published var hostSleepGuardActive = false
     var terminalConnected: Bool { get { runtimeScreen.terminal.terminalConnected } set { setIfChanged(runtimeScreen.terminal, \.terminalConnected, newValue) } }
     var terminalSessionID: UUID { get { runtimeScreen.terminal.terminalSessionID } set { runtimeScreen.terminal.terminalSessionID = newValue } }
     var terminalInput: TerminalInput? { get { runtimeScreen.terminal.terminalInput } set { runtimeScreen.terminal.terminalInput = newValue } }
@@ -143,6 +145,7 @@ final class NativeAppModel: ObservableObject {
     func refreshStatus() {
         refreshRuntimeSnapshot(loadManifest: true)
         webHelperStatus = goHelperSupervisor.status
+        refreshHostSleepGuard()
         refreshDriverCards()
         refreshMetrics()
     }
@@ -339,6 +342,42 @@ final class NativeAppModel: ObservableObject {
         Task {
             await runAction("stop") {
                 try await self.machineService.stopMachine()
+            }
+        }
+    }
+
+    func shutdownRuntimeForLowBattery() async throws -> String {
+        runtimePane = .output
+        terminalConnected = false
+        NotificationCenter.default.post(name: .vegpuRuntimeWillStop, object: self)
+        appendOutput("[warning] Battery below 15%; vEGPU is shutting down the VM to prevent battery drain and PCIe sleep risk")
+
+        guard machineService.currentPid() != nil else {
+            try? await machineService.forceHostSleepGuardOff()
+            refreshStatus()
+            return "Runtime was already stopped. Sleep prevention has been turned off."
+        }
+
+        do {
+            try await machineService.stopMachine(timeout: 90)
+            try? await machineService.forceHostSleepGuardOff()
+            appendOutput("[success] Low-battery VM shutdown completed cleanly")
+            refreshStatus()
+            return "The VM stopped cleanly. Sleep prevention has been turned off."
+        } catch {
+            let stopError = error
+            appendOutput("[warning] Clean low-battery VM shutdown failed; force killing QEMU: \(firstLine(String(describing: stopError)))")
+            do {
+                try await machineService.forceKillMachineProcess()
+                try? await machineService.forceHostSleepGuardOff()
+                appendOutput("[success] QEMU was force killed for low-battery protection")
+                refreshStatus()
+                return "Clean shutdown did not finish in time. QEMU was force killed for low-battery protection, and sleep prevention has been turned off."
+            } catch {
+                try? await machineService.forceHostSleepGuardOff()
+                appendOutput("[error] Low-battery force kill failed: \(error)")
+                refreshStatus()
+                throw RuntimeError.message("Clean shutdown failed: \(firstLine(String(describing: stopError))). Force kill failed: \(firstLine(String(describing: error))).")
             }
         }
     }
@@ -565,6 +604,46 @@ final class NativeAppModel: ObservableObject {
         return normalized
     }
 
+    func refreshHostSleepGuard() {
+        Task {
+            let status = await machineService.hostSleepGuardStatus()
+            await MainActor.run {
+                self.applyHostSleepGuardStatus(status)
+            }
+        }
+    }
+
+    func forceHostSleepGuardOn() {
+        Task {
+            do {
+                try await machineService.forceHostSleepGuardOn()
+                appendOutput("[success] Mac sleep guard forced on")
+            } catch {
+                appendOutput("[error] Could not force Mac sleep guard on: \(error)")
+            }
+            refreshHostSleepGuard()
+        }
+    }
+
+    func forceHostSleepGuardOff() {
+        Task {
+            do {
+                try await machineService.forceHostSleepGuardOff()
+                appendOutput("[success] Mac sleep guard forced off")
+            } catch {
+                appendOutput("[error] Could not force Mac sleep guard off: \(error)")
+            }
+            refreshHostSleepGuard()
+        }
+    }
+
+    func stopHostSleepGuardForShutdown() {
+        Task {
+            try? await machineService.forceHostSleepGuardOff()
+            refreshHostSleepGuard()
+        }
+    }
+
     func setStartRuntimeAtLogin(_ enabled: Bool) {
         do {
             var config = configStore.load()
@@ -593,6 +672,7 @@ final class NativeAppModel: ObservableObject {
             }
             try await machineService.stopMachine(timeout: 90)
         }
+        try? await machineService.forceHostSleepGuardOff()
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()
@@ -602,6 +682,7 @@ final class NativeAppModel: ObservableObject {
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()
+        stopHostSleepGuardForShutdown()
     }
 
     func refreshDriverCards() {
@@ -656,6 +737,7 @@ final class NativeAppModel: ObservableObject {
             }
             linuxPassword = password
             webHelperStatus = goHelperSupervisor.status
+            refreshHostSleepGuard()
             statusRefreshInFlight = false
         }
     }
@@ -756,6 +838,21 @@ final class NativeAppModel: ObservableObject {
             nextDetail = status.detail ?? status.state
         }
         sidebarMonitor.updateRuntime(status: nextStatus, detail: nextDetail, metric: nextMetric, state: normalized)
+    }
+
+    private func applyHostSleepGuardStatus(_ status: HostSleepGuardStatus) {
+        hostSleepGuardActive = status.active
+        if !status.installed {
+            hostSleepGuardStatus = "Sleep Guard: Not installed"
+        } else if status.active {
+            let mode = status.mode == "manual" ? "manual" : "runtime"
+            let pid = status.pid.map { " pid=\($0)" } ?? ""
+            hostSleepGuardStatus = "Sleep Guard: On (\(mode)\(pid))"
+        } else if status.mode == "error" {
+            hostSleepGuardStatus = "Sleep Guard: Error"
+        } else {
+            hostSleepGuardStatus = "Sleep Guard: Off"
+        }
     }
 
     private func applyMetrics(_ metrics: [String: Any]) {

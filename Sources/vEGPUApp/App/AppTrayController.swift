@@ -9,6 +9,14 @@ final class AppTrayController: NSObject {
     private var statusText = "checking"
     private var timer: Timer?
 
+    var screenAnchorRect: NSRect? {
+        guard let button = statusItem.button,
+              let window = button.window else {
+            return nil
+        }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
     init(appDelegate: AppDelegate) {
         self.appDelegate = appDelegate
         super.init()
@@ -30,6 +38,7 @@ final class AppTrayController: NSObject {
     func invalidate() {
         timer?.invalidate()
         timer = nil
+        model?.stopHostSleepGuardForShutdown()
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 
@@ -48,6 +57,7 @@ final class AppTrayController: NSObject {
         guard let model else { return }
         Task {
             let next = await model.machineStatusText()
+            model.refreshHostSleepGuard()
             await MainActor.run {
                 self.statusText = next
                 self.updateMenu()
@@ -77,6 +87,14 @@ final class AppTrayController: NSObject {
         let stop = item("Stop Runtime", #selector(stopRuntime))
         stop.isEnabled = running
         menu.addItem(stop)
+
+        menu.addItem(disabled(model?.hostSleepGuardStatus ?? "Sleep Guard: checking"))
+        let forceSleepGuardOn = item("Force Sleep Guard On", #selector(forceSleepGuardOn))
+        forceSleepGuardOn.isEnabled = model?.hostSleepGuardActive != true
+        menu.addItem(forceSleepGuardOn)
+        let forceSleepGuardOff = item("Force Sleep Guard Off", #selector(forceSleepGuardOff))
+        forceSleepGuardOff.isEnabled = model?.hostSleepGuardActive == true
+        menu.addItem(forceSleepGuardOff)
 
         menu.addItem(.separator())
         let openAtLogin = item("Open at Login", #selector(toggleOpenAtLogin(_:)))
@@ -140,6 +158,16 @@ final class AppTrayController: NSObject {
             model.stopRuntime()
             refreshStatus()
         }
+    }
+
+    @objc private func forceSleepGuardOn() {
+        model?.forceHostSleepGuardOn()
+        refreshStatus()
+    }
+
+    @objc private func forceSleepGuardOff() {
+        model?.forceHostSleepGuardOff()
+        refreshStatus()
     }
 
     @objc private func toggleOpenAtLogin(_ sender: NSMenuItem) {

@@ -29,6 +29,7 @@ public final class MachineService: @unchecked Sendable {
     private let guestSync: GuestSyncService
     private let cloudInit: CloudInitService
     private let download: DownloadService
+    private let sleepGuard: HostSleepGuardService
     private let startLock = NSLock()
     private var starting = false
 
@@ -47,6 +48,7 @@ public final class MachineService: @unchecked Sendable {
         self.guestSync = GuestSyncService(paths: paths, ssh: ssh, manifestStore: manifestStore, progress: progress)
         self.cloudInit = CloudInitService(paths: paths, ssh: ssh, secrets: secrets, manifestStore: manifestStore, runner: runner)
         self.download = DownloadService(progress: progress)
+        self.sleepGuard = HostSleepGuardService(runner: runner, progress: progress)
     }
 
     public func currentPid() -> Int32? {
@@ -95,7 +97,7 @@ public final class MachineService: @unchecked Sendable {
         guard let pid = currentPid() else {
             throw RuntimeError.message("Runtime is not running")
         }
-        await ensureHostAwakeAssertion(for: pid)
+        try await sleepGuard.start(pid: pid)
         try networkStore.write(networkStore.read())
         try await ssh.waitForSSH()
         try await ssh.waitForCloudInit()
@@ -110,6 +112,7 @@ public final class MachineService: @unchecked Sendable {
     public func stopMachine(timeout: TimeInterval = 360) async throws {
         guard currentPid() != nil else {
             audio.stop()
+            try? await sleepGuard.stop()
             progress.report(ProgressEvent(stage: "stop", message: "Runtime is already stopped"))
             return
         }
@@ -123,6 +126,7 @@ public final class MachineService: @unchecked Sendable {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if currentPid() == nil {
+                try? await sleepGuard.stop()
                 progress.report(ProgressEvent(stage: "stop", message: "Runtime stopped cleanly", level: .success))
                 return
             }
@@ -131,6 +135,7 @@ public final class MachineService: @unchecked Sendable {
                 try? await requestQemuQuit()
                 _ = await waitForPidExit(currentPid(), timeout: 20)
                 if currentPid() == nil {
+                    try? await sleepGuard.stop()
                     progress.report(ProgressEvent(stage: "stop", message: "Runtime stopped cleanly", level: .success))
                     return
                 }
@@ -143,6 +148,7 @@ public final class MachineService: @unchecked Sendable {
             throw RuntimeError.message("Guest did not shut down cleanly. QEMU was left running to avoid unsafe PCIe teardown.")
         }
         progress.report(ProgressEvent(stage: "stop", message: "Runtime stopped", level: .success))
+        try? await sleepGuard.stop()
     }
 
     public func resetMachine() async throws {
@@ -159,6 +165,7 @@ public final class MachineService: @unchecked Sendable {
         audio.stop()
         guard let pid = currentPid() else {
             try? FileManager.default.removeItem(at: files.pid)
+            try? await sleepGuard.stop()
             return
         }
         progress.report(ProgressEvent(stage: "stop", message: "Force killing QEMU runtime process"))
@@ -168,6 +175,7 @@ public final class MachineService: @unchecked Sendable {
             _ = await waitForPidExit(pid, timeout: 2)
         }
         try? FileManager.default.removeItem(at: files.pid)
+        try? await sleepGuard.stop()
     }
 
     public func statusMachine() async -> MachineStatus {
@@ -176,6 +184,18 @@ public final class MachineService: @unchecked Sendable {
         }
         let result = try? await runner.run("/usr/bin/ssh", ssh.args(command: "hostname"), timeout: 4)
         return MachineStatus(state: result?.code == 0 ? "running" : "booting", pid: pid, detail: result?.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    public func hostSleepGuardStatus() async -> HostSleepGuardStatus {
+        await sleepGuard.status()
+    }
+
+    public func forceHostSleepGuardOn() async throws {
+        try await sleepGuard.forceOn()
+    }
+
+    public func forceHostSleepGuardOff() async throws {
+        try await sleepGuard.stop()
     }
 
     public func linuxPassword() -> String? {
@@ -313,7 +333,7 @@ public final class MachineService: @unchecked Sendable {
 
     private func startMachineInner() async throws {
         if let existingPid = currentPid() {
-            await ensureHostAwakeAssertion(for: existingPid)
+            try await sleepGuard.start(pid: existingPid)
             try networkStore.write(networkStore.read())
             do {
                 try await ssh.waitForSSH()
@@ -325,6 +345,7 @@ public final class MachineService: @unchecked Sendable {
                         throw RuntimeError.message("Powered-off QEMU runtime did not exit after QMP quit. It was left running to avoid unsafe PCIe teardown.")
                     }
                     try? FileManager.default.removeItem(at: files.pid)
+                    try? await sleepGuard.stop()
                     return try await startMachineInner()
                 }
                 throw error
@@ -380,10 +401,19 @@ public final class MachineService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "qemu", message: "Launching runtime through \(VfioApp.displayName)", detail: config.launchMode.label))
         try networkStore.write(network.state)
         let child = try runner.spawnDetached(network.launchCommand, args, stdout: files.stdoutLog, stderr: files.stderrLog)
-        await ensureHostAwakeAssertion(for: child.processIdentifier)
+        do {
+            try await sleepGuard.start(pid: child.processIdentifier)
+        } catch {
+            kill(child.processIdentifier, SIGTERM)
+            _ = await waitForPidExit(child.processIdentifier, timeout: 5)
+            if child.isRunning {
+                kill(child.processIdentifier, SIGKILL)
+            }
+            throw RuntimeError.message("Mac sleep guard could not start, so the runtime was stopped before PCIe passthrough continued: \(firstLine(String(describing: error)))")
+        }
         try await waitForQmp(socket: files.qmp, timeout: 20, child: child)
         if let pid = currentPid() {
-            await ensureHostAwakeAssertion(for: pid)
+            try await sleepGuard.start(pid: pid)
         }
         progress.report(ProgressEvent(stage: "qmp", message: "QEMU monitor is ready"))
         try await ssh.waitForSSH()
@@ -486,22 +516,6 @@ public final class MachineService: @unchecked Sendable {
         }
     }
 
-    private func ensureHostAwakeAssertion(for pid: Int32) async {
-        guard pid > 0 else { return }
-        let script = """
-        set -eu
-        PID=\(pid)
-        if ! /bin/kill -0 "$PID" 2>/dev/null; then
-          exit 0
-        fi
-        if /usr/bin/pgrep -fq "caffeinate .* -w $PID"; then
-          exit 0
-        fi
-        /usr/bin/caffeinate -i -m -s -w "$PID" >/dev/null 2>&1 &
-        """
-        _ = try? await runner.run("/bin/sh", ["-lc", script], timeout: 2)
-    }
-
     private func downloadMachineDisk() async throws {
         if FileManager.default.fileExists(atPath: files.disk.path) { return }
         try FileManager.default.createDirectory(at: files.disk.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -566,7 +580,10 @@ public final class MachineService: @unchecked Sendable {
     }
 
     private func terminateQemuForReset() async throws {
-        guard let pid = currentPid() else { return }
+        guard let pid = currentPid() else {
+            try? await sleepGuard.stop()
+            return
+        }
         progress.report(ProgressEvent(stage: "reset", message: "Terminating QEMU runtime process"))
         kill(pid, SIGTERM)
         if !(await waitForPidExit(pid, timeout: 3)) {
@@ -574,6 +591,7 @@ public final class MachineService: @unchecked Sendable {
             kill(pid, SIGKILL)
             _ = await waitForPidExit(pid, timeout: 2)
         }
+        try? await sleepGuard.stop()
     }
 
     private func serialLogShowsGuestPowerOff() -> Bool {
