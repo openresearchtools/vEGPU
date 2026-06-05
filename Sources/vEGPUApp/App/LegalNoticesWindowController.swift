@@ -7,12 +7,16 @@ final class LegalNoticesWindowController: NSWindowController {
         case notices
         case licenses
         case guestVMInstallNotices
+        case machineNotices
+        case machineLicenses
 
         var title: String {
             switch self {
             case .notices: return "Notices"
             case .licenses: return "Licenses"
             case .guestVMInstallNotices: return "Guest VM Install Notices"
+            case .machineNotices: return "vEGPU Machine Notices"
+            case .machineLicenses: return "vEGPU Machine Licenses"
             }
         }
 
@@ -21,6 +25,10 @@ final class LegalNoticesWindowController: NSWindowController {
             case .notices: return generatedLegalURL.appendingPathComponent("NOTICES")
             case .licenses: return generatedLegalURL.appendingPathComponent("LICENSES")
             case .guestVMInstallNotices: return generatedLegalURL.appendingPathComponent("GUEST-VM-INSTALL-NOTICES.md")
+            case .machineNotices:
+                return URL(fileURLWithPath: VfioApp.resourcesPath("ThirdPartyNotices", "NOTICES"))
+            case .machineLicenses:
+                return URL(fileURLWithPath: VfioApp.resourcesPath("ThirdPartyNotices", "LICENSES"))
             }
         }
     }
@@ -75,6 +83,14 @@ final class LegalNoticesWindowController: NSWindowController {
 
     func showGuestVMInstallNotices() {
         show(document: .guestVMInstallNotices)
+    }
+
+    func showMachineNotices() {
+        show(document: .machineNotices)
+    }
+
+    func showMachineLicenses() {
+        show(document: .machineLicenses)
     }
 
     private func show(document: LegalDocument) {

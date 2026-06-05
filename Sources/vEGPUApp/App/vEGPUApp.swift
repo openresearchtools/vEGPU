@@ -33,27 +33,6 @@ struct vEGPUApp: App {
                     appDelegate.model.showManageRoutingRoutes()
                 }
             }
-            CommandGroup(replacing: .help) {
-                Button("Check for Updates...") {
-                    appDelegate.checkForUpdates()
-                }
-                Button("Use Pre-release Updates") {
-                    appDelegate.togglePrereleaseUpdates()
-                }
-                Button("Install Available Update...") {
-                    appDelegate.installAvailableUpdate()
-                }
-                Divider()
-                Button("Notices") {
-                    appDelegate.showLegalNotices()
-                }
-                Button("Licenses") {
-                    appDelegate.showLegalLicenses()
-                }
-                Button("VM Install Notices") {
-                    appDelegate.showGuestVMInstallNotices()
-                }
-            }
         }
     }
 }

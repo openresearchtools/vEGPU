@@ -704,6 +704,9 @@ jobs:
             exit 1
           fi
           grep -F 'vEGPU Machine licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'vEGPU.app Help has external vEGPU Machine legal buttons' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
+          grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: Display runtime: glib' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
@@ -718,6 +721,13 @@ jobs:
             echo "vEGPU.app LICENSES must reference Machine/QEMU notices but not duplicate QEMU license blocks" >&2
             exit 1
           fi
+          APP_EXECUTABLE="$(plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist")"
+          APP_STRINGS="$RUNNER_TEMP/vegpu-app-strings.txt"
+          strings "$APP/Contents/MacOS/$APP_EXECUTABLE" > "$APP_STRINGS"
+          grep -F 'vEGPU Help' "$APP_STRINGS"
+          grep -F 'vEGPU Machine Notices' "$APP_STRINGS"
+          grep -F 'vEGPU Machine Licenses' "$APP_STRINGS"
+          grep -F 'EXTERNAL' "$APP_STRINGS"
 
       - name: Pack vEGPU.app artifact
         run: |
@@ -961,6 +971,8 @@ jobs:
           test -f "$OUT"
           pkgutil --expand "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded"
           test -f "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
+          grep -R -F 'vEGPU.app Help has external vEGPU Machine legal buttons' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
           PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}

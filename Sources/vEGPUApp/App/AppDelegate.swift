@@ -19,6 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configure(model: model)
+        configureHelpMenu()
+        DispatchQueue.main.async { [weak self] in
+            self?.configureHelpMenu()
+        }
         startLaunchServicesIfNeeded()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
@@ -26,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self.showMainWindow()
             }
         }
+    }
+
+    func applicationWillBecomeActive(_ notification: Notification) {
+        configureHelpMenu()
     }
 
     func configure(model: NativeAppModel) {
@@ -156,6 +164,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.repairAfterWake()
     }
 
+    @objc func openVEGPUHelp() {
+        guard let url = URL(string: "https://vegpu.com") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     @objc func showLegalNotices() {
         legalController().showNotices()
     }
@@ -166,6 +179,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc func showGuestVMInstallNotices() {
         legalController().showGuestVMInstallNotices()
+    }
+
+    @objc func showMachineLegalNotices() {
+        legalController().showMachineNotices()
+    }
+
+    @objc func showMachineLegalLicenses() {
+        legalController().showMachineLicenses()
     }
 
     @objc func checkForUpdates() {
@@ -225,6 +246,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let controller = LegalNoticesWindowController()
         legalNoticesWindowController = controller
         return controller
+    }
+
+    private func configureHelpMenu() {
+        let helpMenu = NSMenu(title: "Help")
+        helpMenu.autoenablesItems = false
+        helpMenu.addItem(helpMenuItem(title: "vEGPU Help", action: #selector(openVEGPUHelp)))
+        helpMenu.addItem(.separator())
+        helpMenu.addItem(helpMenuItem(title: "Notices", action: #selector(showLegalNotices)))
+        helpMenu.addItem(helpMenuItem(title: "Licenses", action: #selector(showLegalLicenses)))
+        helpMenu.addItem(helpMenuItem(title: "VM Install Notices", action: #selector(showGuestVMInstallNotices)))
+        helpMenu.addItem(externalHelpMenuItem(title: "vEGPU Machine Notices", action: #selector(showMachineLegalNotices)))
+        helpMenu.addItem(externalHelpMenuItem(title: "vEGPU Machine Licenses", action: #selector(showMachineLegalLicenses)))
+
+        guard let mainMenu = NSApplication.shared.mainMenu else {
+            NSApplication.shared.helpMenu = helpMenu
+            return
+        }
+        if let existingHelpItem = mainMenu.items.first(where: { item in
+            item.title == "Help" || item.submenu === NSApplication.shared.helpMenu
+        }) {
+            existingHelpItem.title = "Help"
+            existingHelpItem.submenu = helpMenu
+        } else {
+            let helpItem = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
+            helpItem.submenu = helpMenu
+            mainMenu.addItem(helpItem)
+        }
+        NSApplication.shared.helpMenu = helpMenu
+    }
+
+    private func helpMenuItem(title: String, action: Selector) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.isEnabled = true
+        return item
+    }
+
+    private func externalHelpMenuItem(title: String, action: Selector) -> NSMenuItem {
+        let item = helpMenuItem(title: "[EXTERNAL] \(title)", action: action)
+        item.attributedTitle = externalHelpMenuTitle(title)
+        return item
+    }
+
+    private func externalHelpMenuTitle(_ title: String) -> NSAttributedString {
+        let attributedTitle = NSMutableAttributedString()
+        attributedTitle.append(NSAttributedString(
+            string: " EXTERNAL ",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 9, weight: .semibold),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .backgroundColor: NSColor(calibratedWhite: 0.88, alpha: 1.0),
+                .baselineOffset: 1
+            ]
+        ))
+        attributedTitle.append(NSAttributedString(
+            string: " \(title)",
+            attributes: [
+                .font: NSFont.menuFont(ofSize: 0),
+                .foregroundColor: NSColor.labelColor
+            ]
+        ))
+        return attributedTitle
     }
 
     private func installAvailableUpdateFlow() async {

@@ -94,6 +94,8 @@ test "$(find "$APP_LEGAL/license-files/llama-runtime" -type f | wc -l | tr -d ' 
 grep -F 'Package/Dependency: Display runtime: glib' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: Display runtime: openssl' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
 
 write_install_scripts() {
   local dir="$1"
@@ -418,6 +420,7 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
 
   <h2>Architecture and Source Boundary</h2>
   <p class="boundary">vEGPU follows a UTM / UTM-QEMU-style split with a visible boundary: app-side launcher, display, AI, routing, and orchestration work stays in vEGPU.app. GPL-covered QEMU, VFIO, DriverKit, firmware, VM runtime, and guest-driver mechanics stay in vEGPU Machine.app.</p>
+  <p>vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app without copying those Machine files into vEGPU.app. vEGPU.app Help has external vEGPU Machine legal buttons that render those Machine files for convenience.</p>
   <p>The embedded display side is partially based on UTM app work. The Machine side builds on Scott J. Goldman's scottjg/qemu-vfio-apple as the main Apple VFIO/DriverKit/QEMU base, with additional QEMU-side visual-runtime work adapted from UTM QEMU and UTM virglrenderer.</p>
 
   <h2>Installation Behavior</h2>
@@ -450,7 +453,12 @@ or quit Installer and reboot later. Restart before launching vEGPU with eGPUs
 attached. If the driver still shows as pending after approval, open vEGPU.app
 and use Runtime > Install Driver to retry the same vEGPU Machine helper path.
 
-Use each app's Help menu to open licenses, notices, and bundled source archives.
+Open vEGPU.app Help for app notices, app licenses, VM install notices, and
+external vEGPU Machine notices/licenses rendered from the installed
+vEGPU Machine.app. Those legal files list the installed source archive
+locations.
+vEGPU.app Help has external vEGPU Machine legal buttons for those Machine-owned
+files.
 TEXT
 
 cat > "$RESOURCES/LICENSE.txt" <<'TEXT'
@@ -505,8 +513,12 @@ NOTICES explains the app/Machine split and where each app's source archives
 live. LICENSES consolidates the full verbatim app-side license and notice text.
 GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, and optional
 NVIDIA/CUDA install activity inside the Linux VM.
-The vEGPU.app Help menu also opens the installed legal bundle and exposes the
-bundled source/provenance archives.
+The vEGPU.app Help menu also opens the installed legal files, which list the
+bundled source/provenance archive locations.
+vEGPU.app Help can render external vEGPU Machine notices and licenses from the
+installed vEGPU Machine.app without copying those Machine files into vEGPU.app.
+vEGPU.app Help has external vEGPU Machine legal buttons that render those
+Machine files for convenience.
 
 
 App-side provenance includes:
@@ -557,6 +569,12 @@ Key installed vEGPU Machine legal/source files:
 - ThirdPartyNotices/LICENSES
 - SourceBundles/vEGPU-Machine-<version>-source.tar.gz
 - guest-tools/source/apple-dma-<version>.tar.gz
+
+vEGPU.app Help can render these external vEGPU Machine notices and licenses
+from the installed vEGPU Machine.app without copying those Machine files into
+vEGPU.app.
+vEGPU.app Help has external vEGPU Machine legal buttons that render those
+Machine files for convenience.
 
 vEGPU Machine is QEMU-derived and is distributed from a patch stack over
 recorded source layers. The source tree produced by that patch stack is
@@ -668,6 +686,11 @@ Canonical installed legal files:
 
 This artifact package does not include vEGPU Machine.app. Combined releases
 include vEGPU Machine.app and its separate QEMU/VFIO/DriverKit source bundles.
+When vEGPU Machine.app is installed, vEGPU.app Help can render external vEGPU
+Machine notices and licenses from the installed vEGPU Machine.app without
+copying those Machine files into vEGPU.app.
+vEGPU.app Help has external vEGPU Machine legal buttons that render those
+Machine files for convenience.
 
 Project links:
 
