@@ -34,13 +34,6 @@ struct GUIDisplayTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .vegpuReconnectDisplay)) { _ in
             session.reconnect()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .vegpuExternalSessionShortcut)) { notification in
-            guard let digit = notification.object as? Int else { return }
-            if digit == 1 {
-                session.setExternalInputCapture(false)
-            }
-            displayControl.handleExternalSessionShortcut(digit: digit)
-        }
         .onReceive(NotificationCenter.default.publisher(for: .vegpuReleaseExternalInputCapture)) { _ in
             session.setExternalInputCapture(false)
         }

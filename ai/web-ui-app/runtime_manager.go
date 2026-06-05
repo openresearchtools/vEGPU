@@ -22,6 +22,7 @@ import (
 )
 
 const runtimeMetadataFile = "runtime.json"
+const linuxInstallStateRefreshTimeout = 20 * time.Second
 
 type RuntimeManager struct {
 	appDir   string
@@ -644,15 +645,11 @@ func (m *RuntimeManager) refreshLinuxInstallState(ctx context.Context, runtimeIn
 	if m.runtime == nil || runtimeInfo == nil || runtimeInfo.Platform != "linux" {
 		return
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, linuxInstallStateRefreshTimeout)
 	defer cancel()
 	status, err := m.runtime.BridgeRuntimeInstalled(probeCtx, runtimeInfo.ID)
 	if err != nil {
 		changed := false
-		if runtimeInfo.VMInstalled {
-			runtimeInfo.VMInstalled = false
-			changed = true
-		}
 		if legacyRuntimeInstallMessage(runtimeInfo.InstallError) {
 			runtimeInfo.InstallError = ""
 			changed = true
@@ -691,6 +688,29 @@ func (m *RuntimeManager) refreshLinuxInstallState(ctx context.Context, runtimeIn
 	if changed {
 		_ = writeRuntimeMetadata(*runtimeInfo)
 	}
+	if installed {
+		_ = m.reconcileActiveLinuxRuntimeConfig(*runtimeInfo)
+	}
+}
+
+func (m *RuntimeManager) reconcileActiveLinuxRuntimeConfig(runtimeInfo ManagedRuntime) error {
+	if m.store == nil || runtimeInfo.Platform != "linux" || !runtimeInfo.VMInstalled {
+		return nil
+	}
+	return m.store.Update(func(next *AppConfig) error {
+		if runtimeInfo.ID != next.Runtime.ActiveLinuxRuntime && sanitizeID(runtimeInfo.PairID) != sanitizeID(next.Runtime.ActiveRuntimePair) {
+			return nil
+		}
+		serverCommand := guestRuntimeExecutable(runtimeInfo, runtimeInfo.ServerRel, "/usr/local/bin/llama-server")
+		rpcCommand := guestRuntimeExecutable(runtimeInfo, runtimeInfo.RPCRel, "/usr/local/bin/rpc-server")
+		if strings.TrimSpace(next.Runtime.Residency.ServerCommand) == "" || next.Runtime.Residency.ServerCommand != serverCommand {
+			next.Runtime.Residency.ServerCommand = serverCommand
+		}
+		if strings.TrimSpace(next.Runtime.Residency.RPCCommand) == "" || next.Runtime.Residency.RPCCommand != rpcCommand {
+			next.Runtime.Residency.RPCCommand = rpcCommand
+		}
+		return nil
+	})
 }
 
 func shouldRefreshLinuxInstallState(runtimeInfo ManagedRuntime, cfg AppConfig) bool {

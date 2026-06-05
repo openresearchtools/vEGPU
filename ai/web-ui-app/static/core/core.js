@@ -78,6 +78,8 @@
 		dragDeviceIndex: null
 	};
 	let modelStatusTimer = null;
+	let runtimeInstallPollTimer = null;
+	let runtimeInstallPollStartedAt = 0;
 
 	const el = {
 		statusText: document.getElementById("statusText"),
@@ -833,7 +835,28 @@
 
 	async function refreshRuntimes(render = true) {
 		state.runtimes = await apiFetch("/api/runtimes");
+		updateRuntimeInstallPolling();
 		if (render) renderRuntimes();
+	}
+
+	function updateRuntimeInstallPolling() {
+		const pairs = state.runtimes?.pairs ?? [];
+		const hasPendingInstall = pairs.some((pair) => !pair.vmInstalled && !pair.installError && !pair.vmDeletePending);
+		if (!hasPendingInstall) {
+			if (runtimeInstallPollTimer) {
+				window.clearTimeout(runtimeInstallPollTimer);
+				runtimeInstallPollTimer = null;
+			}
+			runtimeInstallPollStartedAt = 0;
+			return;
+		}
+		const now = Date.now();
+		if (!runtimeInstallPollStartedAt) runtimeInstallPollStartedAt = now;
+		if (now - runtimeInstallPollStartedAt > 120000 || runtimeInstallPollTimer) return;
+		runtimeInstallPollTimer = window.setTimeout(() => {
+			runtimeInstallPollTimer = null;
+			refreshRuntimes(true).catch(showError);
+		}, 3000);
 	}
 
 	async function refreshRuntimeReleases(render = true) {

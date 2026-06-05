@@ -5,22 +5,28 @@ import Carbon.HIToolbox
 final class DisplayGlobalHotkeyService {
     private weak var displayControl: DisplayControlMenuModel?
     private var handlerRef: EventHandlerRef?
+    private var shortcutObserver: NSObjectProtocol?
     private var hotKeyRefs: [EventHotKeyRef] = []
+    private var lastShortcutDigit: Int?
+    private var lastShortcutTime: TimeInterval = 0
     private let signature: OSType = 0x56454750
+    private let duplicateShortcutWindow: TimeInterval = 0.25
 
     init(displayControl: DisplayControlMenuModel) {
         self.displayControl = displayControl
     }
 
     func start() {
+        installShortcutObserver()
         guard handlerRef == nil else { return }
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: OSType(kEventHotKeyPressed)
         )
+        let target = GetEventDispatcherTarget()
         let status = InstallEventHandler(
-            GetApplicationEventTarget(),
+            target,
             displayGlobalHotkeyHandler,
             1,
             &eventType,
@@ -33,7 +39,7 @@ final class DisplayGlobalHotkeyService {
             return
         }
 
-        registerDigits()
+        registerDigits(target: target)
     }
 
     func invalidate() {
@@ -46,9 +52,28 @@ final class DisplayGlobalHotkeyService {
             RemoveEventHandler(handlerRef)
         }
         handlerRef = nil
+
+        if let shortcutObserver {
+            NotificationCenter.default.removeObserver(shortcutObserver)
+        }
+        shortcutObserver = nil
     }
 
-    private func registerDigits() {
+    private func installShortcutObserver() {
+        guard shortcutObserver == nil else { return }
+        shortcutObserver = NotificationCenter.default.addObserver(
+            forName: .vegpuExternalSessionShortcut,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let digit = notification.object as? Int else { return }
+            Task { @MainActor [weak self] in
+                self?.handleShortcut(digit: digit)
+            }
+        }
+    }
+
+    private func registerDigits(target: EventTargetRef?) {
         let keyCodes: [Int: Int] = [
             1: kVK_ANSI_1,
             2: kVK_ANSI_2,
@@ -73,7 +98,7 @@ final class DisplayGlobalHotkeyService {
                 UInt32(keyCode),
                 UInt32(cmdKey | optionKey),
                 hotKeyID,
-                GetApplicationEventTarget(),
+                target,
                 0,
                 &hotKeyRef
             )
@@ -89,10 +114,26 @@ final class DisplayGlobalHotkeyService {
         guard signature == self.signature else { return }
         let digit = Int(id)
         guard (1...9).contains(digit) else { return }
+        handleShortcut(digit: digit)
+    }
+
+    private func handleShortcut(digit: Int) {
+        guard (1...9).contains(digit) else { return }
+        guard shouldHandleShortcut(digit) else { return }
         if digit == 1 {
             NotificationCenter.default.post(name: .vegpuReleaseExternalInputCapture, object: nil)
         }
         displayControl?.handleExternalSessionShortcut(digit: digit)
+    }
+
+    private func shouldHandleShortcut(_ digit: Int) -> Bool {
+        let now = Date().timeIntervalSinceReferenceDate
+        defer {
+            lastShortcutDigit = digit
+            lastShortcutTime = now
+        }
+        guard lastShortcutDigit == digit else { return true }
+        return now - lastShortcutTime > duplicateShortcutWindow
     }
 }
 

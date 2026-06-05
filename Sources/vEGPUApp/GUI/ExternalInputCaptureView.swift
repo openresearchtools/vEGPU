@@ -43,10 +43,9 @@ final class ExternalInputCaptureNSView: NSView {
     }
 
     private func enableCapture() {
-        window?.makeKeyAndOrderFront(nil)
-        window?.makeFirstResponder(nil)
         updateWindowTitle()
         if !installEventTap() {
+            NSLog("vEGPU external input capture could not install global event tap; falling back to key-window local monitor")
             installLocalMonitor()
         }
         centerHostCursor()
