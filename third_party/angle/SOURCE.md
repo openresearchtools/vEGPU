@@ -14,5 +14,5 @@ The upstream `ANGLE.plist` records:
 - Open source project: ANGLE
 - Open source version: `40dfb3a8bd6514b613ce693962c6d8dcd70ab25a`
 - Import date: `2024-02-15`
-- License: BSD
+- License: BSD-3-Clause (the upstream `ANGLE.plist` records this generically as BSD; the bundled `LICENSE` text is the 3-clause BSD form)
 - License file: `LICENSE`

@@ -237,6 +237,16 @@ def primary_gnu_license_from_text(text: str) -> str | None:
         return "GPL"
     return None
 
+def bsd_license_id_from_text(text: str) -> str | None:
+    lower = text.lower()
+    if "redistribution and use in source and binary forms" not in lower:
+        return None
+    if "all advertising materials mentioning features or use of this software" in lower:
+        return "BSD-4-Clause"
+    if "neither the name" in lower or "nor the names of its contributors" in lower or "nor the names of their contributors" in lower:
+        return "BSD-3-Clause"
+    return "BSD"
+
 def license_text_is_gpl_or_agpl(data: bytes) -> bool:
     return primary_gnu_license_from_text(decode_text_lossy(data)) in {"GPL", "AGPL"}
 
@@ -631,7 +641,7 @@ machine_guest_source = machine_app / "Contents" / "Resources" / "guest-tools" / 
 
 angle_meta = {
     "version": "unknown",
-    "license": "BSD",
+    "license": "BSD-3-Clause",
     "source": "third_party/angle/ANGLE.plist",
 }
 angle_plist = root / "third_party" / "angle" / "ANGLE.plist"
@@ -642,7 +652,12 @@ if angle_plist.exists():
         if angle_items:
             item = angle_items[0]
             angle_meta["version"] = str(item.get("OpenSourceVersion", "unknown"))
-            angle_meta["license"] = str(item.get("OpenSourceLicense", "BSD"))
+            raw_angle_license = str(item.get("OpenSourceLicense", "BSD"))
+            if raw_angle_license.strip().upper() == "BSD":
+                angle_license_text = root / "third_party" / "angle" / "LICENSE"
+                if angle_license_text.exists():
+                    raw_angle_license = bsd_license_id_from_text(read_text_lossy(angle_license_text.read_bytes())) or raw_angle_license
+            angle_meta["license"] = raw_angle_license
     except Exception:
         pass
 
@@ -678,8 +693,9 @@ def guess_license_from_text(path: Path) -> str | None:
         return "MPL"
     if "permission is hereby granted, free of charge" in lower:
         return "MIT"
-    if "redistribution and use in source and binary forms" in lower:
-        return "BSD"
+    bsd_license = bsd_license_id_from_text(lower)
+    if bsd_license:
+        return bsd_license
     if "isc license" in lower:
         return "ISC"
     if "zlib license" in lower:
@@ -1139,6 +1155,16 @@ def primary_gnu_license_from_text(text: str) -> str | None:
         return "GPL"
     return None
 
+def bsd_license_id_from_text(text: str) -> str | None:
+    lower = text.lower()
+    if "redistribution and use in source and binary forms" not in lower:
+        return None
+    if "all advertising materials mentioning features or use of this software" in lower:
+        return "BSD-4-Clause"
+    if "neither the name" in lower or "nor the names of its contributors" in lower or "nor the names of their contributors" in lower:
+        return "BSD-3-Clause"
+    return "BSD"
+
 def guess_license(text: str, path: str) -> str:
     lower = text.lower()
     path_lower = path.lower()
@@ -1151,8 +1177,9 @@ def guess_license(text: str, path: str) -> str:
         return "MPL"
     if "permission is hereby granted, free of charge" in lower:
         return "MIT"
-    if "redistribution and use in source and binary forms" in lower:
-        return "BSD"
+    bsd_license = bsd_license_id_from_text(lower)
+    if bsd_license:
+        return bsd_license
     if "isc license" in lower:
         return "ISC"
     if "zlib license" in lower or "zlib/libpng license" in lower:

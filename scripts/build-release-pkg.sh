@@ -109,6 +109,7 @@ grep -F 'Package/Dependency: Go module: gopkg.in/yaml.v3' "$APP_LEGAL/LICENSES" 
 grep -F 'Package/Dependency: SwiftPM: swiftterm' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: SwiftPM: swift-argument-parser' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Component-Scope: Swift package used by vEGPU.app' "$APP_LEGAL/LICENSES" >/dev/null
+awk 'BEGIN{found=0; in_angle=0} /^Package\/Dependency: ANGLE$/ {in_angle=1} in_angle && /^License:/ {if ($0 == "License: BSD-3-Clause") found=1; in_angle=0} END{exit found ? 0 : 1}' "$APP_LEGAL/LICENSES"
 grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP_LEGAL/NOTICES" >/dev/null

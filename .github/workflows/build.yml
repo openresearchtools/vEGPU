@@ -784,6 +784,7 @@ jobs:
             exit 1
           fi
           grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
+          awk 'BEGIN{found=0; in_angle=0} /^Package\/Dependency: ANGLE$/ {in_angle=1} in_angle && /^License:/ {if ($0 == "License: BSD-3-Clause") found=1; in_angle=0} END{exit found ? 0 : 1}' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: Display runtime: glib' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
           grep -F 'Package/Dependency: Display runtime: openssl' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
