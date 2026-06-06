@@ -225,6 +225,44 @@ if (carousel) {
   });
 }
 
+const copyButtons = Array.from(document.querySelectorAll("[data-copy-value]"));
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.left = "-9999px";
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textArea);
+}
+
+copyButtons.forEach((button) => {
+  button.addEventListener("click", async () => {
+    const originalLabel = button.textContent;
+
+    try {
+      await copyTextToClipboard(button.dataset.copyValue || "");
+      button.textContent = "Copied";
+      button.classList.add("is-copied");
+    } catch (_error) {
+      button.textContent = "Select";
+    }
+
+    window.setTimeout(() => {
+      button.textContent = originalLabel;
+      button.classList.remove("is-copied");
+    }, 1400);
+  });
+});
+
 const overlayHosts = Array.from(document.querySelectorAll("[data-overlay-host]"));
 
 function setOverlayOpen(host, isOpen) {

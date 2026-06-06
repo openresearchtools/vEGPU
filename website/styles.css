@@ -556,36 +556,78 @@ h1::after {
   top: 50%;
   z-index: 3;
   display: grid;
-  width: 2.7rem;
-  height: 3.35rem;
+  width: clamp(1.95rem, 2.4vw, 2.35rem);
+  height: clamp(3rem, 4.6vw, 3.85rem);
   padding: 0;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(101, 255, 122, 0.52);
   border-radius: 7px;
-  background: rgba(2, 2, 2, 0.58);
-  color: #f4fbf1;
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.16), rgba(101, 255, 122, 0.035)),
+    rgba(0, 0, 0, 0.72);
+  color: var(--green);
   cursor: pointer;
-  font-size: 2rem;
+  font-size: clamp(1.58rem, 2.65vw, 2rem);
+  font-weight: 900;
   line-height: 1;
+  text-shadow:
+    0 0 8px rgba(101, 255, 122, 0.82),
+    0 0 22px rgba(101, 255, 122, 0.38);
   transform: translateY(-50%);
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
   backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 0 20px rgba(101, 255, 122, 0.08),
+    0 0 24px rgba(101, 255, 122, 0.18),
+    0 22px 56px rgba(0, 0, 0, 0.55);
 }
 
 .carousel-arrow.previous {
-  left: 0.8rem;
+  left: clamp(0.5rem, 1.15vw, 1rem);
 }
 
 .carousel-arrow.next {
-  right: 0.8rem;
+  right: clamp(0.5rem, 1.15vw, 1rem);
+}
+
+.carousel-arrow::before {
+  position: absolute;
+  top: 0.48rem;
+  bottom: 0.48rem;
+  width: 0.13rem;
+  border-radius: 999px;
+  background: #baffc3;
+  content: "";
+  box-shadow:
+    0 0 8px rgba(101, 255, 122, 0.92),
+    0 0 22px rgba(101, 255, 122, 0.62),
+    0 0 46px rgba(101, 255, 122, 0.36);
+}
+
+.carousel-arrow.previous::before {
+  left: 0.34rem;
+}
+
+.carousel-arrow.next::before {
+  right: 0.34rem;
+}
+
+.carousel-arrow span {
+  position: relative;
+  top: -0.03em;
 }
 
 .carousel-arrow:hover,
 .carousel-arrow:focus-visible {
-  border-color: rgba(101, 255, 122, 0.68);
-  background: rgba(101, 255, 122, 0.13);
-  color: var(--green);
-  box-shadow: 0 0 22px rgba(101, 255, 122, 0.18);
+  border-color: rgba(186, 255, 195, 0.92);
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.24), rgba(101, 255, 122, 0.08)),
+    rgba(0, 0, 0, 0.78);
+  color: #d8ffdc;
+  box-shadow:
+    inset 0 0 28px rgba(101, 255, 122, 0.14),
+    0 0 34px rgba(101, 255, 122, 0.34),
+    0 24px 66px rgba(0, 0, 0, 0.66);
 }
 
 .carousel-arrow.previous:hover,
@@ -634,14 +676,16 @@ h1::after {
   min-height: 4.25rem;
   margin: 0;
   padding: 0.85rem 1rem 0.95rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, rgba(101, 255, 122, 0.035), rgba(0, 0, 0, 0.1));
+  border-top: 1px solid rgba(101, 255, 122, 0.15);
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.065), rgba(101, 255, 122, 0.025)),
+    rgba(0, 0, 0, 0.14);
 }
 
 .carousel-caption {
   display: none;
   margin: 0;
-  color: #adb6aa;
+  color: #b8c7b5;
   font-size: clamp(0.88rem, 1.25vw, 1rem);
   line-height: 1.52;
 }
@@ -651,7 +695,7 @@ h1::after {
 }
 
 .carousel-caption strong {
-  color: #fff;
+  color: #f4fff1;
 }
 
 .grid-section {
@@ -734,83 +778,76 @@ h1::after {
 
 .setup-disclosure {
   min-width: 0;
+  margin: 0 1rem 1rem 4.8rem;
+  border: 1px solid rgba(101, 255, 122, 0.24);
+  border-radius: 7px;
+  background: rgba(101, 255, 122, 0.045);
 }
 
 .setup-disclosure > summary {
-  position: relative;
-  display: block;
-  min-height: 4.4rem;
-  padding: 1rem 3.8rem 1rem 4.8rem;
+  display: flex;
+  min-height: 3.1rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.72rem;
+  padding: 0.72rem 1rem;
   cursor: pointer;
   list-style: none;
+  color: #dfffe3;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .setup-disclosure > summary::-webkit-details-marker {
   display: none;
 }
 
+.setup-disclosure > summary::before,
 .setup-disclosure > summary::after {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  display: grid;
-  width: 2.35rem;
-  height: 2.35rem;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 7px;
   color: var(--green);
-  content: "+";
+  content: "↓";
   font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 1rem;
+  font-size: 1.2rem;
   font-weight: 900;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  line-height: 1;
+  transition: transform 160ms ease, color 160ms ease;
 }
 
+.setup-disclosure[open] > summary::before,
 .setup-disclosure[open] > summary::after {
-  border-color: rgba(101, 255, 122, 0.52);
-  background: rgba(101, 255, 122, 0.08);
-  content: "-";
+  content: "↑";
 }
 
-.setup-disclosure > summary:hover::after,
-.setup-disclosure > summary:focus-visible::after {
+.setup-disclosure > summary:hover,
+.setup-disclosure > summary:focus-visible {
+  background: rgba(101, 255, 122, 0.09);
+  color: var(--green);
+}
+
+.setup-disclosure:hover,
+.setup-disclosure:focus-within {
   border-color: rgba(101, 255, 122, 0.72);
-  background: rgba(101, 255, 122, 0.1);
-  transform: translateY(-1px);
-}
-
-.setup-summary-title {
-  display: block;
-  color: #fff;
-  font-weight: 800;
-  line-height: 1.25;
-}
-
-.setup-summary-copy {
-  display: block;
-  margin-top: 0.34rem;
-  color: #c3c9c1;
 }
 
 .setup-expanded {
   display: grid;
   gap: 1rem;
-  padding: 0 1rem 1rem;
-}
-
-.setup-expanded::before {
-  display: block;
-  height: 1px;
-  margin-left: 3.8rem;
-  background: rgba(255, 255, 255, 0.1);
-  content: "";
+  padding: 1rem;
+  border-top: 1px solid rgba(101, 255, 122, 0.16);
 }
 
 .setup-copy {
   min-width: 0;
-  padding-left: 3.8rem;
   color: #c3c9c1;
+}
+
+.setup-visible {
+  padding: 1rem 1rem 1rem 4.8rem;
 }
 
 .setup-copy strong {
@@ -824,17 +861,60 @@ h1::after {
   font-weight: 800;
 }
 
-.setup-command {
+.setup-subtitle {
   display: block;
-  margin-top: 0.7rem;
+  margin-top: 0.82rem;
+  color: #fff;
+  font-weight: 800;
 }
 
-.setup-command code {
-  display: block;
+.setup-command-block {
+  display: grid;
   width: 100%;
-  padding: 0.62rem 0.72rem;
-  overflow-wrap: anywhere;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0.72rem 0 0.2rem;
+  overflow: hidden;
+  border: 1px solid rgba(101, 255, 122, 0.38);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.105), rgba(101, 255, 122, 0.045)),
+    #030603;
+}
+
+.setup-command-block code {
+  display: block;
+  min-width: 0;
+  padding: 0.76rem 0.82rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #baffc3;
+  font-size: 0.86rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.copy-command {
+  min-width: 5.2rem;
+  padding: 0 0.82rem;
+  border: 0;
+  border-left: 1px solid rgba(101, 255, 122, 0.32);
+  background: rgba(101, 255, 122, 0.14);
+  color: #dfffe3;
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.copy-command:hover,
+.copy-command:focus-visible,
+.copy-command.is-copied {
+  background: var(--green);
+  color: #031105;
 }
 
 .setup-shot-grid {
@@ -1116,43 +1196,35 @@ h1::after {
     padding-bottom: 4rem;
   }
 
-  .carousel-arrow {
-    width: 2.2rem;
-    height: 2.8rem;
-    font-size: 1.55rem;
+  .carousel-arrow::before {
+    top: 0.42rem;
+    bottom: 0.42rem;
   }
 
-  .carousel-arrow.previous {
-    left: 0.45rem;
-  }
-
-  .carousel-arrow.next {
-    right: 0.45rem;
-  }
-
-  .setup-disclosure > summary {
+  .setup-visible {
     padding: 4.4rem 1rem 1rem;
   }
 
-  .setup-disclosure > summary::after {
-    top: 1.15rem;
+  .setup-disclosure {
+    margin: 0 1rem 1rem;
+  }
+
+  .setup-disclosure > summary {
+    padding: 0.72rem;
   }
 
   .setup-expanded {
-    padding: 0 1rem 1rem;
+    padding: 0.75rem;
   }
 
-  .setup-expanded::before {
-    margin-left: 0;
+  .setup-command-block {
+    grid-template-columns: 1fr;
   }
 
-  .setup-copy {
-    padding-top: 3.7rem;
-    padding-left: 0;
-  }
-
-  .setup-expanded .setup-copy {
-    padding-top: 0;
+  .copy-command {
+    min-height: 2.4rem;
+    border-top: 1px solid rgba(101, 255, 122, 0.32);
+    border-left: 0;
   }
 
   .setup-shot-grid.single,

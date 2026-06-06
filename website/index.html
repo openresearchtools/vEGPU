@@ -209,31 +209,31 @@
         </p>
         <ol class="setup-guide">
           <li class="setup-guide-item">
-            <details class="setup-disclosure">
-              <summary>
-                <span class="setup-summary-title">Disable SIP on Apple Silicon.</span>
-                <span class="setup-summary-copy">Shut down, boot to startup options, open Recovery Terminal, run <code>csrutil disable</code>, restart, and understand the security cost before continuing.</span>
-              </summary>
-              <div class="setup-expanded">
-                <div class="setup-copy">
-                  <strong>Why this is required.</strong>
-                  vEGPU depends on an experimental DriverKit/VFIO path for Thunderbolt PCIe passthrough. SIP must be disabled before macOS will allow the required host-side extension flow.
-                </div>
-              </div>
-            </details>
+            <div class="setup-copy setup-visible">
+              <strong>Disable SIP on Apple Silicon.</strong>
+              Shut down, boot to startup options, open Recovery Terminal, run <code>csrutil disable</code>, restart, and understand the security cost before continuing. vEGPU depends on an experimental DriverKit/VFIO path for Thunderbolt PCIe passthrough, so SIP must be disabled before macOS will allow the required host-side extension flow.
+            </div>
           </li>
-          <li class="setup-guide-item">
+          <li class="setup-guide-item has-images">
+            <div class="setup-copy setup-visible">
+              <strong>Run the vEGPU installer and allow macOS to open it.</strong>
+              The package installs both vEGPU and vEGPU Machine. Because it comes from GitHub and the DriverKit side is ad hoc signed, macOS may block the first launch.
+              <span class="setup-subtitle">Unblock the downloaded package.</span>
+              If macOS says the package was not opened, go to System Settings, Privacy &amp; Security, and choose Open Anyway for the blocked vEGPU package. You can also remove the quarantine flag from the download in Terminal:
+              <div class="setup-command-block">
+                <code>xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg</code>
+                <button class="copy-command" type="button" data-copy-value="xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg">Copy</button>
+              </div>
+              <span class="setup-subtitle">Install the package.</span>
+              The installer password notice is the normal macOS authorization prompt for a <code>.pkg</code>. It installs the app plus the Machine components that let QEMU and the DriverKit extension talk to Thunderbolt PCIe hardware.
+              <span class="setup-subtitle">Approve the DriverKit extension.</span>
+              When vEGPU Machine asks to use a new driver extension, click <em>Open System Settings</em>, not OK. OK closes the alert without opening the approval page. In Driver Extensions, enable <code>vEGPU Machine</code>, approve the System Extensions prompt, and confirm the toggle is on.
+            </div>
             <details class="setup-disclosure">
               <summary>
-                <span class="setup-summary-title">Run the vEGPU installer and allow macOS to open it.</span>
-                <span class="setup-summary-copy">The package installs both vEGPU and vEGPU Machine. Because it comes from GitHub and the DriverKit side is ad hoc signed, macOS may block the first launch.</span>
+                <span>Show installer and DriverKit screenshots</span>
               </summary>
               <div class="setup-expanded">
-                <div class="setup-copy">
-                  <strong>Unblock the downloaded package.</strong>
-                  If macOS says the package was not opened, go to System Settings, Privacy &amp; Security, and choose Open Anyway for the blocked vEGPU package. You can also remove the quarantine flag from the download in Terminal:
-                  <span class="setup-command"><code>xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg</code></span>
-                </div>
                 <div class="setup-shot-grid quad" aria-label="Gatekeeper unblock flow">
                   <figure class="setup-shot">
                     <img src="assets/setup/gatekeeper-blocked.webp" alt="macOS warning that the vEGPU package was not opened because Apple could not verify it." width="744" height="824" loading="lazy" decoding="async">
@@ -252,19 +252,11 @@
                     <figcaption>Admin approval</figcaption>
                   </figure>
                 </div>
-                <div class="setup-copy">
-                  <strong>Install the package.</strong>
-                  The installer password notice is the normal macOS authorization prompt for a <code>.pkg</code>. It installs the app plus the Machine components that let QEMU and the DriverKit extension talk to Thunderbolt PCIe hardware.
-                </div>
                 <div class="setup-shot-grid single" aria-label="Package installer authorization prompt">
                   <figure class="setup-shot">
                     <img src="assets/setup/pkg-install-password.webp" alt="macOS Installer password prompt for installing new software." width="744" height="836" loading="lazy" decoding="async">
                     <figcaption>Normal package authorization</figcaption>
                   </figure>
-                </div>
-                <div class="setup-copy">
-                  <strong>Approve the DriverKit extension.</strong>
-                  When vEGPU Machine asks to use a new driver extension, click <em>Open System Settings</em>, not OK. OK closes the alert without opening the approval page. In Driver Extensions, enable <code>vEGPU Machine</code>, approve the System Extensions prompt, and confirm the toggle is on.
                 </div>
                 <div class="setup-shot-grid driver-flow" aria-label="DriverKit extension approval flow">
                   <figure class="setup-shot">
@@ -291,17 +283,18 @@
               </div>
             </details>
           </li>
-          <li class="setup-guide-item">
+          <li class="setup-guide-item has-images">
+            <div class="setup-copy setup-visible">
+              <strong>Start vEGPU with no eGPU plugged in.</strong>
+              Let it fetch the official Debian cloud image, expand the disk, run cloud-init, install base packages, and load the Linux DMA guest driver.
+              <span class="setup-subtitle">Allow the first-run helpers.</span>
+              Local Network access is required for the private Mac-to-VM connection: SSH control, web UI tabs, proxy routes, runtime RPC, file sharing, and guest setup all depend on it. The Linux share password prompt mounts the VM home folder over the private vmnet NFS link. The sleep guard helper prevents macOS sleep while PCIe passthrough is active, because sleep can wedge or panic the machine.
+            </div>
             <details class="setup-disclosure">
               <summary>
-                <span class="setup-summary-title">Start vEGPU with no eGPU plugged in.</span>
-                <span class="setup-summary-copy">Let it fetch the official Debian cloud image, expand the disk, run cloud-init, install base packages, and load the Linux DMA guest driver.</span>
+                <span>Show first-run permission screenshots</span>
               </summary>
               <div class="setup-expanded">
-                <div class="setup-copy">
-                  <strong>Allow the first-run helpers.</strong>
-                  Local Network access is required for the private Mac-to-VM connection: SSH control, web UI tabs, proxy routes, runtime RPC, file sharing, and guest setup all depend on it. The Linux share password prompt mounts the VM home folder over the private vmnet NFS link. The sleep guard helper prevents macOS sleep while PCIe passthrough is active, because sleep can wedge or panic the machine.
-                </div>
                 <div class="setup-shot-grid helper-flow" aria-label="First-run local network, file share, and sleep guard prompts">
                   <figure class="setup-shot">
                     <img src="assets/setup/local-network.webp" alt="macOS Local Network permission prompt explaining vEGPU needs private connection access to the Linux VM." width="744" height="820" loading="lazy" decoding="async">
@@ -320,32 +313,16 @@
             </details>
           </li>
           <li class="setup-guide-item">
-            <details class="setup-disclosure">
-              <summary>
-                <span class="setup-summary-title">Install NVIDIA support inside the VM.</span>
-                <span class="setup-summary-copy">The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. vEGPU does not ship those packages.</span>
-              </summary>
-              <div class="setup-expanded">
-                <div class="setup-copy">
-                  <strong>Use the helper or install manually.</strong>
-                  If you use NVIDIA cards, run the helper inside vEGPU after the first Debian boot finishes. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal.
-                </div>
-              </div>
-            </details>
+            <div class="setup-copy setup-visible">
+              <strong>Install NVIDIA support inside the VM.</strong>
+              The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. vEGPU does not ship those packages. If you use NVIDIA cards, run the helper inside vEGPU after the first Debian boot finishes. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal.
+            </div>
           </li>
           <li class="setup-guide-item">
-            <details class="setup-disclosure">
-              <summary>
-                <span class="setup-summary-title">Stop the VM, attach eGPUs, then launch the server with them attached.</span>
-                <span class="setup-summary-copy">If Sidecar does not show the cards, stop the server, unplug, wait, plug, wait, and launch the server again.</span>
-              </summary>
-              <div class="setup-expanded">
-                <div class="setup-copy">
-                  <strong>Give macOS a clean PCIe handoff.</strong>
-                  Stop the server, unplug the eGPUs, wait 5 seconds, plug them back in, wait another 5 seconds, and launch again. This does not reinstall the VM; it gives macOS another clean chance to hand the PCIe devices to QEMU.
-                </div>
-              </div>
-            </details>
+            <div class="setup-copy setup-visible">
+              <strong>Stop the VM, attach eGPUs, then launch the server with them attached.</strong>
+              If Sidecar does not show the cards, stop the server, unplug the eGPUs, wait 5 seconds, plug them back in, wait another 5 seconds, and launch again. This does not reinstall the VM; it gives macOS another clean chance to hand the PCIe devices to QEMU.
+            </div>
           </li>
         </ol>
         <p class="setup-note">
