@@ -889,6 +889,17 @@ h1::after {
   color: #fff;
 }
 
+.setup-highlight {
+  display: block;
+  margin-top: 0.82rem;
+  padding: 0.68rem 0.78rem;
+  border: 1px solid rgba(101, 255, 122, 0.24);
+  border-left: 3px solid rgba(101, 255, 122, 0.72);
+  border-radius: 7px;
+  background: rgba(101, 255, 122, 0.055);
+  color: #d8f6d6;
+}
+
 .setup-copy em {
   color: #fff;
   font-style: normal;
