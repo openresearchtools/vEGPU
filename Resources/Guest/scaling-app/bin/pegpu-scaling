@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+import sys
+from pathlib import Path
+
+
+def _add_module_path() -> None:
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parent.parent / "src",
+        Path("/usr/local/lib/pegpu-scaling"),
+        Path("/usr/lib/pegpu-scaling"),
+    ]
+    for candidate in candidates:
+        if (candidate / "pegpu_scaling.py").exists():
+            sys.path.insert(0, str(candidate))
+            return
+
+
+_add_module_path()
+
+from pegpu_scaling import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

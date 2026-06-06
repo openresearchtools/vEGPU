@@ -383,7 +383,7 @@
 
 	function modelLocation(model) {
 		const raw = String(model?.location || "").toLowerCase();
-		if (raw === "vm" || String(model?.modelPath || "").startsWith("/home/vegpu/")) return "vm";
+		if (raw === "vm" || String(model?.modelPath || "").startsWith("/home/pegpu/")) return "vm";
 		return "mac";
 	}
 
@@ -530,7 +530,7 @@
 	function isVMInternalRPCDevice(device) {
 		const location = String(device?.location ?? "").toLowerCase();
 		const endpoint = String(device?.endpoint ?? "");
-		return isRPCDevice(device) && (location.includes("vegpu vm") || endpoint.startsWith("172.29.253.100:"));
+		return isRPCDevice(device) && (location.includes("pegpu vm") || endpoint.startsWith("172.29.253.100:"));
 	}
 
 	function vmDeviceForRPCSelection(device) {
@@ -576,7 +576,7 @@
 		const current = usableDevices().find((item) => item.name === device.name);
 		if (current && !isVMInternalRPCDevice(device)) return mergeSavedDevice(current, device);
 		const vm = vmDeviceForRPCSelection(device);
-		if (vm) return { ...vm, location: "vEGPU VM" };
+		if (vm) return { ...vm, location: "PEGPU VM" };
 		return mergeSavedDevice(current, device);
 	}
 

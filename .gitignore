@@ -11,7 +11,7 @@
 .swiftpm/
 build/
 DerivedData/
-vegpu-build/
+pegpu-build/
 
 # Local release artifacts
 *.app

@@ -1,7 +1,7 @@
-vEGPU AI Web UI and Model Router
+PEGPU AI Web UI and Model Router
 ================================
 
-This directory contains vEGPU-specific app code for the embedded AI web UI,
+This directory contains PEGPU-specific app code for the embedded AI web UI,
 model discovery, runtime management, and OpenAI/llama.cpp-compatible request
 routing.
 
@@ -12,7 +12,7 @@ llama.cpp provenance
 --------------------
 
 The embedded chat UI and API surface are based on llama.cpp server conventions,
-the llama.cpp web UI surface, and llama.cpp-compatible HTTP APIs. vEGPU modifies
+the llama.cpp web UI surface, and llama.cpp-compatible HTTP APIs. PEGPU modifies
 that app-facing surface for:
 
 - local macOS and VM runtime selection
@@ -21,14 +21,14 @@ that app-facing surface for:
 - multiple model entries routed through configured runtime instances
 - packaged app integration instead of a standalone llama.cpp server bundle
 
-vEGPU does not store llama.cpp runtime binaries in this source repository.
+PEGPU does not store llama.cpp runtime binaries in this source repository.
 Release packages bundle the latest llama.cpp ARM64 runtime build available at
-vEGPU release time from openresearchtools/llama-cpp-arm64-builds. Runtime
+PEGPU release time from openresearchtools/llama-cpp-arm64-builds. Runtime
 binaries such as llama-server, rpc-server, and libllama/libggml libraries carry
 their own license files. Additional llama.cpp and TurboQuant runtime versions
 remain user-managed through the /core runtime release workflow.
 
-llama.cpp is MIT licensed. The generated vEGPU legal bundle includes the
+llama.cpp is MIT licensed. The generated PEGPU legal bundle includes the
 llama.cpp MIT license as:
 
   licenses/llama.cpp-MIT.txt
@@ -37,7 +37,7 @@ llama-swap provenance
 ---------------------
 
 The model-routing behavior is based on llama-swap's request-routing model.
-vEGPU modifies that model to route llama.cpp-compatible API requests across
+PEGPU modifies that model to route llama.cpp-compatible API requests across
 configured macOS and VM runtimes, including:
 
 - VM/CUDA and macOS/Metal runtime pairs
@@ -45,14 +45,14 @@ configured macOS and VM runtimes, including:
 - sessions detached from a single fixed llama-server process
 - app-managed downloads, runtime launches, and bridge endpoints
 
-llama-swap is MIT licensed. The generated vEGPU legal bundle includes the
+llama-swap is MIT licensed. The generated PEGPU legal bundle includes the
 llama-swap MIT license as:
 
   licenses/llama-swap-MIT.txt
 
-vEGPU modifications
+PEGPU modifications
 -------------------
 
-OpenResearchTools vEGPU modifications in this directory are distributed as part
-of the vEGPU app source tree under the repository license unless an individual
+OpenResearchTools PEGPU modifications in this directory are distributed as part
+of the PEGPU app source tree under the repository license unless an individual
 file or embedded upstream notice states a more specific license.

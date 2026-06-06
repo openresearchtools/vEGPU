@@ -54,7 +54,7 @@ type RuntimeResidencyConfig struct {
 	Env                []string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 
-const vmRuntimeHomeRoot = "/home/vegpu/custom-llama-runtimes"
+const vmRuntimeHomeRoot = "/home/pegpu/custom-llama-runtimes"
 
 type DiscoveryConfig struct {
 	Enabled      bool     `yaml:"enabled" json:"enabled"`
@@ -148,11 +148,11 @@ func NewConfigStore(appDir, configPath string) (*ConfigStore, error) {
 }
 
 func defaultConfigPath(appDir string) string {
-	if v := strings.TrimSpace(os.Getenv("VEGPU_APP_DATA_DIR")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("PEGPU_APP_DATA_DIR")); v != "" {
 		return filepath.Join(expandPath(v), "ai", "llms", "app.yaml")
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, "Library", "Application Support", "vEGPU", "Machine", "ai", "llms", "app.yaml")
+		return filepath.Join(home, "Library", "Application Support", "pegpu", "Machine", "ai", "llms", "app.yaml")
 	}
 	return filepath.Join(appDir, "app.yaml")
 }
@@ -538,7 +538,7 @@ func normalizeRuntimeResidency(residency *RuntimeResidencyConfig) {
 
 func rewriteDeprecatedVMRuntimeCommand(value string) string {
 	value = strings.TrimSpace(value)
-	oldRoot := filepath.Join(string(filepath.Separator), "opt", "vegpu", "custom-llama-runtimes")
+	oldRoot := filepath.Join(string(filepath.Separator), "opt", "pegpu", "custom-llama-runtimes")
 	if value == oldRoot {
 		return vmRuntimeHomeRoot
 	}
@@ -552,7 +552,7 @@ func removeDeprecatedRuntimeEnv(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		trimmed := strings.TrimSpace(value)
-		if strings.HasPrefix(trimmed, "XDG_CACHE_HOME=") && strings.Contains(trimmed, "vegpu-llms-cache") {
+		if strings.HasPrefix(trimmed, "XDG_CACHE_HOME=") && strings.Contains(trimmed, "pegpu-llms-cache") {
 			continue
 		}
 		out = append(out, trimmed)
@@ -648,7 +648,7 @@ const (
 
 func normalizeModelLocation(location, modelPath string) string {
 	cleanPath := filepath.ToSlash(strings.TrimSpace(modelPath))
-	if strings.HasPrefix(cleanPath, "/home/vegpu/") {
+	if strings.HasPrefix(cleanPath, "/home/pegpu/") {
 		return modelLocationVM
 	}
 	if cleanPath != "" {
@@ -680,8 +680,8 @@ func isKnownVMModelPath(path string) bool {
 
 func vmModelRoots() []string {
 	return []string{
-		"/home/vegpu/.cache/huggingface/hub",
-		"/home/vegpu/.lmstudio/models",
+		"/home/pegpu/.cache/huggingface/hub",
+		"/home/pegpu/.lmstudio/models",
 	}
 }
 

@@ -1,3 +1,3 @@
-module dev.vegpu.localproxy
+module dev.pegpu.localproxy
 
 go 1.22

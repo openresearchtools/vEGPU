@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SEED_DIR=/var/lib/vegpu/llama-runtime-seed
+SEED_DIR=/var/lib/pegpu/llama-runtime-seed
 MANIFEST=$SEED_DIR/llama-runtime-manifest.json
-RUNTIME_ROOT=/home/vegpu/custom-llama-runtimes
+RUNTIME_ROOT=/home/pegpu/custom-llama-runtimes
 FAMILY=llama
 
 log() {
-  printf '[vegpu-llama-runtime] %s\n' "$*" >&2
+  printf '[pegpu-llama-runtime] %s\n' "$*" >&2
 }
 
 json_get() {
@@ -72,7 +72,7 @@ current_standard_backend() {
   current="$RUNTIME_ROOT/current"
   target="$(readlink -f "$current" 2>/dev/null || true)"
   [ -n "$target" ] || { printf '%s\n' cuda13; return 0; }
-  marker="$target/.vegpu-runtime.json"
+  marker="$target/.pegpu-runtime.json"
   if [ -f "$marker" ]; then
     family="$(jq -r '.family // empty' "$marker" 2>/dev/null || true)"
     backend="$(jq -r '.backend // .linuxBackend // empty' "$marker" 2>/dev/null || true)"
@@ -142,9 +142,9 @@ write_marker() {
       rpcRel:(if $rpcRel == "" then null else $rpcRel end),
       installedAt:$installedAt,
       active:$active
-    }' >"$root/.vegpu-runtime.json"
-  chown vegpu:vegpu "$root/.vegpu-runtime.json"
-  chmod 0644 "$root/.vegpu-runtime.json"
+    }' >"$root/.pegpu-runtime.json"
+  chown pegpu:pegpu "$root/.pegpu-runtime.json"
+  chmod 0644 "$root/.pegpu-runtime.json"
 }
 
 server_rel_for_root() {
@@ -177,8 +177,8 @@ install_backend() {
   archive_sha_matches "$archive" "$sha" || { log "$backend archive checksum mismatch"; return 1; }
   validate_archive "$archive"
 
-  install -d -o vegpu -g vegpu -m 0755 "$RUNTIME_ROOT"
-  marker="$root/.vegpu-runtime.json"
+  install -d -o pegpu -g pegpu -m 0755 "$RUNTIME_ROOT"
+  marker="$root/.pegpu-runtime.json"
   if [ -d "$root" ] && marker_matches "$marker" "$id" "$backend" "$tag" "$archive_name" "$sha" &&
      find "$root" -type f -name llama-server -perm -111 -print -quit | grep -q .; then
     log "$backend runtime already current"
@@ -187,7 +187,7 @@ install_backend() {
 
   log "installing $backend runtime $tag"
   rm -rf "$tmp"
-  install -d -o vegpu -g vegpu -m 0755 "$tmp"
+  install -d -o pegpu -g pegpu -m 0755 "$tmp"
   tar -xzf "$archive" -C "$tmp"
   server="$(find "$tmp" -type f -name llama-server -print -quit)"
   [ -n "$server" ] || { log "runtime archive has no llama-server: $archive"; rm -rf "$tmp"; return 1; }
@@ -195,7 +195,7 @@ install_backend() {
   chmod 0755 "$server"
   [ -n "$rpc" ] && chmod 0755 "$rpc"
   chmod -R u+rwX,go+rX "$tmp"
-  chown -R vegpu:vegpu "$tmp"
+  chown -R pegpu:pegpu "$tmp"
   rm -rf "$root"
   mv "$tmp" "$root"
   server_rel="$(server_rel_for_root "$root")"
@@ -208,7 +208,7 @@ activate_backend() {
   local id root server_rel rpc_rel marker
   id="$(managed_id_for_backend "$backend")"
   root="$RUNTIME_ROOT/$id"
-  marker="$root/.vegpu-runtime.json"
+  marker="$root/.pegpu-runtime.json"
   [ -d "$root" ] || { log "cannot activate missing runtime: $id"; return 1; }
   server_rel="$(server_rel_for_root "$root")"
   rpc_rel="$(rpc_rel_for_root "$root")"
@@ -221,17 +221,17 @@ activate_backend() {
   else
     rm -f /usr/local/bin/rpc-server
   fi
-  for marker in "$RUNTIME_ROOT"/managed-llama-*-linux/.vegpu-runtime.json; do
+  for marker in "$RUNTIME_ROOT"/managed-llama-*-linux/.pegpu-runtime.json; do
     [ -f "$marker" ] || continue
     tmp_marker="$marker.tmp"
     jq --argjson active false '.active = $active' "$marker" >"$tmp_marker"
     mv "$tmp_marker" "$marker"
-    chown vegpu:vegpu "$marker"
+    chown pegpu:pegpu "$marker"
   done
-  tmp_marker="$root/.vegpu-runtime.json.tmp"
-  jq --argjson active true '.active = $active' "$root/.vegpu-runtime.json" >"$tmp_marker"
-  mv "$tmp_marker" "$root/.vegpu-runtime.json"
-  chown vegpu:vegpu "$root/.vegpu-runtime.json"
+  tmp_marker="$root/.pegpu-runtime.json.tmp"
+  jq --argjson active true '.active = $active' "$root/.pegpu-runtime.json" >"$tmp_marker"
+  mv "$tmp_marker" "$root/.pegpu-runtime.json"
+  chown pegpu:pegpu "$root/.pegpu-runtime.json"
   log "active runtime backend: $backend"
 }
 

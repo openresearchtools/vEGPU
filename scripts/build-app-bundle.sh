@@ -5,25 +5,25 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${CONFIGURATION:-release}"
 VERSION="${VERSION:-${RELEASE_VERSION:-0.1.0}}"
 BUILD_NUMBER="${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-1}}"
-DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
-BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
-APP_BUILD_DIR="${VEGPU_APP_BUILD_DIR:-$BUILD_ROOT/app-build}"
+DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
+BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+APP_BUILD_DIR="${PEGPU_APP_BUILD_DIR:-$BUILD_ROOT/app-build}"
 SWIFT_BUILD_SCRATCH_PATH="${SWIFT_BUILD_SCRATCH_PATH:-$BUILD_ROOT/swiftpm-$CONFIGURATION}"
-APP="${VEGPU_APP:-$BUILD_ROOT/vEGPU.app}"
+APP="${PEGPU_APP:-$BUILD_ROOT/PEGPU.app}"
 CONTENTS="$APP/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 FRAMEWORKS="$CONTENTS/Frameworks"
-BUNDLED_ROOT="$RESOURCES/vEGPURoot"
-DISPLAY_FRAMEWORKS="${VEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}"
-ANGLE_NOTICE_DIR="${VEGPU_ANGLE_NOTICE_DIR:-$ROOT/third_party/angle}"
-LEGAL_BUILD_DIR="${VEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}"
-SCALING_PACKAGE_DIR="${VEGPU_SCALING_PACKAGE_DIR:-}"
-BOOTSTRAP_LLAMA_RUNTIME_DIR="${VEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR:-}"
+BUNDLED_ROOT="$RESOURCES/PEGPURoot"
+DISPLAY_FRAMEWORKS="${PEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}"
+ANGLE_NOTICE_DIR="${PEGPU_ANGLE_NOTICE_DIR:-$ROOT/third_party/angle}"
+LEGAL_BUILD_DIR="${PEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}"
+SCALING_PACKAGE_DIR="${PEGPU_SCALING_PACKAGE_DIR:-}"
+BOOTSTRAP_LLAMA_RUNTIME_DIR="${PEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR:-}"
 WEB_UI_BIN="$APP_BUILD_DIR/web-ui-app"
 GOST_BIN="$APP_BUILD_DIR/gost-local-proxy"
-AUDIO_HOST_BIN="$APP_BUILD_DIR/tools/bin/vegpu-audio-host"
-LOCAL_PROXY_BIN="$APP_BUILD_DIR/tools/bin/vegpu-local-proxy"
+AUDIO_HOST_BIN="$APP_BUILD_DIR/tools/bin/pegpu-audio-host"
+LOCAL_PROXY_BIN="$APP_BUILD_DIR/tools/bin/pegpu-local-proxy"
 ANGLE_REQUIRED_FRAMEWORKS=(EGL GLESv2)
 APP_EXCLUDED_DISPLAY_FRAMEWORKS=(
   asprintf.0
@@ -48,7 +48,7 @@ for framework in "${ANGLE_REQUIRED_FRAMEWORKS[@]}"; do
 done
 if [ "${#missing_angle_frameworks[@]}" -gt 0 ]; then
   printf 'Missing app-side display framework(s): %s\n' "${missing_angle_frameworks[*]}" >&2
-  printf 'Build or download the vEGPU-display-frameworks-macos26-arm64 artifact and set VEGPU_DISPLAY_FRAMEWORKS_OUT.\n' >&2
+  printf 'Build or download the PEGPU-display-frameworks-macos26-arm64 artifact and set PEGPU_DISPLAY_FRAMEWORKS_OUT.\n' >&2
   exit 1
 fi
 for notice in SOURCE.md ANGLE.plist LICENSE; do
@@ -59,10 +59,10 @@ for notice in SOURCE.md ANGLE.plist LICENSE; do
 done
 
 mkdir -p "$APP_BUILD_DIR/tools/bin"
-export VEGPU_BUILD_ROOT="$BUILD_ROOT"
-export VEGPU_DISPLAY_FRAMEWORKS_OUT="$DISPLAY_FRAMEWORKS"
-export VEGPU_UTM_PATCHED_WORKTREE="${VEGPU_UTM_PATCHED_WORKTREE:-$BUILD_ROOT/utm-patched}"
-export VEGPU_COCOASPICE_PACKAGE_PATH="${VEGPU_COCOASPICE_PACKAGE_PATH:-$VEGPU_UTM_PATCHED_WORKTREE/OpenResearchTools/CocoaSpice}"
+export PEGPU_BUILD_ROOT="$BUILD_ROOT"
+export PEGPU_DISPLAY_FRAMEWORKS_OUT="$DISPLAY_FRAMEWORKS"
+export PEGPU_UTM_PATCHED_WORKTREE="${PEGPU_UTM_PATCHED_WORKTREE:-$BUILD_ROOT/utm-patched}"
+export PEGPU_COCOASPICE_PACKAGE_PATH="${PEGPU_COCOASPICE_PACKAGE_PATH:-$PEGPU_UTM_PATCHED_WORKTREE/OpenResearchTools/CocoaSpice}"
 "$ROOT/scripts/apply-utm-patches.sh" >/dev/null
 swift build --configuration "$CONFIGURATION" --disable-sandbox --scratch-path "$SWIFT_BUILD_SCRATCH_PATH"
 SWIFT_BUILD_DIR="$(cd "$SWIFT_BUILD_SCRATCH_PATH/$CONFIGURATION" && pwd -P)"
@@ -73,15 +73,15 @@ SDKROOT="$(xcrun --show-sdk-path)"
 "$(xcrun --find clang)" -isysroot "$SDKROOT" -O2 -Wall -Wextra \
   -framework AudioToolbox -framework CoreAudio \
   -o "$AUDIO_HOST_BIN" \
-  "$ROOT/Helpers/AudioBridge/vegpu-audio-host.c"
+  "$ROOT/Helpers/AudioBridge/pegpu-audio-host.c"
 cp "$GOST_BIN" "$LOCAL_PROXY_BIN"
 chmod +x "$WEB_UI_BIN" "$GOST_BIN" "$LOCAL_PROXY_BIN" "$AUDIO_HOST_BIN"
-export VEGPU_REQUIRE_FULL_SOURCE="${VEGPU_REQUIRE_FULL_SOURCE:-1}"
+export PEGPU_REQUIRE_FULL_SOURCE="${PEGPU_REQUIRE_FULL_SOURCE:-1}"
 "$ROOT/scripts/build-legal-bundle.sh" "$LEGAL_BUILD_DIR" >/dev/null
 required_legal_sidecars=(
-  "$LEGAL_BUILD_DIR/source/vEGPU-app-source.NOTICES"
-  "$LEGAL_BUILD_DIR/source/vEGPU-app-source.LICENSES"
-  "$LEGAL_BUILD_DIR/source/vEGPU-app-source.manifest.json"
+  "$LEGAL_BUILD_DIR/source/PEGPU-app-source.NOTICES"
+  "$LEGAL_BUILD_DIR/source/PEGPU-app-source.LICENSES"
+  "$LEGAL_BUILD_DIR/source/PEGPU-app-source.manifest.json"
   "$LEGAL_BUILD_DIR/source/display-runtime-source.NOTICES"
   "$LEGAL_BUILD_DIR/source/display-runtime-source.LICENSES"
   "$LEGAL_BUILD_DIR/source/display-runtime-source.manifest.json"
@@ -93,20 +93,20 @@ for legal_file in "${required_legal_sidecars[@]}"; do
   fi
 done
 if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exit bad ? 0 : 1}' "$LEGAL_BUILD_DIR/LICENSES"; then
-  printf 'vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks.\n' >&2
+  printf 'PEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks.\n' >&2
   exit 1
 fi
 if find "$LEGAL_BUILD_DIR/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
-  printf 'vEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files.\n' >&2
+  printf 'PEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files.\n' >&2
   exit 1
 fi
 
 rm -rf "$APP"
 mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS" "$BUNDLED_ROOT/tools/bin"
 
-cp "$SWIFT_BUILD_DIR/vEGPUApp" "$MACOS/vEGPU"
-cp "$SWIFT_BUILD_DIR/vegpu" "$BUNDLED_ROOT/tools/bin/vegpu"
-chmod +x "$MACOS/vEGPU" "$BUNDLED_ROOT/tools/bin/vegpu"
+cp "$SWIFT_BUILD_DIR/PEGPUApp" "$MACOS/PEGPU"
+cp "$SWIFT_BUILD_DIR/pegpu" "$BUNDLED_ROOT/tools/bin/pegpu"
+chmod +x "$MACOS/PEGPU" "$BUNDLED_ROOT/tools/bin/pegpu"
 while IFS= read -r bundle; do
   rm -rf "$RESOURCES/$(basename "$bundle")"
   /usr/bin/ditto "$bundle" "$RESOURCES/$(basename "$bundle")"
@@ -147,19 +147,19 @@ rsync -a "$ROOT/docs" "$BUNDLED_ROOT/" 2>/dev/null || true
 rsync -a "$ROOT/legal" "$BUNDLED_ROOT/" 2>/dev/null || true
 mkdir -p "$BUNDLED_ROOT/legal/generated"
 rsync -a "$LEGAL_BUILD_DIR/" "$BUNDLED_ROOT/legal/generated/"
-cp "$LOCAL_PROXY_BIN" "$BUNDLED_ROOT/tools/bin/vegpu-local-proxy"
-cp "$AUDIO_HOST_BIN" "$BUNDLED_ROOT/tools/bin/vegpu-audio-host"
-if [ -f "$ROOT/Resources/Assets/vEGPU.icns" ]; then
-  cp "$ROOT/Resources/Assets/vEGPU.icns" "$RESOURCES/vEGPU.icns"
+cp "$LOCAL_PROXY_BIN" "$BUNDLED_ROOT/tools/bin/pegpu-local-proxy"
+cp "$AUDIO_HOST_BIN" "$BUNDLED_ROOT/tools/bin/pegpu-audio-host"
+if [ -f "$ROOT/Resources/Assets/PEGPU.icns" ]; then
+  cp "$ROOT/Resources/Assets/PEGPU.icns" "$RESOURCES/PEGPU.icns"
 fi
 
 script_mismatches=()
 for rel in \
-  "Resources/Guest/firstboot.sh" \
+  "Resources/Guest/pegpu-firstboot.sh" \
   "Resources/Guest/customization.sh" \
   "Resources/Guest/reconcile-llama-runtimes.sh" \
-  "Resources/Guest/gui-ensure.sh" \
-  "Resources/Guest/vegpu-agent.sh"
+  "Resources/Guest/pegpu-gui-ensure.sh" \
+  "Resources/Guest/pegpu-agent.sh"
 do
   if ! cmp -s "$ROOT/$rel" "$BUNDLED_ROOT/$rel"; then
     script_mismatches+=("$rel")
@@ -190,7 +190,7 @@ forbidden_machine_refs="$(
     -print
 )"
 if [ -n "$forbidden_machine_refs" ]; then
-  printf 'Refusing bundle with vEGPU Machine/QEMU artifacts in Apache-side app:\\n%s\\n' "$forbidden_machine_refs" >&2
+  printf 'Refusing bundle with PEGPU Machine/QEMU artifacts in Apache-side app:\\n%s\\n' "$forbidden_machine_refs" >&2
   exit 1
 fi
 
@@ -198,7 +198,7 @@ forbidden_llama_runtime_refs="$(
   find "$BUNDLED_ROOT" \
     -path "$BUNDLED_ROOT/ai/bootstrap-runtimes/llama" -prune -o \
     \( \
-      -name 'vegpu-llama-runtime_*.deb' -o \
+      -name 'pegpu-llama-runtime_*.deb' -o \
       -name '*llama*.dmg' -o \
       -name '*llama*.tar.gz' -o \
       -name 'llama-server' -o \
@@ -216,7 +216,7 @@ fi
 
 if [ -d "$DISPLAY_FRAMEWORKS" ]; then
   rsync -a --delete --include='*.framework/***' --include='*.framework' --exclude='*' "$DISPLAY_FRAMEWORKS/" "$FRAMEWORKS/"
-  # The display artifact carries build, test, and gettext tool libraries. vEGPU.app ships only the runtime closure it loads.
+  # The display artifact carries build, test, and gettext tool libraries. PEGPU.app ships only the runtime closure it loads.
   for framework in "${APP_EXCLUDED_DISPLAY_FRAMEWORKS[@]}"; do
     rm -rf "$FRAMEWORKS/$framework.framework"
   done
@@ -231,17 +231,17 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>vEGPU</string>
+  <string>PEGPU</string>
   <key>CFBundleExecutable</key>
-  <string>vEGPU</string>
+  <string>PEGPU</string>
   <key>CFBundleIconFile</key>
-  <string>vEGPU</string>
+  <string>PEGPU</string>
   <key>CFBundleIdentifier</key>
-  <string>com.vegpu.app</string>
+  <string>com.pegpu.app</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>vEGPU</string>
+  <string>PEGPU</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -253,12 +253,12 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSMicrophoneUsageDescription</key>
-  <string>vEGPU can forward the selected Mac microphone to the Linux VM when microphone audio is enabled.</string>
+  <string>PEGPU can forward the selected Mac microphone to the Linux VM when microphone audio is enabled.</string>
   <key>NSLocalNetworkUsageDescription</key>
-  <string>vEGPU uses Local Network access for the private connection between this Mac and the Linux VM, including SSH control, web UI and proxy routes, runtime RPC, file sharing, and guest setup.</string>
+  <string>PEGPU uses Local Network access for the private connection between this Mac and the Linux VM, including SSH control, web UI and proxy routes, runtime RPC, file sharing, and guest setup.</string>
   <key>NSBonjourServices</key>
   <array>
-    <string>_vegpu-preflight._tcp</string>
+    <string>_pegpu-preflight._tcp</string>
     <string>_ssh._tcp</string>
     <string>_http._tcp</string>
   </array>
@@ -266,8 +266,8 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-if [ -x "$BUNDLED_ROOT/tools/bin/vegpu-audio-host" ]; then
-  codesign --force --sign - "$BUNDLED_ROOT/tools/bin/vegpu-audio-host" >/dev/null
+if [ -x "$BUNDLED_ROOT/tools/bin/pegpu-audio-host" ]; then
+  codesign --force --sign - "$BUNDLED_ROOT/tools/bin/pegpu-audio-host" >/dev/null
 fi
 
 if [ -d "$FRAMEWORKS" ]; then

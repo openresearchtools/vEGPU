@@ -27,10 +27,10 @@ fi
 
 bad_artifacts="$(
   find . -path './.git' -prune -o -type f \( \
-    -path './Resources/Assets/vEGPU.icns' -o \
-    -path './Resources/Assets/vEGPU-logo-transparent.png' -o \
-    -path './Resources/Assets/vEGPU-tray.png' -o \
-    -path './website/assets/vegpu-logo.png' \
+    -path './Resources/Assets/PEGPU.icns' -o \
+    -path './Resources/Assets/PEGPU-logo-transparent.png' -o \
+    -path './Resources/Assets/PEGPU-tray.png' -o \
+    -path './website/assets/pegpu-logo.png' \
   \) -prune -o -type f \( \
     -name '*.app' -o \
     -name '*.pkg' -o \
@@ -65,10 +65,10 @@ fi
 
 binary_payloads="$(
   find . -path './.git' -prune -o \( \
-      -path './Resources/Assets/vEGPU.icns' -o \
-      -path './Resources/Assets/vEGPU-logo-transparent.png' -o \
-      -path './Resources/Assets/vEGPU-tray.png' -o \
-      -path './website/assets/vegpu-logo.png' \
+      -path './Resources/Assets/PEGPU.icns' -o \
+      -path './Resources/Assets/PEGPU-logo-transparent.png' -o \
+      -path './Resources/Assets/PEGPU-tray.png' -o \
+      -path './website/assets/pegpu-logo.png' \
     \) -prune -o -type f -print0 |
     xargs -0 file |
     grep -E 'Mach-O|Debian binary package|current ar archive|Zip archive|xar archive|gzip compressed|XZ compressed|PNG image|JPEG image|Apple icon' || true
@@ -82,7 +82,7 @@ test_payloads="$(
   find . \
     -path './.git' -prune -o \
     \( \
-      -path './Sources/vEGPUCoreSelfTests' -o \
+      -path './Sources/PEGPUCoreSelfTests' -o \
       -path './Resources/Guest/scaling-app/tests' -o \
       -path '*/__pycache__' -o \
       -name '*_test.go' -o \
@@ -99,13 +99,13 @@ test -f legal/GUEST-VM-INSTALL-NOTICES.md
 test -f legal/LICENSES/llama-swap-MIT.txt
 test -f legal/LICENSES/llama.cpp-MIT.txt
 test -f legal/LICENSES/UTM-Apache-2.0.txt
-test -f legal/LICENSES/vegpu-scaling-MIT.txt
+test -f legal/LICENSES/pegpu-scaling-MIT.txt
 test -f releases/releases-manifest.json
 test -f releases/pre-releases-manifest.json
 test -f third_party/angle/LICENSE
 test -f third_party/utm/README.md
-test -f third_party/utm/patches/0001-openresearchtools-vegpu-cocoaspice-package.patch
-test -s third_party/utm/patches/0001-openresearchtools-vegpu-cocoaspice-package.patch
+test -f third_party/utm/patches/0001-openresearchtools-pegpu-cocoaspice-package.patch
+test -s third_party/utm/patches/0001-openresearchtools-pegpu-cocoaspice-package.patch
 
 allowed_scripts="$(
   cat <<'LIST'
@@ -136,45 +136,45 @@ if [ -n "$bad_release_files" ]; then
   exit 1
 fi
 
-if rg -n 'UTM-Derived' Package.swift scripts .github Sources legal third_party -g '!scripts/verify-clean-repo.sh' >/tmp/vegpu-clean-rg.$$ 2>/dev/null; then
-  cat /tmp/vegpu-clean-rg.$$ >&2
-  rm -f /tmp/vegpu-clean-rg.$$
+if rg -n 'UTM-Derived' Package.swift scripts .github Sources legal third_party -g '!scripts/verify-clean-repo.sh' >/tmp/pegpu-clean-rg.$$ 2>/dev/null; then
+  cat /tmp/pegpu-clean-rg.$$ >&2
+  rm -f /tmp/pegpu-clean-rg.$$
   printf 'Committed clean repo must not reference UTM-Derived source paths.\n' >&2
   exit 1
 fi
-rm -f /tmp/vegpu-clean-rg.$$
+rm -f /tmp/pegpu-clean-rg.$$
 
-if rg -n '\$ROOT/build|path: build/|OUT="build/|\$PWD/build|go build -o web-ui-app|go build -o gost-local-proxy|\$ROOT/tools|build-angle-frameworks|prepare-clean-release-repo|build/generated/display-frameworks|build/vEGPU\.app|build/legal/generated' Package.swift .github scripts Sources Resources docs ai third_party -g '!scripts/verify-clean-repo.sh' >/tmp/vegpu-clean-rg.$$ 2>/dev/null; then
-  cat /tmp/vegpu-clean-rg.$$ >&2
-  rm -f /tmp/vegpu-clean-rg.$$
+if rg -n '\$ROOT/build|path: build/|OUT="build/|\$PWD/build|go build -o web-ui-app|go build -o gost-local-proxy|\$ROOT/tools|build-angle-frameworks|prepare-clean-release-repo|build/generated/display-frameworks|build/PEGPU\.app|build/legal/generated' Package.swift .github scripts Sources Resources docs ai third_party -g '!scripts/verify-clean-repo.sh' >/tmp/pegpu-clean-rg.$$ 2>/dev/null; then
+  cat /tmp/pegpu-clean-rg.$$ >&2
+  rm -f /tmp/pegpu-clean-rg.$$
   printf 'Build scripts/workflows must not write generated outputs into the checkout or keep local fallback builders.\n' >&2
   exit 1
 fi
-rm -f /tmp/vegpu-clean-rg.$$
+rm -f /tmp/pegpu-clean-rg.$$
 
-if rg -n '/Users/user|/var/folders|NSIRD_|TemporaryItems|modelPath: /Users|mmprojPath: /Users' ai docs legal Package.swift scripts Sources Resources .github -g '!scripts/verify-clean-repo.sh' >/tmp/vegpu-clean-rg.$$ 2>/dev/null; then
-  cat /tmp/vegpu-clean-rg.$$ >&2
-  rm -f /tmp/vegpu-clean-rg.$$
+if rg -n '/Users/user|/var/folders|NSIRD_|TemporaryItems|modelPath: /Users|mmprojPath: /Users' ai docs legal Package.swift scripts Sources Resources .github -g '!scripts/verify-clean-repo.sh' >/tmp/pegpu-clean-rg.$$ 2>/dev/null; then
+  cat /tmp/pegpu-clean-rg.$$ >&2
+  rm -f /tmp/pegpu-clean-rg.$$
   printf 'Clean repo must not contain machine-local paths or discovered model config.\n' >&2
   exit 1
 fi
-rm -f /tmp/vegpu-clean-rg.$$
+rm -f /tmp/pegpu-clean-rg.$$
 
-if rg -n 'Electron/Node|Electron app|Electron-era|Electron/Chromium' docs legal scripts .github Package.swift Sources Resources -g '!scripts/verify-clean-repo.sh' >/tmp/vegpu-clean-rg.$$ 2>/dev/null; then
-  cat /tmp/vegpu-clean-rg.$$ >&2
-  rm -f /tmp/vegpu-clean-rg.$$
+if rg -n 'Electron/Node|Electron app|Electron-era|Electron/Chromium' docs legal scripts .github Package.swift Sources Resources -g '!scripts/verify-clean-repo.sh' >/tmp/pegpu-clean-rg.$$ 2>/dev/null; then
+  cat /tmp/pegpu-clean-rg.$$ >&2
+  rm -f /tmp/pegpu-clean-rg.$$
   printf 'Clean repo docs/notices must not describe the old Electron architecture.\n' >&2
   exit 1
 fi
-rm -f /tmp/vegpu-clean-rg.$$
+rm -f /tmp/pegpu-clean-rg.$$
 
-if rg -n 'vEGPUCoreSelfTests|go test|unittest discover' Package.swift .github scripts docs Resources -g '!scripts/verify-clean-repo.sh' >/tmp/vegpu-clean-rg.$$ 2>/dev/null; then
-  cat /tmp/vegpu-clean-rg.$$ >&2
-  rm -f /tmp/vegpu-clean-rg.$$
+if rg -n 'PEGPUCoreSelfTests|go test|unittest discover' Package.swift .github scripts docs Resources -g '!scripts/verify-clean-repo.sh' >/tmp/pegpu-clean-rg.$$ 2>/dev/null; then
+  cat /tmp/pegpu-clean-rg.$$ >&2
+  rm -f /tmp/pegpu-clean-rg.$$
   printf 'Clean repo must not reference removed test runners.\n' >&2
   exit 1
 fi
-rm -f /tmp/vegpu-clean-rg.$$
+rm -f /tmp/pegpu-clean-rg.$$
 
 empty_dirs="$(find . -path './.git' -prune -o -type d -empty -print)"
 if [ -n "$empty_dirs" ]; then

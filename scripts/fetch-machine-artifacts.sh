@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
-BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
+BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 OUT="${1:-$BUILD_ROOT/machine-artifacts}"
-REPO="${VEGPU_MACHINE_REPOSITORY:-openresearchtools/vEGPU-machine}"
-WORKFLOW="${VEGPU_MACHINE_WORKFLOW:-build-nosip.yml}"
-REF="${VEGPU_MACHINE_REF:-main}"
-RUN_ID="${VEGPU_MACHINE_RUN_ID:-}"
-TRIGGER="${VEGPU_TRIGGER_MACHINE_BUILD:-0}"
-VERSION="${VEGPU_RELEASE_VERSION:-}"
-BUILD_NUMBER="${VEGPU_BUILD_NUMBER:-}"
-LOCAL_ZIP="${VEGPU_MACHINE_ZIP:-}"
-LOCAL_SOURCE="${VEGPU_MACHINE_SOURCE_TGZ:-}"
-LOCAL_ARTIFACT_DIR="${VEGPU_MACHINE_ARTIFACT_DIR:-}"
-REQUIRE_SOURCE="${VEGPU_REQUIRE_MACHINE_SOURCE:-1}"
+REPO="${PEGPU_MACHINE_REPOSITORY:-openresearchtools/PEGPU-machine}"
+WORKFLOW="${PEGPU_MACHINE_WORKFLOW:-build-nosip.yml}"
+REF="${PEGPU_MACHINE_REF:-main}"
+RUN_ID="${PEGPU_MACHINE_RUN_ID:-}"
+TRIGGER="${PEGPU_TRIGGER_MACHINE_BUILD:-0}"
+VERSION="${PEGPU_RELEASE_VERSION:-}"
+BUILD_NUMBER="${PEGPU_BUILD_NUMBER:-}"
+LOCAL_ZIP="${PEGPU_MACHINE_ZIP:-}"
+LOCAL_SOURCE="${PEGPU_MACHINE_SOURCE_TGZ:-}"
+LOCAL_ARTIFACT_DIR="${PEGPU_MACHINE_ARTIFACT_DIR:-}"
+REQUIRE_SOURCE="${PEGPU_REQUIRE_MACHINE_SOURCE:-1}"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -26,7 +26,7 @@ copy_local() {
     test -f "$LOCAL_SOURCE"
     cp "$LOCAL_SOURCE" "$OUT/"
   elif [ "$REQUIRE_SOURCE" = "1" ]; then
-    printf 'VEGPU_MACHINE_SOURCE_TGZ is required with local Machine zip when VEGPU_REQUIRE_MACHINE_SOURCE=1\n' >&2
+    printf 'PEGPU_MACHINE_SOURCE_TGZ is required with local Machine zip when PEGPU_REQUIRE_MACHINE_SOURCE=1\n' >&2
     exit 1
   fi
 }
@@ -55,7 +55,7 @@ trigger_and_wait() {
     exit 1
   }
   if [ -z "$VERSION" ]; then
-    printf 'VEGPU_RELEASE_VERSION is required when VEGPU_TRIGGER_MACHINE_BUILD=1\n' >&2
+    printf 'PEGPU_RELEASE_VERSION is required when PEGPU_TRIGGER_MACHINE_BUILD=1\n' >&2
     exit 1
   fi
 
@@ -110,14 +110,14 @@ elif [ "$TRIGGER" = "1" ]; then
   trigger_and_wait
 else
   printf 'No Machine artifact source supplied.\n' >&2
-  printf 'Set one of: VEGPU_MACHINE_ZIP, VEGPU_MACHINE_RUN_ID, or VEGPU_TRIGGER_MACHINE_BUILD=1.\n' >&2
+  printf 'Set one of: PEGPU_MACHINE_ZIP, PEGPU_MACHINE_RUN_ID, or PEGPU_TRIGGER_MACHINE_BUILD=1.\n' >&2
   exit 1
 fi
 
-machine_zip="$(find "$OUT" -type f -name 'vEGPU-Machine-*.zip' | sort | head -n 1)"
-machine_source="$(find "$OUT" -type f -name 'vEGPU-Machine-*-source.tar.gz' | sort | head -n 1 || true)"
+machine_zip="$(find "$OUT" -type f -name 'PEGPU-Machine-*.zip' | sort | head -n 1)"
+machine_source="$(find "$OUT" -type f -name 'PEGPU-Machine-*-source.tar.gz' | sort | head -n 1 || true)"
 if [ -z "$machine_source" ] && [ "$REQUIRE_SOURCE" = "1" ]; then
-  printf 'Machine artifacts did not contain vEGPU-Machine-*-source.tar.gz\n' >&2
+  printf 'Machine artifacts did not contain PEGPU-Machine-*-source.tar.gz\n' >&2
   find "$OUT" -type f >&2
   exit 1
 fi
@@ -135,24 +135,24 @@ if [ -n "$machine_zip" ]; then
   rm -rf "$OUT/extracted"
   mkdir -p "$OUT/extracted"
   ditto -x -k "$machine_zip" "$OUT/extracted"
-  machine_app="$OUT/extracted/vEGPU Machine.app"
+  machine_app="$OUT/extracted/PEGPU Machine.app"
   if [ ! -d "$machine_app" ]; then
-    machine_app="$(find "$OUT/extracted" -maxdepth 3 -type d -name 'vEGPU Machine.app' | head -n 1)"
+    machine_app="$(find "$OUT/extracted" -maxdepth 3 -type d -name 'PEGPU Machine.app' | head -n 1)"
   fi
 else
-  machine_app="$(find "$OUT" -maxdepth 4 -type d -name 'vEGPU Machine.app' | head -n 1)"
+  machine_app="$(find "$OUT" -maxdepth 4 -type d -name 'PEGPU Machine.app' | head -n 1)"
 fi
 if [ -z "$machine_app" ] || [ ! -d "$machine_app" ]; then
-  printf 'Machine artifacts did not contain vEGPU Machine.app or vEGPU-Machine-*.zip\n' >&2
+  printf 'Machine artifacts did not contain PEGPU Machine.app or PEGPU-Machine-*.zip\n' >&2
   exit 1
 fi
 
-rm -rf "$OUT/vEGPU Machine.app"
-ditto "$machine_app" "$OUT/vEGPU Machine.app"
+rm -rf "$OUT/PEGPU Machine.app"
+ditto "$machine_app" "$OUT/PEGPU Machine.app"
 rm -rf "$OUT/downloaded" "$OUT/extracted"
 
 {
-  echo "machine_app=$OUT/vEGPU Machine.app"
+  echo "machine_app=$OUT/PEGPU Machine.app"
   if [ -n "$machine_source" ]; then
     echo "machine_source=$machine_source"
   fi

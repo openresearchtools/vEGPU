@@ -2,14 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
-BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
+BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 MODE="normalize"
 if [ "${1:-}" = "--check" ]; then
   MODE="check"
   shift
 fi
-FRAMEWORKS_DIR="${1:-${VEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}}"
+FRAMEWORKS_DIR="${1:-${PEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}}"
 
 plist_set_or_add() {
   local info="$1"
@@ -23,8 +23,8 @@ plist_set_or_add() {
 framework_bundle_id() {
   local name="$1"
   case "$name" in
-    EGL) printf 'com.vegpu.app.angle.EGL' ;;
-    GLESv2) printf 'com.vegpu.app.angle.GLESv2' ;;
+    EGL) printf 'com.pegpu.app.angle.EGL' ;;
+    GLESv2) printf 'com.pegpu.app.angle.GLESv2' ;;
     *) printf 'com.utmapp.%s' "$name" ;;
   esac
 }
@@ -145,7 +145,7 @@ verify_framework_identity() {
   binary="$(framework_binary "$framework" "$name")"
   if [ -n "$binary" ] && command -v codesign >/dev/null 2>&1; then
     signature_id="$(codesign -dv "$binary" 2>&1 | sed -n 's/^Identifier=//p' | head -n 1 || true)"
-    if [[ "$signature_id" == com.vegpu.app.display.* ]]; then
+    if [[ "$signature_id" == com.pegpu.app.display.* ]]; then
       printf 'Display framework code signature uses known-bad display identity: %s\n  expected plist: %s\n  actual:         %s\n  binary:         %s\n' \
         "$name.framework" "$expected" "$signature_id" "$binary" >&2
       exit 1

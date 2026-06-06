@@ -331,13 +331,13 @@ func (r *RuntimeService) writeBridgePayload(payload any, subcommand string) (str
 }
 
 func (r *RuntimeService) runBridge(ctx context.Context, args ...string) ([]byte, error) {
-	if nativeURL := strings.TrimSpace(os.Getenv("VEGPU_NATIVE_BRIDGE_URL")); nativeURL != "" {
+	if nativeURL := strings.TrimSpace(os.Getenv("PEGPU_NATIVE_BRIDGE_URL")); nativeURL != "" {
 		if validNativeBridgeURL(nativeURL) {
 			return r.runNativeBridge(ctx, nativeURL, args...)
 		}
 	}
-	cliPath := strings.TrimSpace(os.Getenv("VEGPU_CLI_PATH"))
-	nodePath := strings.TrimSpace(os.Getenv("VEGPU_NODE_PATH"))
+	cliPath := strings.TrimSpace(os.Getenv("PEGPU_CLI_PATH"))
+	nodePath := strings.TrimSpace(os.Getenv("PEGPU_NODE_PATH"))
 	var cmd *exec.Cmd
 	baseArgs := append([]string{"machine", "llms-runtime"}, args...)
 	switch {
@@ -347,7 +347,7 @@ func (r *RuntimeService) runBridge(ctx context.Context, args ...string) ([]byte,
 	case cliPath != "":
 		cmd = exec.CommandContext(ctx, cliPath, baseArgs...)
 	default:
-		cmd = exec.CommandContext(ctx, "vegpu", baseArgs...)
+		cmd = exec.CommandContext(ctx, "pegpu", baseArgs...)
 	}
 	if cmd.Env == nil {
 		cmd.Env = os.Environ()
@@ -380,8 +380,8 @@ func (r *RuntimeService) runNativeBridge(ctx context.Context, nativeURL string, 
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token := strings.TrimSpace(os.Getenv("VEGPU_NATIVE_BRIDGE_TOKEN")); token != "" {
-		req.Header.Set("X-vEGPU-Bridge-Token", token)
+	if token := strings.TrimSpace(os.Getenv("PEGPU_NATIVE_BRIDGE_TOKEN")); token != "" {
+		req.Header.Set("X-PEGPU-Bridge-Token", token)
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	client := &http.Client{Timeout: 30 * time.Minute}

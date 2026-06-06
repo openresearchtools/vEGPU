@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PEGPU Scaling
+Comment=Adjust sharp XFCE desktop scaling
+Exec=pegpu-scaling --gui
+Icon=pegpu-scaling
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;
+StartupNotify=false

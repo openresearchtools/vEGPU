@@ -982,7 +982,7 @@ func rpcSelectionTargetsVM(dev DeviceSelection, runtimeBackend string) bool {
 	if endpoint != "" {
 		return isVMRPCEndpoint(endpoint)
 	}
-	if strings.Contains(location, "vegpu vm") || strings.Contains(location, "vm rpc") {
+	if strings.Contains(location, "pegpu vm") || strings.Contains(location, "vm rpc") {
 		return true
 	}
 	return runtimeBackend == runtimeBackendLocal && strings.EqualFold(strings.TrimSpace(dev.Backend), "RPC") && strings.Contains(location, "vm")

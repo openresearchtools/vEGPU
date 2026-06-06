@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
-BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
-OUT="${1:-${VEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}}"
-REQUIRE_FULL_SOURCE="${VEGPU_REQUIRE_FULL_SOURCE:-1}"
+DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
+BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+OUT="${1:-${PEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}}"
+REQUIRE_FULL_SOURCE="${PEGPU_REQUIRE_FULL_SOURCE:-1}"
 
 rm -rf "$OUT"
 mkdir -p "$OUT/license-files" "$OUT/source"
@@ -28,8 +28,8 @@ root = Path(sys.argv[1])
 out = Path(sys.argv[2])
 require_full_source = sys.argv[3] == "1"
 default_build_root = Path(
-    os.environ.get("VEGPU_BUILD_ROOT")
-    or os.path.join(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()), "vegpu-build")
+    os.environ.get("PEGPU_BUILD_ROOT")
+    or os.path.join(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()), "pegpu-build")
 )
 license_dir = out / "license-files"
 generated_at = datetime.now(timezone.utc).isoformat()
@@ -42,7 +42,7 @@ source_revision = os.environ.get("GITHUB_SHA") or subprocess.run(
     check=False,
 ).stdout.strip() or "unknown"
 release_version = os.environ.get("VERSION") or os.environ.get("RELEASE_VERSION") or "unknown"
-utm_commit = os.environ.get("VEGPU_UTM_COMMIT") or "e4a4c34b671284263fc69f81b607de494d7e9b65"
+utm_commit = os.environ.get("PEGPU_UTM_COMMIT") or "e4a4c34b671284263fc69f81b607de494d7e9b65"
 
 def copy_license(rel: str, name: str | None = None) -> None:
     src = root / rel
@@ -59,11 +59,11 @@ def copy_license(rel: str, name: str | None = None) -> None:
 copy_license("third_party/angle/LICENSE", "ANGLE-LICENSE.txt")
 copy_license("third_party/angle/SOURCE.md", "ANGLE-SOURCE.md")
 copy_license("third_party/angle/IMPORT.txt", "ANGLE-IMPORT.txt")
-copy_license("LICENSE", "vEGPU-App-Apache-2.0.txt")
+copy_license("LICENSE", "PEGPU-App-Apache-2.0.txt")
 copy_license("legal/LICENSES/CocoaSpice-Apache-2.0.txt", "CocoaSpice-LICENSE.txt")
-copy_license("legal/LICENSES", "vEGPU-LICENSES")
+copy_license("legal/LICENSES", "PEGPU-LICENSES")
 copy_license("third_party/utm/README.md", "UTM-PATCH-README.md")
-copy_license("legal/NOTICES.md", "vEGPU-NOTICES.md")
+copy_license("legal/NOTICES.md", "PEGPU-NOTICES.md")
 copy_license("legal/GUEST-VM-INSTALL-NOTICES.md", "GUEST-VM-INSTALL-NOTICES.md")
 copy_license("legal/LICENSES/llama-swap-MIT.txt", "llama-swap-MIT.txt")
 copy_license("legal/LICENSES/llama.cpp-MIT.txt", "llama.cpp-MIT.txt")
@@ -492,7 +492,7 @@ if require_full_source:
             joined = ", ".join(sorted(set(missing_swift_licenses)))
             raise SystemExit(
                 "Missing SwiftPM license/notice files for pinned packages: "
-                f"{joined}. Build vEGPU.app after SwiftPM dependencies have been resolved, "
+                f"{joined}. Build PEGPU.app after SwiftPM dependencies have been resolved, "
                 "and pass SWIFT_BUILD_SCRATCH_PATH to the legal bundle builder."
             )
 
@@ -553,8 +553,8 @@ app_excluded_display_frameworks = {
 framework_rows: list[tuple[str, str, str]] = []
 framework_dir = Path(
     os.environ.get(
-        "VEGPU_DISPLAY_FRAMEWORKS_OUT",
-        os.environ.get("VEGPU_DISPLAY_FRAMEWORKS_DIR", str(default_build_root / "display-frameworks" / "macos-arm64")),
+        "PEGPU_DISPLAY_FRAMEWORKS_OUT",
+        os.environ.get("PEGPU_DISPLAY_FRAMEWORKS_DIR", str(default_build_root / "display-frameworks" / "macos-arm64")),
     )
 )
 for info in sorted(framework_dir.glob("*.framework/Versions/A/Resources/Info.plist")):
@@ -601,7 +601,7 @@ for gomod in sorted((root / "ai").glob("*/go.mod")):
     go_modules.append(f"- {module} ({gomod.relative_to(root)}, Go {go_version}, {len(requires)} direct require lines)")
 
 display_source_candidates = [
-    Path(os.environ["VEGPU_DISPLAY_SOURCE_OUT"]) if os.environ.get("VEGPU_DISPLAY_SOURCE_OUT") else None,
+    Path(os.environ["PEGPU_DISPLAY_SOURCE_OUT"]) if os.environ.get("PEGPU_DISPLAY_SOURCE_OUT") else None,
     root / "legal" / "display-runtime-source.tar.zst",
     root / "legal" / "display-runtime-source.tar.gz",
     root / "legal" / "display-runtime-source.tar.xz",
@@ -619,7 +619,7 @@ if display_source is not None:
     else:
         (out / "source" / "DISPLAY_RUNTIME_SOURCE_DIRECTORY.txt").write_text(
             f"Display runtime source directory is present in source tree at: {display_source}\n"
-            "Release packaging should archive this directory next to vEGPU-app-source.tar.gz.\n"
+            "Release packaging should archive this directory next to PEGPU-app-source.tar.gz.\n"
         )
         try:
             display_source_manifest_path = str(display_source.relative_to(root))
@@ -627,12 +627,12 @@ if display_source is not None:
             display_source_manifest_path = str(display_source)
 elif require_full_source:
     raise SystemExit(
-        "Missing display runtime corresponding source archive. Set VEGPU_DISPLAY_SOURCE_OUT "
-        "to the downloaded display-runtime-source artifact. vEGPU.app package and artifact "
+        "Missing display runtime corresponding source archive. Set PEGPU_DISPLAY_SOURCE_OUT "
+        "to the downloaded display-runtime-source artifact. PEGPU.app package and artifact "
         "builds must always include this source archive and its generated legal sidecars."
     )
 
-machine_app = Path(os.environ.get("VEGPU_MACHINE_APP", "/Applications/vEGPU Machine.app"))
+machine_app = Path(os.environ.get("PEGPU_MACHINE_APP", "/Applications/PEGPU Machine.app"))
 machine_notices = machine_app / "Contents" / "Resources" / "ThirdPartyNotices"
 machine_notice_file = machine_notices / "NOTICES"
 machine_license_file = machine_notices / "LICENSES"
@@ -664,7 +664,7 @@ if angle_plist.exists():
 llama_runtime_manifest_path = None
 llama_runtime_manifest = None
 bootstrap_llama_path = None
-bootstrap_llama = os.environ.get("VEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR")
+bootstrap_llama = os.environ.get("PEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR")
 if bootstrap_llama:
     bootstrap_llama_path = Path(bootstrap_llama)
     candidate = bootstrap_llama_path / "llama-runtime-manifest.json"
@@ -735,11 +735,11 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
         "name": re.sub(r"[-_]+", " ", base).strip() or rel,
         "version": "unknown",
         "license": license_guess(path, rel),
-        "scope": "vEGPU.app distribution",
+        "scope": "PEGPU.app distribution",
         "source": f"license-files/{rel}",
     }
-    if rel == "vEGPU-App-Apache-2.0.txt":
-        meta.update({"name": "vEGPU.app", "version": f"{release_version} ({source_revision})", "license": "Apache-2.0", "scope": "vEGPU.app source code"})
+    if rel == "PEGPU-App-Apache-2.0.txt":
+        meta.update({"name": "PEGPU.app", "version": f"{release_version} ({source_revision})", "license": "Apache-2.0", "scope": "PEGPU.app source code"})
     elif rel == "ANGLE-LICENSE.txt":
         meta.update({"name": "ANGLE", "version": angle_meta["version"], "license": angle_meta["license"], "scope": "Bundled app-side ANGLE runtime/source"})
     elif rel in {"ANGLE-SOURCE.md", "ANGLE-IMPORT.txt"}:
@@ -748,10 +748,10 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
         meta.update({"name": "CocoaSpice", "version": f"UTM {utm_commit}", "license": "Apache-2.0", "scope": "Bundled app-side display package"})
     elif rel == "UTM-PATCH-README.md":
         meta.update({"name": "UTM/CocoaSpice patch provenance", "version": utm_commit, "license": "Notice/Provenance", "scope": "App-side display patch provenance"})
-    elif rel == "vEGPU-NOTICES.md":
-        meta.update({"name": "vEGPU app notices seed", "version": source_revision, "license": "Notice/Provenance", "scope": "App-side notice seed"})
+    elif rel == "PEGPU-NOTICES.md":
+        meta.update({"name": "PEGPU app notices seed", "version": source_revision, "license": "Notice/Provenance", "scope": "App-side notice seed"})
     elif rel == "GUEST-VM-INSTALL-NOTICES.md":
-        meta.update({"name": "vEGPU guest VM installation notices", "version": source_revision, "license": "Notice/Provenance", "scope": "Guest VM install notice"})
+        meta.update({"name": "PEGPU guest VM installation notices", "version": source_revision, "license": "Notice/Provenance", "scope": "Guest VM install notice"})
     elif rel == "web-ui-app-NOTICE.txt":
         meta.update({"name": "AI web UI/router provenance", "version": source_revision, "license": "Notice/Provenance", "scope": "Bundled app-side AI web UI/router"})
     elif "llama.cpp" in lower:
@@ -760,8 +760,8 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
         meta.update({"name": "llama-swap routing provenance", "version": "modified app-side routing", "license": "MIT", "scope": "App-side routing provenance"})
     elif "gost" in lower:
         meta.update({"name": "GOST/local proxy provenance", "version": "modified app-side local proxy", "license": "MIT" if "license" in lower or "mit" in lower else "Notice/Provenance", "scope": "Bundled app-side local proxy"})
-    elif "vegpu-scaling" in lower:
-        meta.update({"name": "vEGPU Linux scaling helper", "version": release_version, "license": "MIT", "scope": "Bundled guest-side scaling helper package"})
+    elif "pegpu-scaling" in lower:
+        meta.update({"name": "PEGPU Linux scaling helper", "version": release_version, "license": "MIT", "scope": "Bundled guest-side scaling helper package"})
     elif "utm-apache" in lower:
         meta.update({"name": "UTM app-side display provenance", "version": utm_commit, "license": "Apache-2.0", "scope": "App-side display provenance"})
     elif lower.startswith("display-runtime/"):
@@ -796,10 +796,10 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
                 "name": f"SwiftPM: {pin['name']}",
                 "version": f"{pin['version']} ({pin['revision']})",
                 "license": pin["license"],
-                "scope": "Swift package used by vEGPU.app",
+                "scope": "Swift package used by PEGPU.app",
             })
         else:
-            meta.update({"name": f"SwiftPM: {package}", "scope": "Swift package used by vEGPU.app"})
+            meta.update({"name": f"SwiftPM: {package}", "scope": "Swift package used by PEGPU.app"})
     elif lower.startswith("go/"):
         module = rel.split("/", 2)[1]
         gometa = go_module_meta.get(module)
@@ -816,10 +816,10 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
 
 license_blocks = []
 duplicate_raw_license_paths = {
-    "vEGPU-LICENSES/CocoaSpice-Apache-2.0.txt",
-    "vEGPU-LICENSES/llama-swap-MIT.txt",
-    "vEGPU-LICENSES/llama.cpp-MIT.txt",
-    "vEGPU-LICENSES/gost-MIT.txt",
+    "PEGPU-LICENSES/CocoaSpice-Apache-2.0.txt",
+    "PEGPU-LICENSES/llama-swap-MIT.txt",
+    "PEGPU-LICENSES/llama.cpp-MIT.txt",
+    "PEGPU-LICENSES/gost-MIT.txt",
 }
 for path in sorted(license_dir.rglob("*")):
     if not path.is_file():
@@ -832,15 +832,15 @@ for path in sorted(license_dir.rglob("*")):
     license_blocks.append((meta, text))
 
 license_lines = []
-license_lines.append("vEGPU.app Distribution Licenses")
+license_lines.append("PEGPU.app Distribution Licenses")
 license_lines.append("===============================")
 license_lines.append("")
 license_lines.append("Each package/dependency block below contains the package name, version or revision when known, license metadata, component scope, source license file copied into this notice bundle, and the full license or notice text between BEGIN LICENSE and END LICENSE markers.")
 license_lines.append("")
-license_lines.append("This LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution. It covers vEGPU.app's own application source license and the third-party software, runtime payloads, helper programs, framework dependencies, and app-managed runtime archives distributed as part of vEGPU.app.")
-license_lines.append("vEGPU.app also installs corresponding source and provenance archives under legal/generated/source/. Those archives are provided to document and reproduce the app-side components they describe, and may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are not loaded by vEGPU.app at runtime.")
-license_lines.append("Each source archive has generated legal sidecars next to the archive: <archive>.NOTICES, <archive>.LICENSES, and <archive>.manifest.json. Those sidecars are the license and notice records for the files contained in the corresponding source archive. This app-visible LICENSES file does not flatten every source-archive license block into the runtime license view unless the same component is also distributed as an installed vEGPU.app runtime payload.")
-license_lines.append("Machine/QEMU license text is not copied into this vEGPU.app LICENSES file. For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL, and vEGPU.app does not copy Machine legal text into its own bundle.")
+license_lines.append("This LICENSES file is the consolidated license record for the installed PEGPU.app application/runtime distribution. It covers PEGPU.app's own application source license and the third-party software, runtime payloads, helper programs, framework dependencies, and app-managed runtime archives distributed as part of PEGPU.app.")
+license_lines.append("PEGPU.app also installs corresponding source and provenance archives under legal/generated/source/. Those archives are provided to document and reproduce the app-side components they describe, and may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are not loaded by PEGPU.app at runtime.")
+license_lines.append("Each source archive has generated legal sidecars next to the archive: <archive>.NOTICES, <archive>.LICENSES, and <archive>.manifest.json. Those sidecars are the license and notice records for the files contained in the corresponding source archive. This app-visible LICENSES file does not flatten every source-archive license block into the runtime license view unless the same component is also distributed as an installed PEGPU.app runtime payload.")
+license_lines.append("Machine/QEMU license text is not copied into this PEGPU.app LICENSES file. For convenience, PEGPU.app Help can render external PEGPU Machine notices and licenses from the installed PEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL, and PEGPU.app does not copy Machine legal text into its own bundle.")
 license_lines.append("")
 for meta, text in license_blocks:
     license_lines.append(f"Package/Dependency: {meta['name']}")
@@ -859,47 +859,47 @@ for meta, text in license_blocks:
 
 notice = []
 notice.extend([
-    "vEGPU Notices",
+    "PEGPU Notices",
     "=============",
     "",
-    "This is the canonical app-side NOTICES file installed inside vEGPU.app. It explains the vEGPU.app / vEGPU Machine.app split, where installed legal files and source bundles live, and how vEGPU.app Help exposes both app-side and external Machine-side legal files.",
+    "This is the canonical app-side NOTICES file installed inside PEGPU.app. It explains the PEGPU.app / PEGPU Machine.app split, where installed legal files and source bundles live, and how PEGPU.app Help exposes both app-side and external Machine-side legal files.",
     "",
-    "vEGPU and vEGPU Machine are related applications, but they are distributed with a visible architecture, repository, license, notice, and source boundary. A combined installer may install both applications into /Applications, but the repositories, notices, source archives, runtime responsibilities, and license boundaries remain separate.",
+    "PEGPU and PEGPU Machine are related applications, but they are distributed with a visible architecture, repository, license, notice, and source boundary. A combined installer may install both applications into /Applications, but the repositories, notices, source archives, runtime responsibilities, and license boundaries remain separate.",
     "",
     "Project website:",
-    "https://vegpu.com",
+    "https://pegpu.com",
     "",
     "",
-    "1. vEGPU.app",
+    "1. PEGPU.app",
     "------------",
     "",
-    "vEGPU.app is the host-side macOS application. It provides the Swift/AppKit launcher, tray/menu UI, UTM-derived embedded SPICE display client, ANGLE/CocoaSpice display integration, local AI/runtime controls, model/runtime routing helpers, file/port/terminal UI, sidecar metrics, local networking helpers, VM orchestration, guest setup/repair scripts, and app-side legal/source payload.",
+    "PEGPU.app is the host-side macOS application. It provides the Swift/AppKit launcher, tray/menu UI, UTM-derived embedded SPICE display client, ANGLE/CocoaSpice display integration, local AI/runtime controls, model/runtime routing helpers, file/port/terminal UI, sidecar metrics, local networking helpers, VM orchestration, guest setup/repair scripts, and app-side legal/source payload.",
     "",
     "Repository:",
-    "https://github.com/openresearchtools/vEGPU",
+    "https://github.com/openresearchtools/PEGPU",
     "",
-    "The vEGPU.app application code is distributed under the Apache License, Version 2.0, except where an individual file or bundled component states a different license.",
+    "The PEGPU.app application code is distributed under the Apache License, Version 2.0, except where an individual file or bundled component states a different license.",
     "",
-    "vEGPU.app bundles, builds against, or ships app-side runtime components including SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work, Swift package dependencies, Go helper dependencies, local AI web UI/router materials, llama.cpp and llama-swap derived/provenance materials, bundled llama.cpp runtime archives, GOST-style local proxy materials, TurboQuant runtime provenance, Linux scaling helper packaging, guest setup/repair scripts, and related support libraries. Those components keep their own license terms, including permissive licenses and LGPL-family licenses where applicable. File-level and component-level notices remain authoritative.",
+    "PEGPU.app bundles, builds against, or ships app-side runtime components including SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work, Swift package dependencies, Go helper dependencies, local AI web UI/router materials, llama.cpp and llama-swap derived/provenance materials, bundled llama.cpp runtime archives, GOST-style local proxy materials, TurboQuant runtime provenance, Linux scaling helper packaging, guest setup/repair scripts, and related support libraries. Those components keep their own license terms, including permissive licenses and LGPL-family licenses where applicable. File-level and component-level notices remain authoritative.",
     "",
-    "The app-visible LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution. It covers vEGPU.app's own application source license and the third-party software, runtime payloads, helper programs, framework dependencies, and app-managed runtime archives distributed as part of vEGPU.app.",
+    "The app-visible LICENSES file is the consolidated license record for the installed PEGPU.app application/runtime distribution. It covers PEGPU.app's own application source license and the third-party software, runtime payloads, helper programs, framework dependencies, and app-managed runtime archives distributed as part of PEGPU.app.",
     "",
-    "vEGPU.app also installs corresponding source and provenance archives under legal/generated/source/. Those archives are provided to document and reproduce the app-side components they describe. Source archives are intentionally broader than the installed runtime closure: they may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are present for provenance or reproducible-build purposes but are not loaded by vEGPU.app at runtime.",
+    "PEGPU.app also installs corresponding source and provenance archives under legal/generated/source/. Those archives are provided to document and reproduce the app-side components they describe. Source archives are intentionally broader than the installed runtime closure: they may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are present for provenance or reproducible-build purposes but are not loaded by PEGPU.app at runtime.",
     "",
     "The legal records for those source archive contents are generated next to each archive, not mixed into the main app runtime license view. For each archive, use the adjacent NOTICES, LICENSES, and manifest sidecars listed below.",
     "",
     "",
-    "2. vEGPU Machine.app",
+    "2. PEGPU Machine.app",
     "--------------------",
     "",
-    "vEGPU Machine.app is the separate VM, DriverKit, VFIO, QEMU, firmware, and guest-tools runtime application used by vEGPU virtual machines. It owns the Machine-side passthrough mechanics and carries its own notices, license texts, and source bundles.",
+    "PEGPU Machine.app is the separate VM, DriverKit, VFIO, QEMU, firmware, and guest-tools runtime application used by PEGPU virtual machines. It owns the Machine-side passthrough mechanics and carries its own notices, license texts, and source bundles.",
     "",
     "Repository:",
-    "https://github.com/openresearchtools/vEGPU-machine",
+    "https://github.com/openresearchtools/PEGPU-machine",
     "",
-    "vEGPU Machine includes and packages Machine-side components including patched QEMU, the Apple VFIO backend, the DriverKit host application, the VFIOUserPCIDriver DriverKit system extension, the embedded qemu-vfio-apple launcher/CLI, QEMU firmware and runtime payloads, bundled QEMU tools and libraries, QEMU-side SPICE/virgl visual-runtime adaptations, guest-driver packages, and guest-side apple_dma DKMS source materials where included by the release.",
+    "PEGPU Machine includes and packages Machine-side components including patched QEMU, the Apple VFIO backend, the DriverKit host application, the VFIOUserPCIDriver DriverKit system extension, the embedded qemu-vfio-apple launcher/CLI, QEMU firmware and runtime payloads, bundled QEMU tools and libraries, QEMU-side SPICE/virgl visual-runtime adaptations, guest-driver packages, and guest-side apple_dma DKMS source materials where included by the release.",
     "",
-    "Machine-side notices, licenses, and source bundles are external installed files owned by vEGPU Machine.app. vEGPU.app does not copy those Machine files into its own bundle.",
+    "Machine-side notices, licenses, and source bundles are external installed files owned by PEGPU Machine.app. PEGPU.app does not copy those Machine files into its own bundle.",
     "",
     "",
     "3. Installed Legal And Source Files",
@@ -907,17 +907,17 @@ notice.extend([
     "",
     "Installed app-side notices, license texts, source records, and corresponding source/provenance archives are available at:",
     "",
-    "/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated",
+    "/Applications/PEGPU.app/Contents/Resources/PEGPURoot/legal/generated",
     "",
-    "Key installed vEGPU.app legal/source files:",
+    "Key installed PEGPU.app legal/source files:",
     "",
     "- NOTICES",
     "- LICENSES",
     "- GUEST-VM-INSTALL-NOTICES.md",
-    "- source/vEGPU-app-source.tar.gz",
-    "- source/vEGPU-app-source.NOTICES",
-    "- source/vEGPU-app-source.LICENSES",
-    "- source/vEGPU-app-source.manifest.json",
+    "- source/PEGPU-app-source.tar.gz",
+    "- source/PEGPU-app-source.NOTICES",
+    "- source/PEGPU-app-source.LICENSES",
+    "- source/PEGPU-app-source.manifest.json",
     "- source/display-runtime-source.tar.gz",
     "- source/display-runtime-source.NOTICES",
     "- source/display-runtime-source.LICENSES",
@@ -925,9 +925,9 @@ notice.extend([
     "",
     "Installed Machine-side notices, license texts, and source bundles are available inside:",
     "",
-    "/Applications/vEGPU Machine.app/Contents/Resources",
+    "/Applications/PEGPU Machine.app/Contents/Resources",
     "",
-    "Key installed vEGPU Machine legal/source files:",
+    "Key installed PEGPU Machine legal/source files:",
     "",
     "- ThirdPartyNotices/NOTICES",
     "- ThirdPartyNotices/LICENSES",
@@ -937,32 +937,32 @@ notice.extend([
     "Guest VM Installation Notice",
     "----------------------------",
     "",
-    "GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, vEGPU guest scripts, vEGPU Machine guest packages, and optional NVIDIA/CUDA install activity inside the Linux VM.",
+    "GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, PEGPU guest scripts, PEGPU Machine guest packages, and optional NVIDIA/CUDA install activity inside the Linux VM.",
     "",
     "",
     "Help Menu Access",
     "----------------",
     "",
-    "The vEGPU.app Help menu opens the installed legal files directly:",
+    "The PEGPU.app Help menu opens the installed legal files directly:",
     "",
     "- Notices",
     "- Licenses",
     "- VM Install Notices",
-    "- EXTERNAL vEGPU Machine Notices",
-    "- EXTERNAL vEGPU Machine Licenses",
+    "- EXTERNAL PEGPU Machine Notices",
+    "- EXTERNAL PEGPU Machine Licenses",
     "",
-    "For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL. They do not duplicate or embed Machine legal text into vEGPU.app.",
+    "For convenience, PEGPU.app Help can render external PEGPU Machine notices and licenses from the installed PEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL. They do not duplicate or embed Machine legal text into PEGPU.app.",
     "",
     "",
     "License and architecture boundary",
     "---------------------------------",
     "",
-    "vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture: the frontend, AI/runtime control surface, display client, routing, and orchestration app is packaged separately from the GPL-covered Machine/QEMU VM/runtime stack. The two apps have separate repositories, notices, source archives, and runtime responsibilities.",
+    "PEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture: the frontend, AI/runtime control surface, display client, routing, and orchestration app is packaged separately from the GPL-covered Machine/QEMU VM/runtime stack. The two apps have separate repositories, notices, source archives, and runtime responsibilities.",
     "",
-    "- vEGPU.app contains the Apache-licensed launcher, GUI, app-side display client, AI/runtime controls, local routing helpers, guest setup/repair scripts, and orchestration code.",
-    "- vEGPU Machine.app contains the GPL-covered QEMU-derived VM runtime, Apple VFIO backend, DriverKit host extension, firmware/runtime payloads, and guest-driver packaging.",
+    "- PEGPU.app contains the Apache-licensed launcher, GUI, app-side display client, AI/runtime controls, local routing helpers, guest setup/repair scripts, and orchestration code.",
+    "- PEGPU Machine.app contains the GPL-covered QEMU-derived VM runtime, Apple VFIO backend, DriverKit host extension, firmware/runtime payloads, and guest-driver packaging.",
     "",
-    "GPL-covered QEMU-derived code stays on the Machine side. App-side launcher, display, AI, guest provisioning, and orchestration work stays in vEGPU.app unless an individual bundled component states otherwise. QEMU-side licenses and notices are inside vEGPU Machine.app, not duplicated in vEGPU.app. Machine/QEMU license text is not copied into the vEGPU.app LICENSES file.",
+    "GPL-covered QEMU-derived code stays on the Machine side. App-side launcher, display, AI, guest provisioning, and orchestration work stays in PEGPU.app unless an individual bundled component states otherwise. QEMU-side licenses and notices are inside PEGPU Machine.app, not duplicated in PEGPU.app. Machine/QEMU license text is not copied into the PEGPU.app LICENSES file.",
     "",
     "Generated Metadata",
     "------------------",
@@ -972,7 +972,7 @@ notice.extend([
     "No Affiliation",
     "--------------",
     "",
-    "vEGPU and vEGPU Machine are not endorsed by, sponsored by, or affiliated with Apple, NVIDIA, Fabrice Bellard, the QEMU project, Scott J. Goldman, scottjg/qemu-vfio-apple, UTM, utmapp/qemu, utmapp/virglrenderer, llama.cpp, llama-swap, GOST, TurboQuant, or their maintainers.",
+    "PEGPU and PEGPU Machine are not endorsed by, sponsored by, or affiliated with Apple, NVIDIA, Fabrice Bellard, the QEMU project, Scott J. Goldman, scottjg/qemu-vfio-apple, UTM, utmapp/qemu, utmapp/virglrenderer, llama.cpp, llama-swap, GOST, TurboQuant, or their maintainers.",
     "",
 ])
 
@@ -1010,7 +1010,7 @@ for item in README.md LICENSE Package.swift Package.resolved Sources Resources H
   fi
 done
 
-tar -czf "$OUT/source/vEGPU-app-source.tar.gz" \
+tar -czf "$OUT/source/PEGPU-app-source.tar.gz" \
   -C "$ROOT" \
   --exclude='.DS_Store' \
   --exclude='Resources/Guest/scaling-app/build' \
@@ -1235,7 +1235,7 @@ def write_source_sidecars(archive: Path, title: str, description: str) -> None:
         "",
         "This sidecar belongs to the source/provenance archive named above. The archive is distributed so the corresponding app-side artifacts can be inspected, audited, and reproduced from their recorded source inputs.",
         "",
-        "Source archives are intentionally broader than the installed runtime closure. They may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are present for provenance or reproducible-build purposes but are not loaded by vEGPU.app at runtime.",
+        "Source archives are intentionally broader than the installed runtime closure. They may contain upstream source trees, build recipes, backend implementations, generated inputs, tests, examples, and source-only build tools that are present for provenance or reproducible-build purposes but are not loaded by PEGPU.app at runtime.",
         "",
         "Use this sidecar together with the adjacent LICENSES and manifest files for the archive contents:",
         "",
@@ -1253,7 +1253,7 @@ def write_source_sidecars(archive: Path, title: str, description: str) -> None:
         f"Archive: {rel_archive}",
         f"Generated: {generated_at}",
         "",
-        "This LICENSES sidecar contains license and notice text harvested from the source/provenance archive named above, including nested source archives where they are present. It governs the files contained in that source archive. It is separate from the main app-visible vEGPU.app LICENSES file, which covers the installed application/runtime distribution.",
+        "This LICENSES sidecar contains license and notice text harvested from the source/provenance archive named above, including nested source archives where they are present. It governs the files contained in that source archive. It is separate from the main app-visible PEGPU.app LICENSES file, which covers the installed application/runtime distribution.",
         "",
     ]
     for record in records:
@@ -1286,13 +1286,13 @@ def write_source_sidecars(archive: Path, title: str, description: str) -> None:
     (prefix.with_suffix(".manifest.json")).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 write_source_sidecars(
-    source_dir / "vEGPU-app-source.tar.gz",
-    "vEGPU.app",
-    "This archive contains the vEGPU.app source tree used for the release, excluding generated build products, runtime downloads, local model files, VM disks, and other non-source artifacts.",
+    source_dir / "PEGPU-app-source.tar.gz",
+    "PEGPU.app",
+    "This archive contains the PEGPU.app source tree used for the release, excluding generated build products, runtime downloads, local model files, VM disks, and other non-source artifacts.",
 )
 write_source_sidecars(
     source_dir / "display-runtime-source.tar.gz",
-    "vEGPU.app Display Runtime",
+    "PEGPU.app Display Runtime",
     "This archive contains app-side display runtime source and provenance inputs used for the packaged SPICE/GLib/GStreamer/ANGLE display stack.",
 )
 PY

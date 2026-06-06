@@ -2,15 +2,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
-BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
-UTM_REPO="${VGPU_UTM_REPO:-${VEGPU_UTM_REPO:-https://github.com/utmapp/UTM.git}}"
-UTM_COMMIT="${VGPU_UTM_COMMIT:-${VEGPU_UTM_COMMIT:-e4a4c34b671284263fc69f81b607de494d7e9b65}}"
-WORK="${VGPU_DISPLAY_BUILD_DIR:-${VEGPU_DISPLAY_BUILD_DIR:-$BUILD_ROOT/display-runtime-source-build}}"
+DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
+BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+UTM_REPO="${PEGPU_UTM_REPO:-${PEGPU_UTM_REPO:-https://github.com/utmapp/UTM.git}}"
+UTM_COMMIT="${PEGPU_UTM_COMMIT:-${PEGPU_UTM_COMMIT:-e4a4c34b671284263fc69f81b607de494d7e9b65}}"
+WORK="${PEGPU_DISPLAY_BUILD_DIR:-${PEGPU_DISPLAY_BUILD_DIR:-$BUILD_ROOT/display-runtime-source-build}}"
 UTM_DIR="$WORK/utm-base"
-DRIVER="$WORK/vegpu-display-driver.sh"
-SOURCE_OUT="${VGPU_DISPLAY_SOURCE_OUT:-${VEGPU_DISPLAY_SOURCE_OUT:-$BUILD_ROOT/legal/display-runtime-source.tar.gz}}"
-FRAMEWORKS_OUT="${VGPU_DISPLAY_FRAMEWORKS_OUT:-${VEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}}"
+DRIVER="$WORK/pegpu-display-driver.sh"
+SOURCE_OUT="${PEGPU_DISPLAY_SOURCE_OUT:-${PEGPU_DISPLAY_SOURCE_OUT:-$BUILD_ROOT/legal/display-runtime-source.tar.gz}}"
+FRAMEWORKS_OUT="${PEGPU_DISPLAY_FRAMEWORKS_OUT:-${PEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}}"
 
 require() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -26,7 +26,7 @@ Install/build requirements expected by the UTM display dependency recipe:
   brew install bison pkg-config gettext glib-utils libgpg-error nasm make meson cmake llvm spirv-llvm-translator libxcb libxrandr
   python3 -m pip install --user six pyparsing pyyaml setuptools distlib mako
 
-This builds only vEGPU's app-side SPICE/GLib/GStreamer/ANGLE framework set.
+This builds only PEGPU's app-side SPICE/GLib/GStreamer/ANGLE framework set.
 It does not build UTM.app and it does not build QEMU.
 EOF
 }
@@ -103,7 +103,7 @@ SYSROOT_DIR="$WORK/sysroot-macOS-arm64"
 SOURCE_PREFLIGHT="$WORK/source-preflight"
 PATCHES_DIR="$UTM_DIR/patches"
 REBUILD=
-REDOWNLOAD="${VEGPU_DISPLAY_REDOWNLOAD:-}"
+REDOWNLOAD="${PEGPU_DISPLAY_REDOWNLOAD:-}"
 QEMU_DIR=
 DEBUG=
 DEBUG_FLAGS=
@@ -339,7 +339,7 @@ build_angle() {
       -arch "$ARCH" \
       -configuration "$BUILD_CONFIGURATION" \
       -derivedDataPath "$BUILD_DIR/angle-derived-data" \
-      -jobs "${VEGPU_XCODE_JOBS:-4}" \
+      -jobs "${PEGPU_XCODE_JOBS:-4}" \
       WEBCORE_LIBRARY_DIR="/usr/local/lib" \
       NORMAL_UMBRELLA_FRAMEWORKS_DIR="" \
       CODE_SIGNING_ALLOWED=NO \
@@ -356,8 +356,8 @@ build_angle() {
 }
 
 build_display_frameworks() {
-  echo "${GREEN}Starting vEGPU app display runtime build for macOS arm64 [${NCPU} jobs]${NC}"
-  if have_display_frameworks && have_source_preflight && [ "${VEGPU_DISPLAY_FORCE_REBUILD:-0}" != "1" ]; then
+  echo "${GREEN}Starting PEGPU app display runtime build for macOS arm64 [${NCPU} jobs]${NC}"
+  if have_display_frameworks && have_source_preflight && [ "${PEGPU_DISPLAY_FORCE_REBUILD:-0}" != "1" ]; then
     ensure_display_git_sources
     echo "${GREEN}Reusing existing display runtime frameworks and source preflight from $WORK${NC}"
     return
@@ -365,7 +365,7 @@ build_display_frameworks() {
   check_env
   download_display_sources
   stage_display_source_preflight
-  if have_display_frameworks && [ "${VEGPU_DISPLAY_FORCE_REBUILD:-0}" != "1" ]; then
+  if have_display_frameworks && [ "${PEGPU_DISPLAY_FORCE_REBUILD:-0}" != "1" ]; then
     echo "${GREEN}Reusing existing display runtime frameworks from $PREFIX after refreshing source preflight${NC}"
     return
   fi
@@ -442,7 +442,7 @@ mkdir -p "$SOURCE_STAGE"
 
 rsync -a "$UTM_DIR/scripts/" "$SOURCE_STAGE/utm-scripts/"
 rsync -a "$UTM_DIR/patches/" "$SOURCE_STAGE/utm-patches/"
-rsync -a "$ROOT/third_party/utm/patches/" "$SOURCE_STAGE/vegpu-utm-patches/"
+rsync -a "$ROOT/third_party/utm/patches/" "$SOURCE_STAGE/pegpu-utm-patches/"
 cp "$UTM_DIR/LICENSE" "$SOURCE_STAGE/UTM-LICENSE.txt"
 git -C "$UTM_DIR" rev-parse HEAD > "$SOURCE_STAGE/UTM_COMMIT"
 git -C "$UTM_DIR" remote get-url origin > "$SOURCE_STAGE/UTM_REMOTE"
@@ -505,18 +505,18 @@ if [ ! -f "$SOURCE_STAGE/utm-patches/sources" ]; then
   printf 'Display runtime source bundle is missing UTM dependency source records.\n' >&2
   exit 1
 fi
-if [ ! -f "$SOURCE_STAGE/vegpu-utm-patches/0001-openresearchtools-vegpu-cocoaspice-package.patch" ]; then
-  printf 'Display runtime source bundle is missing the vEGPU UTM patch stack.\n' >&2
+if [ ! -f "$SOURCE_STAGE/pegpu-utm-patches/0001-openresearchtools-pegpu-cocoaspice-package.patch" ]; then
+  printf 'Display runtime source bundle is missing the PEGPU UTM patch stack.\n' >&2
   exit 1
 fi
 
 cat > "$SOURCE_STAGE/README" <<EOF
-vEGPU app-side display runtime source bundle
+PEGPU app-side display runtime source bundle
 ===========================================
 
 This archive accompanies the app-side display frameworks copied into:
 
-  the vEGPU-display-frameworks-macos26-arm64 workflow artifact
+  the PEGPU-display-frameworks-macos26-arm64 workflow artifact
 
 It records the pinned UTM dependency recipe, UTM dependency patches/sources
 file, downloaded upstream source archives, and git source bundles used to
@@ -530,7 +530,7 @@ snapshot is included as:
   git-sources/WebKit.git/HEAD
   git-sources/WebKit.git/REMOTE
 
-The pinned UTM base source snapshot that the vEGPU patch stack applies to is
+The pinned UTM base source snapshot that the PEGPU patch stack applies to is
 included at:
 
   git-sources/utm-base/utm-base-$UTM_COMMIT.tar.gz
@@ -539,18 +539,18 @@ Source builder:
 
   UTM repo: $UTM_REPO
   UTM commit: $UTM_COMMIT
-  vEGPU script: scripts/build-display-runtime-from-source.sh
+  PEGPU script: scripts/build-display-runtime-from-source.sh
 
 Scope:
 
   This build does not build UTM.app.
   This build does not build QEMU.
-  QEMU/VFIO/DriverKit source and notices are produced by vEGPU Machine.
+  QEMU/VFIO/DriverKit source and notices are produced by PEGPU Machine.
 EOF
 
 (cd "$SOURCE_STAGE" && find . -type f -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS)
 echo "Display runtime source bundle contents:"
-du -sh "$SOURCE_STAGE/upstream-sources" "$SOURCE_STAGE/git-sources" "$SOURCE_STAGE/utm-patches" "$SOURCE_STAGE/vegpu-utm-patches" 2>/dev/null || true
+du -sh "$SOURCE_STAGE/upstream-sources" "$SOURCE_STAGE/git-sources" "$SOURCE_STAGE/utm-patches" "$SOURCE_STAGE/pegpu-utm-patches" 2>/dev/null || true
 tar -C "$WORK" -czf "$SOURCE_OUT" "$(basename "$SOURCE_STAGE")"
 du -sh "$SOURCE_OUT"
 

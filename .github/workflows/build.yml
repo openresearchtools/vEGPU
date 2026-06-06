@@ -1,4 +1,4 @@
-name: Build vEGPU
+name: Build PEGPU
 
 on:
   push:
@@ -35,7 +35,7 @@ on:
           - package
           - display-runtime-only
       display_mode:
-        description: "How this workflow obtains the app display runtime. app-run reuses a prior vEGPU workflow artifact; build rebuilds ANGLE/SPICE."
+        description: "How this workflow obtains the app display runtime. app-run reuses a prior PEGPU workflow artifact; build rebuilds ANGLE/SPICE."
         required: true
         default: app-run
         type: choice
@@ -43,11 +43,11 @@ on:
           - app-run
           - build
       display_artifact_run_id:
-        description: "Existing vEGPU workflow run id containing display runtime artifacts when display_mode=app-run."
+        description: "Existing PEGPU workflow run id containing display runtime artifacts when display_mode=app-run."
         required: false
         type: string
       scaling_mode:
-        description: "How this workflow obtains the Linux scaling helper package. app-run reuses a prior vEGPU workflow artifact."
+        description: "How this workflow obtains the Linux scaling helper package. app-run reuses a prior PEGPU workflow artifact."
         required: true
         default: app-run
         type: choice
@@ -55,7 +55,7 @@ on:
           - app-run
           - build
       scaling_artifact_run_id:
-        description: "Existing vEGPU workflow run id containing vEGPU-scaling-package when scaling_mode=app-run."
+        description: "Existing PEGPU workflow run id containing PEGPU-scaling-package when scaling_mode=app-run."
         required: false
         type: string
       utm_repository:
@@ -69,7 +69,7 @@ on:
         default: e4a4c34b671284263fc69f81b607de494d7e9b65
         type: string
       machine_mode:
-        description: "How this workflow obtains vEGPU Machine. trigger rebuilds Machine/DKMS; app-run reuses a prior vEGPU workflow artifact."
+        description: "How this workflow obtains PEGPU Machine. trigger rebuilds Machine/DKMS; app-run reuses a prior PEGPU workflow artifact."
         required: true
         default: app-run
         type: choice
@@ -78,13 +78,13 @@ on:
           - download-run
           - trigger
       machine_app_run_id:
-        description: "Existing vEGPU workflow run id containing vEGPU-machine-artifacts when machine_mode=app-run."
+        description: "Existing PEGPU workflow run id containing PEGPU-machine-artifacts when machine_mode=app-run."
         required: false
         type: string
       machine_repository:
         description: "Machine repo used for download-run/trigger."
         required: false
-        default: openresearchtools/vEGPU-machine
+        default: openresearchtools/PEGPU-machine
         type: string
       machine_ref:
         description: "Machine branch/ref used when triggering its workflow."
@@ -101,7 +101,7 @@ on:
         default: latest
         type: string
       display_partial_run_id:
-        description: "Optional vEGPU run id containing vEGPU-display-runtime-partial to resume a failed display build."
+        description: "Optional PEGPU run id containing PEGPU-display-runtime-partial to resume a failed display build."
         required: false
         type: string
       publish_release:
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Check out vEGPU
+      - name: Check out PEGPU
         uses: actions/checkout@v6
 
       - name: Install verifier tools
@@ -149,10 +149,10 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     env:
       DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
-      DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.VEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
+      DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.PEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
 
     steps:
-      - name: Check out vEGPU
+      - name: Check out PEGPU
         uses: actions/checkout@v6
 
       - name: Validate display runtime mode
@@ -173,20 +173,20 @@ jobs:
             exit 1
           fi
 
-      - name: Download display runtime artifacts from prior vEGPU workflow run
+      - name: Download display runtime artifacts from prior PEGPU workflow run
         if: ${{ env.DISPLAY_MODE == 'app-run' }}
         run: |
           mkdir -p \
-            "$RUNNER_TEMP/vegpu-artifacts/display-frameworks/macos-arm64" \
-            "$RUNNER_TEMP/vegpu-artifacts/display-runtime-source"
+            "$RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64" \
+            "$RUNNER_TEMP/pegpu-artifacts/display-runtime-source"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-frameworks-macos26-arm64 \
-            --dir "$RUNNER_TEMP/vegpu-artifacts/display-frameworks/macos-arm64"
+            --name PEGPU-display-frameworks-macos26-arm64 \
+            --dir "$RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-runtime-source-macos26-arm64 \
-            --dir "$RUNNER_TEMP/vegpu-artifacts/display-runtime-source"
+            --name PEGPU-display-runtime-source-macos26-arm64 \
+            --dir "$RUNNER_TEMP/pegpu-artifacts/display-runtime-source"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -196,9 +196,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
-            ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
-          key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-artifacts-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
+            ${{ runner.temp }}/pegpu-artifacts/display-frameworks/macos-arm64
+            ${{ runner.temp }}/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-artifacts-v3-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
 
       - name: Install display-runtime build requirements
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
@@ -231,24 +231,24 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache@v5
         with:
-          path: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
-          key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
+          path: ${{ runner.temp }}/pegpu-build/display-runtime-source-build
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
           restore-keys: |
-            ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-
+            ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-
             ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-work-v3-
 
       - name: Restore failed display runtime partial artifact
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' && inputs.display_partial_run_id != '' }}
         run: |
-          mkdir -p "$RUNNER_TEMP/vegpu-input/display-runtime-partial"
+          mkdir -p "$RUNNER_TEMP/pegpu-input/display-runtime-partial"
           gh run download "$DISPLAY_PARTIAL_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-runtime-partial \
-            --dir "$RUNNER_TEMP/vegpu-input/display-runtime-partial"
-          partial="$RUNNER_TEMP/vegpu-input/display-runtime-partial/display-runtime-partial.tar.gz"
+            --name PEGPU-display-runtime-partial \
+            --dir "$RUNNER_TEMP/pegpu-input/display-runtime-partial"
+          partial="$RUNNER_TEMP/pegpu-input/display-runtime-partial/display-runtime-partial.tar.gz"
           test -f "$partial"
-          mkdir -p "$RUNNER_TEMP/vegpu-build"
-          tar -xzf "$partial" -C "$RUNNER_TEMP/vegpu-build"
+          mkdir -p "$RUNNER_TEMP/pegpu-build"
+          tar -xzf "$partial" -C "$RUNNER_TEMP/pegpu-build"
         env:
           GH_TOKEN: ${{ github.token }}
           DISPLAY_PARTIAL_RUN_ID: ${{ inputs.display_partial_run_id }}
@@ -258,17 +258,17 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         run: scripts/build-display-runtime-from-source.sh
         env:
-          VGPU_UTM_REPO: ${{ inputs.utm_repository || vars.VEGPU_UTM_REPO || 'https://github.com/utmapp/UTM.git' }}
-          VGPU_UTM_COMMIT: ${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}
-          VGPU_DISPLAY_BUILD_DIR: ${{ runner.temp }}/vegpu-build/display-runtime-source-build
-          VGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
-          VGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+          PEGPU_UTM_REPO: ${{ inputs.utm_repository || vars.PEGPU_UTM_REPO || 'https://github.com/utmapp/UTM.git' }}
+          PEGPU_UTM_COMMIT: ${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}
+          PEGPU_DISPLAY_BUILD_DIR: ${{ runner.temp }}/pegpu-build/display-runtime-source-build
+          PEGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/pegpu-artifacts/display-frameworks/macos-arm64
+          PEGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
 
       - name: Pack failed display runtime partial state
         if: ${{ failure() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         run: |
-          work="$RUNNER_TEMP/vegpu-build/display-runtime-source-build"
-          out="$RUNNER_TEMP/vegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz"
+          work="$RUNNER_TEMP/pegpu-build/display-runtime-source-build"
+          out="$RUNNER_TEMP/pegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz"
           test -d "$work"
           mkdir -p "$(dirname "$out")"
           tar \
@@ -277,22 +277,22 @@ jobs:
             --exclude='*/DerivedData/*/Index.noindex' \
             --exclude='*/Index.noindex' \
             -czf "$out" \
-            -C "$RUNNER_TEMP/vegpu-build" \
+            -C "$RUNNER_TEMP/pegpu-build" \
             display-runtime-source-build
 
       - name: Upload failed display runtime partial state
         if: ${{ failure() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-display-runtime-partial
-          path: ${{ runner.temp }}/vegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz
+          name: PEGPU-display-runtime-partial
+          path: ${{ runner.temp }}/pegpu-artifacts/display-runtime-partial/display-runtime-partial.tar.gz
           if-no-files-found: warn
           retention-days: 7
 
       - name: Verify display runtime outputs
         run: |
-          FRAMEWORKS="$RUNNER_TEMP/vegpu-artifacts/display-frameworks/macos-arm64"
-          SOURCE="$RUNNER_TEMP/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz"
+          FRAMEWORKS="$RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64"
+          SOURCE="$RUNNER_TEMP/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz"
           test -d "$FRAMEWORKS/spice-client-glib-2.0.8.framework"
           test -d "$FRAMEWORKS/EGL.framework"
           test -d "$FRAMEWORKS/GLESv2.framework"
@@ -310,7 +310,7 @@ jobs:
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/REMOTE'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/libucontext.git/libucontext-source.tar.gz'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/git-sources/libepoxy.git/libepoxy-source.tar.gz'
-          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/vegpu-utm-patches/0001-openresearchtools-vegpu-cocoaspice-package.patch'
+          tar -tzf "$SOURCE" | grep -F 'display-runtime-source/pegpu-utm-patches/0001-openresearchtools-pegpu-cocoaspice-package.patch'
           strings "$FRAMEWORKS/spice-client-glib-2.0.8.framework/Versions/A/spice-client-glib-2.0.8" |
             grep -F 'SPICE_DISABLE_GL_SCANOUT'
 
@@ -318,8 +318,8 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' }}
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-display-frameworks-macos26-arm64
-          path: ${{ runner.temp }}/vegpu-artifacts/display-frameworks/macos-arm64
+          name: PEGPU-display-frameworks-macos26-arm64
+          path: ${{ runner.temp }}/pegpu-artifacts/display-frameworks/macos-arm64
           if-no-files-found: error
           retention-days: 90
 
@@ -327,8 +327,8 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' }}
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-display-runtime-source-macos26-arm64
-          path: ${{ runner.temp }}/vegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+          name: PEGPU-display-runtime-source-macos26-arm64
+          path: ${{ runner.temp }}/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
           if-no-files-found: error
           retention-days: 90
 
@@ -338,10 +338,10 @@ jobs:
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
     env:
       SCALING_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.scaling_mode || 'app-run') || 'app-run' }}
-      SCALING_ARTIFACT_RUN_ID: ${{ inputs.scaling_artifact_run_id || vars.VEGPU_SCALING_ARTIFACT_RUN_ID || '' }}
+      SCALING_ARTIFACT_RUN_ID: ${{ inputs.scaling_artifact_run_id || vars.PEGPU_SCALING_ARTIFACT_RUN_ID || '' }}
 
     steps:
-      - name: Check out vEGPU
+      - name: Check out PEGPU
         uses: actions/checkout@v6
 
       - name: Validate scaling package mode
@@ -357,12 +357,12 @@ jobs:
       - name: Resolve latest scaling package artifact run
         if: ${{ env.SCALING_MODE == 'app-run' && env.SCALING_ARTIFACT_RUN_ID == '' }}
         run: |
-          pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
+          pages="$RUNNER_TEMP/pegpu-actions-artifacts.json"
           gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
-          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" vEGPU-scaling-package)"
+          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" PEGPU-scaling-package)"
           test -n "$run_id"
           echo "SCALING_ARTIFACT_RUN_ID=$run_id" >> "$GITHUB_ENV"
-          echo "Resolved scaling package artifact from vEGPU run $run_id"
+          echo "Resolved scaling package artifact from PEGPU run $run_id"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -374,14 +374,14 @@ jobs:
             exit 1
           fi
 
-      - name: Download scaling package from prior vEGPU workflow run
+      - name: Download scaling package from prior PEGPU workflow run
         if: ${{ env.SCALING_MODE == 'app-run' }}
         run: |
-          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/scaling-package"
+          mkdir -p "$RUNNER_TEMP/pegpu-artifacts/scaling-package"
           gh run download "$SCALING_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-scaling-package \
-            --dir "$RUNNER_TEMP/vegpu-artifacts/scaling-package"
+            --name PEGPU-scaling-package \
+            --dir "$RUNNER_TEMP/pegpu-artifacts/scaling-package"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -390,13 +390,13 @@ jobs:
         if: ${{ env.SCALING_MODE == 'build' }}
         uses: actions/cache@v5
         with:
-          path: ${{ runner.temp }}/vegpu-artifacts/scaling-package
+          path: ${{ runner.temp }}/pegpu-artifacts/scaling-package
           key: ${{ runner.os }}-scaling-package-v2-${{ hashFiles('scripts/build-scaling-app-package.sh', 'Resources/Guest/scaling-app/**') }}
 
       - name: Build Debian package in disposable Debian
         if: ${{ env.SCALING_MODE == 'build' && steps.scaling-package-cache.outputs.cache-hit != 'true' }}
         run: |
-          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/scaling-package" "$RUNNER_TEMP/vegpu-build/scaling-app-deb"
+          mkdir -p "$RUNNER_TEMP/pegpu-artifacts/scaling-package" "$RUNNER_TEMP/pegpu-build/scaling-app-deb"
           docker run --rm \
             -v "$PWD:/workspace:ro" \
             -v "$RUNNER_TEMP:/runner-temp" \
@@ -406,26 +406,26 @@ jobs:
               set -euo pipefail
               apt-get update
               apt-get install -y --no-install-recommends ca-certificates coreutils dpkg-dev findutils
-              VEGPU_SCALING_ARCH=arm64 \
-              VEGPU_SCALING_PACKAGE_OUT=/runner-temp/vegpu-artifacts/scaling-package \
-              VEGPU_SCALING_BUILD_DIR=/runner-temp/vegpu-build/scaling-app-deb \
+              PEGPU_SCALING_ARCH=arm64 \
+              PEGPU_SCALING_PACKAGE_OUT=/runner-temp/pegpu-artifacts/scaling-package \
+              PEGPU_SCALING_BUILD_DIR=/runner-temp/pegpu-build/scaling-app-deb \
               scripts/build-scaling-app-package.sh
             '
 
       - name: Validate Debian package
         run: |
-          OUT="$RUNNER_TEMP/vegpu-artifacts/scaling-package"
+          OUT="$RUNNER_TEMP/pegpu-artifacts/scaling-package"
           test -f "$OUT/SHA512SUMS"
-          package="$(find "$OUT" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit)"
+          package="$(find "$OUT" -maxdepth 1 -type f -name 'pegpu-scaling_*.deb' -print -quit)"
           test -n "$package"
           (cd "$OUT" && sha512sum -c SHA512SUMS)
-          dpkg-deb -c "$package" | grep -F './usr/share/doc/vegpu-scaling/copyright'
+          dpkg-deb -c "$package" | grep -F './usr/share/doc/pegpu-scaling/copyright'
 
       - name: Upload scaling package
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-scaling-package
-          path: ${{ runner.temp }}/vegpu-artifacts/scaling-package
+          name: PEGPU-scaling-package
+          path: ${{ runner.temp }}/pegpu-artifacts/scaling-package
           if-no-files-found: error
           retention-days: 90
 
@@ -439,16 +439,16 @@ jobs:
       LLAMA_RUNTIME_TAG: ${{ inputs.llama_runtime_tag || 'latest' }}
 
     steps:
-      - name: Check out vEGPU
+      - name: Check out PEGPU
         uses: actions/checkout@v6
 
       - name: Resolve and download llama.cpp runtime assets
         id: resolve
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/llama-runtime/archives"
+          mkdir -p "$RUNNER_TEMP/pegpu-artifacts/llama-runtime/archives"
           gh api "repos/openresearchtools/llama-cpp-arm64-builds/releases?per_page=100" > "$RUNNER_TEMP/llama-releases.json"
-          python3 - "$RUNNER_TEMP/llama-releases.json" "$RUNNER_TEMP/vegpu-artifacts/llama-runtime" "$LLAMA_RUNTIME_TAG" <<'PY'
+          python3 - "$RUNNER_TEMP/llama-releases.json" "$RUNNER_TEMP/pegpu-artifacts/llama-runtime" "$LLAMA_RUNTIME_TAG" <<'PY'
           import hashlib
           import json
           import os
@@ -528,20 +528,20 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write(f"cache_key={cache_key}\n")
           PY
-          find "$RUNNER_TEMP/vegpu-artifacts/llama-runtime" -maxdepth 2 -type f -print | sort
+          find "$RUNNER_TEMP/pegpu-artifacts/llama-runtime" -maxdepth 2 -type f -print | sort
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload bundled llama.cpp runtime
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-llama-runtime-bootstrap
-          path: ${{ runner.temp }}/vegpu-artifacts/llama-runtime
+          name: PEGPU-llama-runtime-bootstrap
+          path: ${{ runner.temp }}/pegpu-artifacts/llama-runtime
           if-no-files-found: error
           retention-days: 90
 
   build-app:
-    name: Build vEGPU.app
+    name: Build PEGPU.app
     runs-on: macos-26
     needs:
       - display-runtime
@@ -550,22 +550,22 @@ jobs:
     if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' && needs.llama-runtime.result == 'success' }}
     env:
       DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
-      DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.VEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
+      DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.PEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
 
     steps:
-      - name: Check out vEGPU
+      - name: Check out PEGPU
         uses: actions/checkout@v6
 
-      - name: Restore vEGPU.app artifact cache
+      - name: Restore PEGPU.app artifact cache
         id: app-artifact-cache
         uses: actions/cache@v5
         with:
           path: |
-            ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
-            ${{ runner.temp }}/vegpu-artifacts/legal/generated
-          key: ${{ env.MACOS_ARTIFACT_ABI }}-vegpu-app-v3-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
+            ${{ runner.temp }}/pegpu-artifacts/app/PEGPU.app
+            ${{ runner.temp }}/pegpu-artifacts/legal/generated
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-pegpu-app-v3-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
 
-      - name: Download display runtime artifacts from prior vEGPU workflow run
+      - name: Download display runtime artifacts from prior PEGPU workflow run
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' }}
         run: |
           if [ -z "${DISPLAY_ARTIFACT_RUN_ID}" ]; then
@@ -573,16 +573,16 @@ jobs:
             exit 1
           fi
           mkdir -p \
-            "$RUNNER_TEMP/vegpu-input/display-frameworks/macos-arm64" \
-            "$RUNNER_TEMP/vegpu-input/display-runtime-source"
+            "$RUNNER_TEMP/pegpu-input/display-frameworks/macos-arm64" \
+            "$RUNNER_TEMP/pegpu-input/display-runtime-source"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-frameworks-macos26-arm64 \
-            --dir "$RUNNER_TEMP/vegpu-input/display-frameworks/macos-arm64"
+            --name PEGPU-display-frameworks-macos26-arm64 \
+            --dir "$RUNNER_TEMP/pegpu-input/display-frameworks/macos-arm64"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-display-runtime-source-macos26-arm64 \
-            --dir "$RUNNER_TEMP/vegpu-input/display-runtime-source"
+            --name PEGPU-display-runtime-source-macos26-arm64 \
+            --dir "$RUNNER_TEMP/pegpu-input/display-runtime-source"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -590,29 +590,29 @@ jobs:
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-display-frameworks-macos26-arm64
-          path: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
+          name: PEGPU-display-frameworks-macos26-arm64
+          path: ${{ runner.temp }}/pegpu-input/display-frameworks/macos-arm64
 
       - name: Download display runtime source bundle
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-display-runtime-source-macos26-arm64
-          path: ${{ runner.temp }}/vegpu-input/display-runtime-source
+          name: PEGPU-display-runtime-source-macos26-arm64
+          path: ${{ runner.temp }}/pegpu-input/display-runtime-source
 
       - name: Download Linux scaling helper package
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-scaling-package
-          path: ${{ runner.temp }}/vegpu-input/scaling-package
+          name: PEGPU-scaling-package
+          path: ${{ runner.temp }}/pegpu-input/scaling-package
 
       - name: Download bundled llama.cpp runtime
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-llama-runtime-bootstrap
-          path: ${{ runner.temp }}/vegpu-input/llama-runtime
+          name: PEGPU-llama-runtime-bootstrap
+          path: ${{ runner.temp }}/pegpu-input/llama-runtime
 
       - name: Set up Go
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
@@ -628,7 +628,7 @@ jobs:
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v5
         with:
-          path: ${{ runner.temp }}/vegpu-build/swiftpm-release
+          path: ${{ runner.temp }}/pegpu-build/swiftpm-release
           key: ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
           restore-keys: |
             ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved') }}-
@@ -638,56 +638,56 @@ jobs:
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v5
         with:
-          path: ${{ runner.temp }}/vegpu-build/utm-patched
-          key: ${{ env.MACOS_ARTIFACT_ABI }}-utm-patched-v3-${{ inputs.utm_commit || vars.VEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('third_party/utm/patches/*.patch', 'scripts/apply-utm-patches.sh') }}
+          path: ${{ runner.temp }}/pegpu-build/utm-patched
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-utm-patched-v3-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('third_party/utm/patches/*.patch', 'scripts/apply-utm-patches.sh') }}
 
-      - name: Build vEGPU.app
+      - name: Build PEGPU.app
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
         run: |
-          export VEGPU_REQUIRE_FULL_SOURCE=1
+          export PEGPU_REQUIRE_FULL_SOURCE=1
           CONFIGURATION="${CONFIGURATION}" scripts/build-app-bundle.sh
         env:
           VERSION: ${{ env.RELEASE_VERSION }}
           BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
-          SWIFT_BUILD_SCRATCH_PATH: ${{ runner.temp }}/vegpu-build/swiftpm-release
-          VEGPU_APP: ${{ runner.temp }}/vegpu-artifacts/app/vEGPU.app
-          VEGPU_APP_BUILD_DIR: ${{ runner.temp }}/vegpu-build/app-build
-          VEGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/vegpu-input/display-frameworks/macos-arm64
-          VEGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/vegpu-input/display-runtime-source/display-runtime-source.tar.gz
-          VEGPU_LEGAL_BUILD_DIR: ${{ runner.temp }}/vegpu-artifacts/legal/generated
-          VEGPU_SCALING_PACKAGE_DIR: ${{ runner.temp }}/vegpu-input/scaling-package
-          VEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR: ${{ runner.temp }}/vegpu-input/llama-runtime
-          VEGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/vegpu-build/utm-patched
+          SWIFT_BUILD_SCRATCH_PATH: ${{ runner.temp }}/pegpu-build/swiftpm-release
+          PEGPU_APP: ${{ runner.temp }}/pegpu-artifacts/app/PEGPU.app
+          PEGPU_APP_BUILD_DIR: ${{ runner.temp }}/pegpu-build/app-build
+          PEGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/pegpu-input/display-frameworks/macos-arm64
+          PEGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/pegpu-input/display-runtime-source/display-runtime-source.tar.gz
+          PEGPU_LEGAL_BUILD_DIR: ${{ runner.temp }}/pegpu-artifacts/legal/generated
+          PEGPU_SCALING_PACKAGE_DIR: ${{ runner.temp }}/pegpu-input/scaling-package
+          PEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR: ${{ runner.temp }}/pegpu-input/llama-runtime
+          PEGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/pegpu-build/utm-patched
 
       - name: Validate app bundle and notices
         run: |
-          APP="$RUNNER_TEMP/vegpu-artifacts/app/vEGPU.app"
+          APP="$RUNNER_TEMP/pegpu-artifacts/app/PEGPU.app"
           codesign --verify --deep --strict "$APP"
-          test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "com.vegpu.app"
-          test "$(plutil -extract CFBundleDisplayName raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
-          test "$(plutil -extract CFBundleName raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
-          test "$(plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
-          test "$(plutil -extract CFBundleIconFile raw -o - "$APP/Contents/Info.plist")" = "vEGPU"
+          test "$(plutil -extract CFBundleIdentifier raw -o - "$APP/Contents/Info.plist")" = "com.pegpu.app"
+          test "$(plutil -extract CFBundleDisplayName raw -o - "$APP/Contents/Info.plist")" = "PEGPU"
+          test "$(plutil -extract CFBundleName raw -o - "$APP/Contents/Info.plist")" = "PEGPU"
+          test "$(plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist")" = "PEGPU"
+          test "$(plutil -extract CFBundleIconFile raw -o - "$APP/Contents/Info.plist")" = "PEGPU"
           test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "${RELEASE_VERSION}"
           test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "${BUILD_NUMBER}"
-          test -x "$APP/Contents/MacOS/vEGPU"
-          test ! -e "$APP/Contents/MacOS/vEGPUApp"
-          test -f "$APP/Contents/Resources/vEGPU.icns"
+          test -x "$APP/Contents/MacOS/PEGPU"
+          test ! -e "$APP/Contents/MacOS/PEGPUApp"
+          test -f "$APP/Contents/Resources/PEGPU.icns"
           plutil -extract NSLocalNetworkUsageDescription raw -o - "$APP/Contents/Info.plist" | grep -q 'SSH control'
-          plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_vegpu-preflight._tcp'
+          plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_pegpu-preflight._tcp'
           plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_ssh._tcp'
           plutil -extract NSBonjourServices xml1 -o - "$APP/Contents/Info.plist" | grep -q '_http._tcp'
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES.md"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/manifest.json"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-LICENSE.txt"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-SOURCE.md"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/ANGLE-IMPORT.txt"
-          test -d "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime"
-          test -d "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/llama-runtime"
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES.md"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/manifest.json"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/ANGLE-LICENSE.txt"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/ANGLE-SOURCE.md"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/ANGLE-IMPORT.txt"
+          test -d "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime"
+          test -d "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/llama-runtime"
+          find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swiftterm/'
+          find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/swiftpm" -type f -iname 'LICENSE*' | grep -Ei '/swift-argument-parser/'
           scripts/normalize-display-frameworks.sh --check "$APP/Contents/Frameworks"
           for framework in \
             asprintf.0 \
@@ -702,158 +702,158 @@ jobs:
             turbojpeg.0
           do
             if [ -d "$APP/Contents/Frameworks/$framework.framework" ]; then
-              echo "unused display build/test/tool framework must not be bundled in vEGPU.app: $framework.framework" >&2
+              echo "unused display build/test/tool framework must not be bundled in PEGPU.app: $framework.framework" >&2
               exit 1
             fi
           done
           otool -D "$APP/Contents/Frameworks/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
           otool -D "$APP/Contents/Frameworks/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
-          DISPLAY_SOURCE="$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.tar.gz"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
+          DISPLAY_SOURCE="$APP/Contents/Resources/PEGPURoot/legal/generated/source/display-runtime-source.tar.gz"
           tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/git-sources/WebKit.git/WebKit-source.tar.gz'
           tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/git-sources/libucontext.git/libucontext-source.tar.gz'
           tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/upstream-sources/gettext-0.22.5.tar.gz'
           tar -tzf "$DISPLAY_SOURCE" | grep -F 'display-runtime-source/upstream-sources/pkg-config-0.29.2.tar.gz'
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.NOTICES"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.LICENSES"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.manifest.json"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.NOTICES"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.LICENSES"
-          test -f "$APP/Contents/Resources/vEGPURoot/legal/generated/source/display-runtime-source.manifest.json"
-          test -f "$APP/Contents/Resources/vEGPURoot/Resources/Guest/reconcile-llama-runtimes.sh"
-          find "$APP/Contents/Resources/vEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'vegpu-scaling_*.deb' -print -quit | grep -q .
-          test -f "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json"
-          find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-macos-arm64.tar.gz' -print -quit | grep -q .
-          find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-cuda13-arm64.tar.gz' -print -quit | grep -q .
-          find "$APP/Contents/Resources/vEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-vulkan-arm64.tar.gz' -print -quit | grep -q .
-          test "$(find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime" -type f | wc -l | tr -d ' ')" -ge 20
-          test "$(find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/llama-runtime" -type f | wc -l | tr -d ' ')" -ge 3
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/glib-2.83.0/'
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/openssl-1.1.1b/'
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/gstreamer-1.19.1/'
-          find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files/llama-runtime" -type f | grep -F 'llama-b9500'
-          if tar -tzf "$APP/Contents/Resources/vEGPURoot/legal/generated/source/vEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.NOTICES"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.LICENSES"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.manifest.json"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/display-runtime-source.NOTICES"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/display-runtime-source.LICENSES"
+          test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/display-runtime-source.manifest.json"
+          test -f "$APP/Contents/Resources/PEGPURoot/Resources/Guest/reconcile-llama-runtimes.sh"
+          find "$APP/Contents/Resources/PEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'pegpu-scaling_*.deb' -print -quit | grep -q .
+          test -f "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json"
+          find "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-macos-arm64.tar.gz' -print -quit | grep -q .
+          find "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-cuda13-arm64.tar.gz' -print -quit | grep -q .
+          find "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-vulkan-arm64.tar.gz' -print -quit | grep -q .
+          test "$(find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime" -type f | wc -l | tr -d ' ')" -ge 20
+          test "$(find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/llama-runtime" -type f | wc -l | tr -d ' ')" -ge 3
+          find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/glib-2.83.0/'
+          find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/openssl-1.1.1b/'
+          find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/gstreamer-1.19.1/'
+          find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/llama-runtime" -type f | grep -F 'llama-b9500'
+          if tar -tzf "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
             echo "generated app source tarball must not include scaling helper build artifacts" >&2
             exit 1
           fi
-          if find "$APP/Contents/Resources/vEGPURoot" -maxdepth 2 -name 'THIRD_PARTY_*' -print -quit | grep -q .; then
+          if find "$APP/Contents/Resources/PEGPURoot" -maxdepth 2 -name 'THIRD_PARTY_*' -print -quit | grep -q .; then
             echo "legacy THIRD_PARTY notice files must not be bundled" >&2
             exit 1
           fi
-          grep -F 'EXTERNAL vEGPU Machine Licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'ThirdPartyNotices/LICENSES' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'The app-visible LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'The legal records for those source archive contents are generated next to each archive' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"
-          grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'This LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Component-Scope: vEGPU.app source code' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Component-Scope: Bundled app-side display runtime dependency' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Component-Scope: Bundled app-managed llama.cpp runtime archive' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: llama-swap routing provenance' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: llama.cpp' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: GOST/local proxy provenance' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: AI web UI/router provenance' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: Go module: web-ui-app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: Go module: gopkg.in/yaml.v3' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: SwiftPM: swiftterm' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: SwiftPM: swift-argument-parser' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Component-Scope: Swift package used by vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exit bad ? 0 : 1}' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"; then
-            echo "vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks" >&2
+          grep -F 'EXTERNAL PEGPU Machine Licenses' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'ThirdPartyNotices/LICENSES' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'For convenience, PEGPU.app Help can render external PEGPU Machine notices and licenses' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'PEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'The app-visible LICENSES file is the consolidated license record for the installed PEGPU.app application/runtime distribution' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'The legal records for those source archive contents are generated next to each archive' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"
+          grep -F 'Machine/QEMU license text is not copied into this PEGPU.app LICENSES file' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'This LICENSES file is the consolidated license record for the installed PEGPU.app application/runtime distribution' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: PEGPU.app source code' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: Bundled app-side display runtime dependency' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: Bundled app-managed llama.cpp runtime archive' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: llama-swap routing provenance' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: llama.cpp' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: GOST/local proxy provenance' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: AI web UI/router provenance' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Go module: web-ui-app' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Go module: gopkg.in/yaml.v3' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: SwiftPM: swiftterm' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: SwiftPM: swift-argument-parser' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Component-Scope: Swift package used by PEGPU.app' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exit bad ? 0 : 1}' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"; then
+            echo "PEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks" >&2
             exit 1
           fi
-          if find "$APP/Contents/Resources/vEGPURoot/legal/generated/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
-            echo "vEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files" >&2
+          if find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
+            echo "PEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files" >&2
             exit 1
           fi
-          if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
-            echo "vEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory" >&2
+          if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"; then
+            echo "PEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory" >&2
             exit 1
           fi
-          if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP/Contents/Resources/vEGPURoot/legal/generated/NOTICES"; then
-            echo "vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status" >&2
+          if grep -E '^- PEGPU Machine .*[(]missing[)]' "$APP/Contents/Resources/PEGPURoot/legal/generated/NOTICES"; then
+            echo "PEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status" >&2
             exit 1
           fi
-          if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier|records found' "$APP/Contents/Resources/vEGPURoot/legal/generated/source/"*.NOTICES; then
+          if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier|records found' "$APP/Contents/Resources/PEGPURoot/legal/generated/source/"*.NOTICES; then
             echo "source archive NOTICES sidecars must be user-facing legal/source prose, not raw generated audit inventories" >&2
             exit 1
           fi
-          grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          awk 'BEGIN{found=0; in_angle=0} /^Package\/Dependency: ANGLE$/ {in_angle=1} in_angle && /^License:/ {if ($0 == "License: BSD-3-Clause") found=1; in_angle=0} END{exit found ? 0 : 1}' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: vEGPU.app' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: Display runtime: glib' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: Display runtime: openssl' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: Display runtime: gstreamer' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"
-          if [ "$(grep -c '^Package/Dependency:' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES")" -lt 40 ]; then
-            echo "vEGPU.app LICENSES is missing harvested bundled dependency license blocks" >&2
+          grep -F 'Package/Dependency: ANGLE' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          awk 'BEGIN{found=0; in_angle=0} /^Package\/Dependency: ANGLE$/ {in_angle=1} in_angle && /^License:/ {if ($0 == "License: BSD-3-Clause") found=1; in_angle=0} END{exit found ? 0 : 1}' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: PEGPU.app' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Display runtime: glib' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Display runtime: openssl' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Display runtime: gstreamer' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          grep -F 'Package/Dependency: Bundled llama.cpp runtime' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"
+          if [ "$(grep -c '^Package/Dependency:' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES")" -lt 40 ]; then
+            echo "PEGPU.app LICENSES is missing harvested bundled dependency license blocks" >&2
             exit 1
           fi
-          if grep -F 'Package/Dependency: QEMU' "$APP/Contents/Resources/vEGPURoot/legal/generated/LICENSES"; then
-            echo "vEGPU.app LICENSES must reference Machine/QEMU notices but not duplicate QEMU license blocks" >&2
+          if grep -F 'Package/Dependency: QEMU' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"; then
+            echo "PEGPU.app LICENSES must reference Machine/QEMU notices but not duplicate QEMU license blocks" >&2
             exit 1
           fi
           APP_EXECUTABLE="$(plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist")"
-          APP_STRINGS="$RUNNER_TEMP/vegpu-app-strings.txt"
+          APP_STRINGS="$RUNNER_TEMP/pegpu-app-strings.txt"
           strings "$APP/Contents/MacOS/$APP_EXECUTABLE" > "$APP_STRINGS"
           require_app_string_or_source() {
             needle="$1"
-            if ! grep -F "$needle" "$APP_STRINGS" >/dev/null && ! grep -R -F "$needle" Sources/vEGPUApp >/dev/null; then
-              echo "vEGPU.app is missing expected Help/legal string in built strings and source: $needle" >&2
+            if ! grep -F "$needle" "$APP_STRINGS" >/dev/null && ! grep -R -F "$needle" Sources/PEGPUApp >/dev/null; then
+              echo "PEGPU.app is missing expected Help/legal string in built strings and source: $needle" >&2
               exit 1
             fi
           }
-          require_app_string_or_source 'vEGPU Help'
-          require_app_string_or_source 'vEGPU Machine Notices'
-          require_app_string_or_source 'vEGPU Machine Licenses'
+          require_app_string_or_source 'PEGPU Help'
+          require_app_string_or_source 'PEGPU Machine Notices'
+          require_app_string_or_source 'PEGPU Machine Licenses'
           require_app_string_or_source 'EXTERNAL'
 
-      - name: Pack vEGPU.app artifact
+      - name: Pack PEGPU.app artifact
         run: |
-          mkdir -p "$RUNNER_TEMP/vegpu-artifacts/app-archive"
-          tar -czf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" \
-            -C "$RUNNER_TEMP/vegpu-artifacts/app" \
-            vEGPU.app
-          tar -tzf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" | grep -F 'vEGPU.app/Contents/MacOS/vEGPU'
-          if tar -tzf "$RUNNER_TEMP/vegpu-artifacts/app-archive/vEGPU-app.tar.gz" | grep -F 'vEGPU.app/Contents/MacOS/vEGPUApp'; then
-            echo "vEGPU.app must not ship with the old vEGPUApp executable name" >&2
+          mkdir -p "$RUNNER_TEMP/pegpu-artifacts/app-archive"
+          tar -czf "$RUNNER_TEMP/pegpu-artifacts/app-archive/PEGPU-app.tar.gz" \
+            -C "$RUNNER_TEMP/pegpu-artifacts/app" \
+            PEGPU.app
+          tar -tzf "$RUNNER_TEMP/pegpu-artifacts/app-archive/PEGPU-app.tar.gz" | grep -F 'PEGPU.app/Contents/MacOS/PEGPU'
+          if tar -tzf "$RUNNER_TEMP/pegpu-artifacts/app-archive/PEGPU-app.tar.gz" | grep -F 'PEGPU.app/Contents/MacOS/PEGPUApp'; then
+            echo "PEGPU.app must not ship with the old PEGPUApp executable name" >&2
             exit 1
           fi
 
-      - name: Upload vEGPU.app archive
+      - name: Upload PEGPU.app archive
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-app
-          path: ${{ runner.temp }}/vegpu-artifacts/app-archive/vEGPU-app.tar.gz
+          name: PEGPU-app
+          path: ${{ runner.temp }}/pegpu-artifacts/app-archive/PEGPU-app.tar.gz
           if-no-files-found: error
           retention-days: 90
 
-      - name: Upload generated vEGPU notices and source
+      - name: Upload generated PEGPU notices and source
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-legal-generated
-          path: ${{ runner.temp }}/vegpu-artifacts/legal/generated
+          name: PEGPU-legal-generated
+          path: ${{ runner.temp }}/pegpu-artifacts/legal/generated
           if-no-files-found: error
           retention-days: 90
 
   machine-artifacts:
-    name: Build/fetch vEGPU Machine and DKMS guest tools
+    name: Build/fetch PEGPU Machine and DKMS guest tools
     runs-on: macos-26
     needs:
       - machine-build
     if: ${{ always() && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
     env:
       MACHINE_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run' }}
-      MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || vars.VEGPU_MACHINE_APP_RUN_ID || '' }}
+      MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || vars.PEGPU_MACHINE_APP_RUN_ID || '' }}
       MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
 
     steps:
-      - name: Check out vEGPU
+      - name: Check out PEGPU
         uses: actions/checkout@v6
 
       - name: Validate Machine mode
@@ -869,12 +869,12 @@ jobs:
       - name: Resolve latest Machine artifact run
         if: ${{ env.MACHINE_MODE == 'app-run' && env.MACHINE_APP_RUN_ID == '' }}
         run: |
-          pages="$RUNNER_TEMP/vegpu-actions-artifacts.json"
+          pages="$RUNNER_TEMP/pegpu-actions-artifacts.json"
           gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > "$pages"
-          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" vEGPU-machine-artifacts)"
+          run_id="$(python3 scripts/resolve-artifact-run.py "$pages" PEGPU-machine-artifacts)"
           test -n "$run_id"
           echo "MACHINE_APP_RUN_ID=$run_id" >> "$GITHUB_ENV"
-          echo "Resolved Machine artifact from vEGPU run $run_id"
+          echo "Resolved Machine artifact from PEGPU run $run_id"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -889,14 +889,14 @@ jobs:
             exit 1
           fi
 
-      - name: Download Machine artifacts from prior vEGPU workflow run
+      - name: Download Machine artifacts from prior PEGPU workflow run
         if: ${{ env.MACHINE_MODE == 'app-run' }}
         run: |
-          mkdir -p "$RUNNER_TEMP/vegpu-input/machine-app-run"
+          mkdir -p "$RUNNER_TEMP/pegpu-input/machine-app-run"
           gh run download "$MACHINE_APP_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name vEGPU-machine-artifacts \
-            --dir "$RUNNER_TEMP/vegpu-input/machine-app-run"
+            --name PEGPU-machine-artifacts \
+            --dir "$RUNNER_TEMP/pegpu-input/machine-app-run"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -904,46 +904,46 @@ jobs:
         if: ${{ env.MACHINE_MODE == 'trigger' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: vEGPU-Machine-*-build-output
-          path: ${{ runner.temp }}/vegpu-input/machine-reusable
+          pattern: PEGPU-Machine-*-build-output
+          path: ${{ runner.temp }}/pegpu-input/machine-reusable
           merge-multiple: true
 
       - name: Normalize Machine artifacts
         run: |
           if [ "${MACHINE_MODE}" = "app-run" ]; then
-            export VEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/vegpu-input/machine-app-run"
+            export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-app-run"
           elif [ "${MACHINE_MODE}" = "trigger" ]; then
-            export VEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/vegpu-input/machine-reusable"
+            export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-reusable"
           fi
-          scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/vegpu-artifacts/machine"
+          scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/pegpu-artifacts/machine"
         env:
-          GH_TOKEN: ${{ secrets.VEGPU_MACHINE_TOKEN || github.token }}
-          VEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/vEGPU-machine' }}
-          VEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
-          VEGPU_MACHINE_RUN_ID: ${{ env.MACHINE_MODE == 'download-run' && inputs.machine_run_id || '' }}
-          VEGPU_TRIGGER_MACHINE_BUILD: "0"
-          VEGPU_REQUIRE_MACHINE_SOURCE: "1"
-          VEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-          VEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+          GH_TOKEN: ${{ secrets.PEGPU_MACHINE_TOKEN || github.token }}
+          PEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/PEGPU-machine' }}
+          PEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
+          PEGPU_MACHINE_RUN_ID: ${{ env.MACHINE_MODE == 'download-run' && inputs.machine_run_id || '' }}
+          PEGPU_TRIGGER_MACHINE_BUILD: "0"
+          PEGPU_REQUIRE_MACHINE_SOURCE: "1"
+          PEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+          PEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
 
       - name: Validate Machine app payload
         run: |
-          APP="$RUNNER_TEMP/vegpu-artifacts/machine/vEGPU Machine.app"
+          APP="$RUNNER_TEMP/pegpu-artifacts/machine/PEGPU Machine.app"
           test -d "$APP"
-          test -x "$APP/Contents/MacOS/vEGPU Machine"
+          test -x "$APP/Contents/MacOS/PEGPU Machine"
           test -x "$APP/Contents/MacOS/qemu-vfio-apple"
           test -f "$APP/Contents/Resources/ThirdPartyNotices/NOTICES"
           test -f "$APP/Contents/Resources/ThirdPartyNotices/LICENSES"
           test -f "$APP/Contents/Resources/guest-tools/manifest.json"
           test -d "$APP/Contents/Resources/guest-tools/source"
-          find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'vegpu-guest-dma-dkms_*.deb' \) -print -quit | grep -q .
-          if find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-modules-*.deb' -o -name 'vegpu-guest-dma-modules-*.deb' \) -print -quit | grep -q .; then
+          find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'pegpu-guest-dma-dkms_*.deb' \) -print -quit | grep -q .
+          if find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-modules-*.deb' -o -name 'pegpu-guest-dma-modules-*.deb' \) -print -quit | grep -q .; then
             echo "Machine guest tools must not contain kernel-versioned DMA module packages" >&2
             exit 1
           fi
           find "$APP/Contents/Resources/guest-tools/source" -type f -name 'apple-dma-*.tar.gz' -print -quit | grep -q .
-          find "$RUNNER_TEMP/vegpu-artifacts/machine" -maxdepth 1 -type f -name 'vEGPU-Machine-*-source.tar.gz' -print -quit | grep -q .
-          if find "$RUNNER_TEMP/vegpu-artifacts/machine" -path '*/downloaded/*' -print -quit | grep -q .; then
+          find "$RUNNER_TEMP/pegpu-artifacts/machine" -maxdepth 1 -type f -name 'PEGPU-Machine-*-source.tar.gz' -print -quit | grep -q .
+          if find "$RUNNER_TEMP/pegpu-artifacts/machine" -path '*/downloaded/*' -print -quit | grep -q .; then
             echo "Machine artifact must not recursively upload downloaded artifact scratch directories" >&2
             exit 1
           fi
@@ -952,15 +952,15 @@ jobs:
       - name: Upload Machine artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-machine-artifacts
-          path: ${{ runner.temp }}/vegpu-artifacts/machine
+          name: PEGPU-machine-artifacts
+          path: ${{ runner.temp }}/pegpu-artifacts/machine
           if-no-files-found: error
           retention-days: 90
 
   machine-build:
-    name: Build vEGPU Machine
+    name: Build PEGPU Machine
     if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'trigger' }}
-    uses: openresearchtools/vEGPU-machine/.github/workflows/build-nosip.yml@main
+    uses: openresearchtools/PEGPU-machine/.github/workflows/build-nosip.yml@main
     permissions:
       contents: write
     secrets: inherit
@@ -979,44 +979,44 @@ jobs:
     if: ${{ always() && needs.build-app.result == 'success' && needs.machine-artifacts.result == 'success' }}
 
     steps:
-      - name: Check out vEGPU
+      - name: Check out PEGPU
         uses: actions/checkout@v6
 
-      - name: Download vEGPU.app
+      - name: Download PEGPU.app
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-app
-          path: ${{ runner.temp }}/vegpu-input/app-archive
+          name: PEGPU-app
+          path: ${{ runner.temp }}/pegpu-input/app-archive
 
-      - name: Unpack vEGPU.app
+      - name: Unpack PEGPU.app
         run: |
-          mkdir -p "$RUNNER_TEMP/vegpu-input/app"
-          tar -xzf "$RUNNER_TEMP/vegpu-input/app-archive/vEGPU-app.tar.gz" \
-            -C "$RUNNER_TEMP/vegpu-input/app"
-          codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-input/app/vEGPU.app"
+          mkdir -p "$RUNNER_TEMP/pegpu-input/app"
+          tar -xzf "$RUNNER_TEMP/pegpu-input/app-archive/PEGPU-app.tar.gz" \
+            -C "$RUNNER_TEMP/pegpu-input/app"
+          codesign --verify --deep --strict "$RUNNER_TEMP/pegpu-input/app/PEGPU.app"
 
-      - name: Download vEGPU legal payload
+      - name: Download PEGPU legal payload
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-legal-generated
-          path: ${{ runner.temp }}/vegpu-input/legal
+          name: PEGPU-legal-generated
+          path: ${{ runner.temp }}/pegpu-input/legal
 
       - name: Download Machine artifacts
         uses: actions/download-artifact@v8
         with:
-          name: vEGPU-machine-artifacts
-          path: ${{ runner.temp }}/vegpu-input/machine
+          name: PEGPU-machine-artifacts
+          path: ${{ runner.temp }}/pegpu-input/machine
 
       - name: Rehydrate Machine app from archive
         run: |
-          rm -rf "$RUNNER_TEMP/vegpu-input/machine-rehydrated"
-          VEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/vegpu-input/machine" \
-          VEGPU_REQUIRE_MACHINE_SOURCE=1 \
-          scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/vegpu-input/machine-rehydrated"
-          rm -rf "$RUNNER_TEMP/vegpu-input/machine"
-          mv "$RUNNER_TEMP/vegpu-input/machine-rehydrated" "$RUNNER_TEMP/vegpu-input/machine"
-          codesign --verify --deep --strict "$RUNNER_TEMP/vegpu-input/machine/vEGPU Machine.app"
-          codesign -d --entitlements :- "$RUNNER_TEMP/vegpu-input/machine/vEGPU Machine.app" 2>/dev/null | grep -F 'com.apple.developer.system-extension.install'
+          rm -rf "$RUNNER_TEMP/pegpu-input/machine-rehydrated"
+          PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine" \
+          PEGPU_REQUIRE_MACHINE_SOURCE=1 \
+          scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/pegpu-input/machine-rehydrated"
+          rm -rf "$RUNNER_TEMP/pegpu-input/machine"
+          mv "$RUNNER_TEMP/pegpu-input/machine-rehydrated" "$RUNNER_TEMP/pegpu-input/machine"
+          codesign --verify --deep --strict "$RUNNER_TEMP/pegpu-input/machine/PEGPU Machine.app"
+          codesign -d --entitlements :- "$RUNNER_TEMP/pegpu-input/machine/PEGPU Machine.app" 2>/dev/null | grep -F 'com.apple.developer.system-extension.install'
 
       - name: Build pkg
         run: |
@@ -1024,49 +1024,49 @@ jobs:
           case "${BUILD_MODE}" in
             pre-release)
               PACKAGE_CHANNEL="pre-release"
-              PKG_NAME="vEGPU-v${VERSION}-pre-release.pkg"
+              PKG_NAME="PEGPU-v${VERSION}-pre-release.pkg"
               ;;
             full-release)
               PACKAGE_CHANNEL="release"
-              PKG_NAME="vEGPU-v${VERSION}.pkg"
+              PKG_NAME="PEGPU-v${VERSION}.pkg"
               ;;
             *)
               if [ "${PUBLISH_RELEASE}" = "true" ]; then
                 if [ "${PRERELEASE_INPUT}" = "true" ]; then
                   PACKAGE_CHANNEL="pre-release"
-                  PKG_NAME="vEGPU-v${VERSION}-pre-release.pkg"
+                  PKG_NAME="PEGPU-v${VERSION}-pre-release.pkg"
                 else
                   PACKAGE_CHANNEL="release"
-                  PKG_NAME="vEGPU-v${VERSION}.pkg"
+                  PKG_NAME="PEGPU-v${VERSION}.pkg"
                 fi
               else
                 PACKAGE_CHANNEL="artifact"
-                PKG_NAME="vEGPU-v${VERSION}-artifact.pkg"
+                PKG_NAME="PEGPU-v${VERSION}-artifact.pkg"
               fi
               ;;
           esac
-          OUT="$RUNNER_TEMP/vegpu-artifacts/pkg/$PKG_NAME"
-          mkdir -p "$(dirname "$OUT")" "$RUNNER_TEMP/vegpu-check"
-          export VEGPU_MACHINE_APP="$RUNNER_TEMP/vegpu-input/machine/vEGPU Machine.app"
-          export VEGPU_REQUIRE_MACHINE_APP=1
-          export VEGPU_REQUIRE_MACHINE_SOURCE=1
-          VEGPU_APP="$RUNNER_TEMP/vegpu-input/app/vEGPU.app" \
-          VEGPU_PKG_BUILD_DIR="$RUNNER_TEMP/vegpu-build/pkg" \
-          VEGPU_PACKAGE_CHANNEL="$PACKAGE_CHANNEL" \
+          OUT="$RUNNER_TEMP/pegpu-artifacts/pkg/$PKG_NAME"
+          mkdir -p "$(dirname "$OUT")" "$RUNNER_TEMP/pegpu-check"
+          export PEGPU_MACHINE_APP="$RUNNER_TEMP/pegpu-input/machine/PEGPU Machine.app"
+          export PEGPU_REQUIRE_MACHINE_APP=1
+          export PEGPU_REQUIRE_MACHINE_SOURCE=1
+          PEGPU_APP="$RUNNER_TEMP/pegpu-input/app/PEGPU.app" \
+          PEGPU_PKG_BUILD_DIR="$RUNNER_TEMP/pegpu-build/pkg" \
+          PEGPU_PACKAGE_CHANNEL="$PACKAGE_CHANNEL" \
           VERSION="$VERSION" \
           OUT="$OUT" \
           scripts/build-release-pkg.sh
           test -f "$OUT"
-          pkgutil --expand "$OUT" "$RUNNER_TEMP/vegpu-check/pkg-expanded"
-          test -f "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -R -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
-          grep -R -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
-          grep -R -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
-          grep -R -F 'The installed license texts are the controlling terms' "$RUNNER_TEMP/vegpu-check/pkg-expanded"
-          grep -R -F '/Library/SystemExtensions' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -R -F 'driverStatusKnownMissing()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -R -F 'driverStatusUnknown()' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
-          grep -R -F 'start_selected="driverNeedsRefresh()"' "$RUNNER_TEMP/vegpu-check/pkg-expanded/Distribution"
+          pkgutil --expand "$OUT" "$RUNNER_TEMP/pegpu-check/pkg-expanded"
+          test -f "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'For convenience, PEGPU.app Help can render external PEGPU Machine notices and licenses' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
+          grep -R -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
+          grep -R -F 'PEGPU uses a stricter form of the UTM / UTM-QEMU-style' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
+          grep -R -F 'The installed license texts are the controlling terms' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
+          grep -R -F '/Library/SystemExtensions' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'driverStatusKnownMissing()' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'driverStatusUnknown()' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'start_selected="driverNeedsRefresh()"' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
           PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}
@@ -1075,19 +1075,19 @@ jobs:
       - name: Gather package assets
         run: |
           VERSION="${RELEASE_VERSION}"
-          ASSETS="$RUNNER_TEMP/vegpu-artifacts/release-assets"
+          ASSETS="$RUNNER_TEMP/pegpu-artifacts/release-assets"
           mkdir -p "$ASSETS"
-          pkg="$(find "$RUNNER_TEMP/vegpu-artifacts/pkg" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' -print -quit)"
+          pkg="$(find "$RUNNER_TEMP/pegpu-artifacts/pkg" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' -print -quit)"
           test -n "$pkg"
           cp "$pkg" "$ASSETS/"
-          test "$(find "$ASSETS" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' | wc -l | tr -d ' ')" = "1"
+          test "$(find "$ASSETS" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' | wc -l | tr -d ' ')" = "1"
           find "$ASSETS" -maxdepth 1 -type f -print | sort
 
       - name: Upload package assets
         uses: actions/upload-artifact@v7
         with:
-          name: vEGPU-package-assets
-          path: ${{ runner.temp }}/vegpu-artifacts/release-assets
+          name: PEGPU-package-assets
+          path: ${{ runner.temp }}/pegpu-artifacts/release-assets
           if-no-files-found: error
           retention-days: 90
 
@@ -1103,26 +1103,26 @@ jobs:
           case "${BUILD_MODE}" in
             pre-release)
               TAG="v${VERSION}-pre-release"
-              TITLE="vEGPU ${VERSION} Pre-release"
+              TITLE="PEGPU ${VERSION} Pre-release"
               PRERELEASE="true"
               ;;
             full-release)
               TAG="v${VERSION}"
-              TITLE="vEGPU ${VERSION}"
+              TITLE="PEGPU ${VERSION}"
               PRERELEASE="false"
               ;;
             *)
               if [ "$IS_TAG" = "true" ]; then
                 TAG="v${VERSION}"
-                TITLE="vEGPU ${VERSION}"
+                TITLE="PEGPU ${VERSION}"
                 PRERELEASE="false"
               elif [ "$PRERELEASE_INPUT" = "true" ]; then
                 TAG="v${VERSION}-pre-release"
-                TITLE="vEGPU ${VERSION} Pre-release"
+                TITLE="PEGPU ${VERSION} Pre-release"
                 PRERELEASE="true"
               else
                 TAG="v${VERSION}"
-                TITLE="vEGPU ${VERSION}"
+                TITLE="PEGPU ${VERSION}"
                 PRERELEASE="false"
               fi
               ;;
@@ -1136,13 +1136,13 @@ jobs:
               -F "prerelease=${PRERELEASE}" \
               >/dev/null
           else
-            args=(--title "$TITLE" --notes "vEGPU ${VERSION}")
+            args=(--title "$TITLE" --notes "PEGPU ${VERSION}")
             if [ "$PRERELEASE" = "true" ]; then
               args+=(--prerelease)
             fi
             gh release create "$TAG" --target "$GITHUB_SHA" "${args[@]}"
           fi
-          pkg="$(find "$RUNNER_TEMP/vegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' -print -quit)"
+          pkg="$(find "$RUNNER_TEMP/pegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' -print -quit)"
           test -n "$pkg"
           gh release upload "$TAG" "$pkg" --clobber
 
@@ -1179,7 +1179,7 @@ jobs:
               PRERELEASE="false"
               ;;
           esac
-          pkg="$(find "$RUNNER_TEMP/vegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'vEGPU-v*.pkg' -print -quit)"
+          pkg="$(find "$RUNNER_TEMP/pegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' -print -quit)"
           test -n "$pkg"
           PKG_NAME="$(basename "$pkg")"
           PKG_SIZE="$(stat -f%z "$pkg" 2>/dev/null || stat -c%s "$pkg")"

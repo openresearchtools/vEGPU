@@ -101,7 +101,7 @@ func translateLocalLaunchDevices(ctx context.Context, launch LaunchConfig, cfg A
 			item.Backend = "RPC"
 			item.Remote = true
 			item.Endpoint = net.JoinHostPort(vmnetGuestHost, strconv.Itoa(cfg.Runtime.Residency.RPCPort))
-			item.Location = "vEGPU VM RPC"
+			item.Location = "PEGPU VM RPC"
 		}
 		next = append(next, item)
 	}
@@ -120,7 +120,7 @@ func ensureLocalRPCDevices(ctx context.Context, model ModelConfig, cfg AppConfig
 	}
 	if shouldEnsureVMRPC(rpcServers) {
 		if runtimeSvc == nil {
-			return launch, "", fmt.Errorf("vEGPU VM RPC selected but runtime service is unavailable")
+			return launch, "", fmt.Errorf("PEGPU VM RPC selected but runtime service is unavailable")
 		}
 		if !allVMRPCEndpointsReady(ctx, rpcServers, 750*time.Millisecond) {
 			result, err := runtimeSvc.StartBridgeRPC(ctx, BridgeRuntimeSpec{
@@ -299,7 +299,7 @@ func defaultBridgeDeviceSelections(ctx context.Context, runtimeSvc *RuntimeServi
 		MinTotalMiB: dev.TotalMiB,
 		PCIAddress:  dev.PCIAddress,
 		UUID:        dev.UUID,
-		Location:    "vEGPU VM",
+		Location:    "PEGPU VM",
 	}}, nil
 }
 
@@ -434,7 +434,7 @@ func resolveOneLlamaDevice(saved DeviceSelection, fresh []DeviceInfo) (DeviceInf
 		return fresh[0], nil
 	}
 	if strings.HasPrefix(strings.ToUpper(name), "VM:") {
-		return DeviceInfo{}, fmt.Errorf("legacy GPU selection %s has no llama.cpp profile; reselect the GPU once so vEGPU can save label and VRAM", name)
+		return DeviceInfo{}, fmt.Errorf("legacy GPU selection %s has no llama.cpp profile; reselect the GPU once so PEGPU can save label and VRAM", name)
 	}
 	return DeviceInfo{}, fmt.Errorf("selected GPU profile not present: %s", name)
 }
@@ -583,7 +583,7 @@ func runtimeMountRoots(cfg AppConfig, model ModelConfig) []string {
 	if home, err := os.UserHomeDir(); err == nil {
 		add(filepath.Join(home, ".lmstudio", "models"))
 		add(filepath.Join(home, ".cache", "huggingface", "hub"))
-		add(filepath.Join(home, "Library", "Application Support", "vEGPU", "Machine", "ai", "llms", "models"))
+			add(filepath.Join(home, "Library", "Application Support", "pegpu", "Machine", "ai", "llms", "models"))
 	}
 	out := make([]string, 0, len(roots))
 	for root := range roots {
@@ -597,7 +597,7 @@ func findFreePortOnHost(host string, start int) (int, error) {
 		start = 10001
 	}
 	listenHost := host
-	if os.Getenv("VEGPU_WEB_UI_TEST_LOCALHOST_FALLBACK") == "1" && host == vmnetGatewayHost {
+	if os.Getenv("PEGPU_WEB_UI_TEST_LOCALHOST_FALLBACK") == "1" && host == vmnetGatewayHost {
 		listenHost = "127.0.0.1"
 	}
 	for port := start; port < start+1000; port++ {

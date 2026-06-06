@@ -61,10 +61,10 @@ func main() {
 	var reloadInterval time.Duration
 	var udpTTL time.Duration
 
-	flag.StringVar(&portsFile, "ports-file", "", "vEGPU ports.json path")
+	flag.StringVar(&portsFile, "ports-file", "", "PEGPU ports.json path")
 	flag.StringVar(&bindHost, "bind-host", "127.0.0.1", "local address to bind")
-	flag.StringVar(&targetHost, "target-host", "172.29.253.100", "vEGPU VM address to forward to")
-	flag.StringVar(&gatewayHost, "gateway-host", "172.29.253.1", "vEGPU vmnet gateway address for VM-to-Mac access")
+	flag.StringVar(&targetHost, "target-host", "172.29.253.100", "PEGPU VM address to forward to")
+	flag.StringVar(&gatewayHost, "gateway-host", "172.29.253.1", "PEGPU vmnet gateway address for VM-to-Mac access")
 	flag.DurationVar(&reloadInterval, "reload-interval", time.Second, "port state reload interval")
 	flag.DurationVar(&udpTTL, "udp-ttl", 60*time.Second, "idle UDP client mapping lifetime")
 	flag.Parse()

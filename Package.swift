@@ -3,24 +3,24 @@ import PackageDescription
 import Foundation
 
 let environment = ProcessInfo.processInfo.environment
-let defaultBuildRoot = environment["VEGPU_BUILD_ROOT"]
-    ?? environment["RUNNER_TEMP"].map { "\($0)/vegpu-build" }
-    ?? "\(NSTemporaryDirectory())vegpu-build"
-let cocoaSpicePackagePath = environment["VEGPU_COCOASPICE_PACKAGE_PATH"]
+let defaultBuildRoot = environment["PEGPU_BUILD_ROOT"]
+    ?? environment["RUNNER_TEMP"].map { "\($0)/pegpu-build" }
+    ?? "\(NSTemporaryDirectory())pegpu-build"
+let cocoaSpicePackagePath = environment["PEGPU_COCOASPICE_PACKAGE_PATH"]
     ?? "\(defaultBuildRoot)/utm-patched/OpenResearchTools/CocoaSpice"
-let displayFrameworksPath = environment["VEGPU_DISPLAY_FRAMEWORKS_OUT"]
-    ?? environment["VEGPU_DISPLAY_FRAMEWORKS_DIR"]
+let displayFrameworksPath = environment["PEGPU_DISPLAY_FRAMEWORKS_OUT"]
+    ?? environment["PEGPU_DISPLAY_FRAMEWORKS_DIR"]
     ?? "\(defaultBuildRoot)/display-frameworks/macos-arm64"
 
 let package = Package(
-    name: "vEGPU-Swift",
+    name: "PEGPU-Swift",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .library(name: "vEGPUCore", targets: ["vEGPUCore"]),
-        .executable(name: "vEGPUApp", targets: ["vEGPUApp"]),
-        .executable(name: "vegpu", targets: ["vegpu"])
+        .library(name: "PEGPUCore", targets: ["PEGPUCore"]),
+        .executable(name: "PEGPUApp", targets: ["PEGPUApp"]),
+        .executable(name: "pegpu", targets: ["pegpu"])
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0"),
@@ -28,13 +28,13 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "vEGPUCore",
+            name: "PEGPUCore",
             dependencies: []
         ),
         .executableTarget(
-            name: "vEGPUApp",
+            name: "PEGPUApp",
             dependencies: [
-                "vEGPUCore",
+                "PEGPUCore",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "CocoaSpiceNoUsb", package: "CocoaSpice")
             ],
@@ -81,8 +81,8 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "vegpu",
-            dependencies: ["vEGPUCore"]
+            name: "pegpu",
+            dependencies: ["PEGPUCore"]
         )
     ]
 )

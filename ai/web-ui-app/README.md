@@ -5,8 +5,8 @@ Single-binary llama.cpp web UI wrapper with a llama-swap-style router backend.
 ## Run
 
 ```sh
-go build -o "${TMPDIR:-/tmp}/vegpu-build/web-ui-app" .
-"${TMPDIR:-/tmp}/vegpu-build/web-ui-app"
+go build -o "${TMPDIR:-/tmp}/pegpu-build/web-ui-app" .
+"${TMPDIR:-/tmp}/pegpu-build/web-ui-app"
 ```
 
 The app serves:
@@ -14,8 +14,8 @@ The app serves:
 - `http://127.0.0.1:9292/` - embedded llama.cpp chat UI
 - `http://127.0.0.1:9292/core` - standalone router, model, device, and runtime settings
 
-Mutable config is stored under the vEGPU app support directory. vEGPU release
-packages ship the latest llama.cpp ARM64 runtime pair available at vEGPU
+Mutable config is stored under the PEGPU app support directory. PEGPU release
+packages ship the latest llama.cpp ARM64 runtime pair available at PEGPU
 release time from `openresearchtools/llama-cpp-arm64-builds`; `/core` still
 lets users fetch, activate, retry, and delete additional matched runtime pairs.
 
@@ -30,9 +30,9 @@ Debian Trixie CUDA 13 ARM64, and Debian Trixie Vulkan ARM64. On first app
 startup, the bundled release is installed into the normal managed runtime
 folders; CUDA is selected by default and Vulkan remains installed for later
 selection. When the VM is reachable, guest sync uploads the packaged Linux
-runtime seed and runs `vegpu-agent reconcile-llama-runtimes`; that single
+runtime seed and runs `pegpu-agent reconcile-llama-runtimes`; that single
 reconcile path installs or refreshes the VM CUDA and Vulkan runtimes under
-`/home/vegpu/custom-llama-runtimes`.
+`/home/pegpu/custom-llama-runtimes`.
 
 `/core` also installs matched macOS and Linux runtime pairs from
 `openresearchtools/llama-cpp-arm64-builds` releases. Users choose the runtime

@@ -2,12 +2,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
-BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
-UTM_REPO="${VEGPU_UTM_REPO:-https://github.com/utmapp/UTM.git}"
-UTM_COMMIT="${VEGPU_UTM_COMMIT:-e4a4c34b671284263fc69f81b607de494d7e9b65}"
-WORKTREE="${VEGPU_UTM_PATCHED_WORKTREE:-$BUILD_ROOT/utm-patched}"
-PATCH_DIR="${VEGPU_UTM_PATCH_DIR:-$ROOT/third_party/utm/patches}"
+DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
+BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+UTM_REPO="${PEGPU_UTM_REPO:-https://github.com/utmapp/UTM.git}"
+UTM_COMMIT="${PEGPU_UTM_COMMIT:-e4a4c34b671284263fc69f81b607de494d7e9b65}"
+WORKTREE="${PEGPU_UTM_PATCHED_WORKTREE:-$BUILD_ROOT/utm-patched}"
+PATCH_DIR="${PEGPU_UTM_PATCH_DIR:-$ROOT/third_party/utm/patches}"
 
 if [ ! -d "$PATCH_DIR" ]; then
   printf 'Missing UTM patch directory: %s\n' "$PATCH_DIR" >&2

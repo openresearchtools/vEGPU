@@ -2,22 +2,22 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/vegpu-build"
-BUILD_ROOT="${VEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
+BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 VERSION="${VERSION:-0.1.0}"
-PACKAGE_CHANNEL="${VEGPU_PACKAGE_CHANNEL:-release}"
-APP="${VEGPU_APP:-$BUILD_ROOT/vEGPU.app}"
-MACHINE_APP="${VEGPU_MACHINE_APP:-/Applications/vEGPU Machine.app}"
-REQUIRE_MACHINE_APP="${VEGPU_REQUIRE_MACHINE_APP:-1}"
-REQUIRE_MACHINE_SOURCE="${VEGPU_REQUIRE_MACHINE_SOURCE:-0}"
+PACKAGE_CHANNEL="${PEGPU_PACKAGE_CHANNEL:-release}"
+APP="${PEGPU_APP:-$BUILD_ROOT/PEGPU.app}"
+MACHINE_APP="${PEGPU_MACHINE_APP:-/Applications/PEGPU Machine.app}"
+REQUIRE_MACHINE_APP="${PEGPU_REQUIRE_MACHINE_APP:-1}"
+REQUIRE_MACHINE_SOURCE="${PEGPU_REQUIRE_MACHINE_SOURCE:-0}"
 case "$PACKAGE_CHANNEL" in
-  release) DEFAULT_PKG_NAME="vEGPU-v$VERSION.pkg" ;;
-  pre-release) DEFAULT_PKG_NAME="vEGPU-v$VERSION-pre-release.pkg" ;;
-  artifact) DEFAULT_PKG_NAME="vEGPU-v$VERSION-artifact.pkg" ;;
-  *) DEFAULT_PKG_NAME="vEGPU-v$VERSION-$PACKAGE_CHANNEL.pkg" ;;
+  release) DEFAULT_PKG_NAME="PEGPU-v$VERSION.pkg" ;;
+  pre-release) DEFAULT_PKG_NAME="PEGPU-v$VERSION-pre-release.pkg" ;;
+  artifact) DEFAULT_PKG_NAME="PEGPU-v$VERSION-artifact.pkg" ;;
+  *) DEFAULT_PKG_NAME="PEGPU-v$VERSION-$PACKAGE_CHANNEL.pkg" ;;
 esac
 OUT="${OUT:-$BUILD_ROOT/$DEFAULT_PKG_NAME}"
-WORK="${VEGPU_PKG_BUILD_DIR:-$BUILD_ROOT/pkg}"
+WORK="${PEGPU_PKG_BUILD_DIR:-$BUILD_ROOT/pkg}"
 COMPONENTS="$WORK/components"
 RESOURCES="$WORK/resources"
 SCRIPTS_APP="$WORK/scripts-app"
@@ -33,13 +33,13 @@ if [ ! -d "$APP" ]; then
   CONFIGURATION="${CONFIGURATION:-release}" "$ROOT/scripts/build-app-bundle.sh" >/dev/null
 fi
 if [ ! -d "$APP" ]; then
-  printf 'Missing vEGPU.app: %s\n' "$APP" >&2
+  printf 'Missing PEGPU.app: %s\n' "$APP" >&2
   exit 1
 fi
 if [ ! -d "$MACHINE_APP" ]; then
   if [ "$REQUIRE_MACHINE_APP" = "1" ]; then
-    printf 'Missing vEGPU Machine.app: %s\n' "$MACHINE_APP" >&2
-    printf 'Set VEGPU_MACHINE_APP to the built Machine app before packaging, or set VEGPU_REQUIRE_MACHINE_APP=0 for an app-only artifact package.\n' >&2
+    printf 'Missing PEGPU Machine.app: %s\n' "$MACHINE_APP" >&2
+    printf 'Set PEGPU_MACHINE_APP to the built Machine app before packaging, or set PEGPU_REQUIRE_MACHINE_APP=0 for an app-only artifact package.\n' >&2
     exit 1
   fi
 else
@@ -49,25 +49,25 @@ fi
 rm -rf "$WORK"
 mkdir -p "$COMPONENTS" "$RESOURCES" "$SCRIPTS_APP" "$SCRIPTS_MACHINE" "$SCRIPTS_DRIVER" "$STAGE_APP/Applications" "$STAGE_MACHINE/Applications"
 
-/usr/bin/ditto "$APP" "$STAGE_APP/Applications/vEGPU.app"
+/usr/bin/ditto "$APP" "$STAGE_APP/Applications/PEGPU.app"
 if [ "$INCLUDE_MACHINE" = "1" ]; then
-  /usr/bin/ditto "$MACHINE_APP" "$STAGE_MACHINE/Applications/vEGPU Machine.app"
-  MACHINE_INFO="$STAGE_MACHINE/Applications/vEGPU Machine.app/Contents/Info.plist"
+  /usr/bin/ditto "$MACHINE_APP" "$STAGE_MACHINE/Applications/PEGPU Machine.app"
+  MACHINE_INFO="$STAGE_MACHINE/Applications/PEGPU Machine.app/Contents/Info.plist"
   MACHINE_NEW_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$MACHINE_INFO" 2>/dev/null || true)"
   MACHINE_NEW_SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$MACHINE_INFO" 2>/dev/null || true)"
   MACHINE_ENTITLEMENTS="$WORK/machine-host.entitlements.plist"
   if ! /usr/bin/codesign -d --entitlements :- "$MACHINE_APP" >"$MACHINE_ENTITLEMENTS" 2>/dev/null; then
-    /usr/bin/codesign -d --entitlements :- "$MACHINE_APP/Contents/MacOS/vEGPU Machine" >"$MACHINE_ENTITLEMENTS" 2>/dev/null || {
-      printf 'Unable to read vEGPU Machine host app entitlements from: %s\n' "$MACHINE_APP" >&2
+    /usr/bin/codesign -d --entitlements :- "$MACHINE_APP/Contents/MacOS/PEGPU Machine" >"$MACHINE_ENTITLEMENTS" 2>/dev/null || {
+      printf 'Unable to read PEGPU Machine host app entitlements from: %s\n' "$MACHINE_APP" >&2
       exit 1
     }
   fi
   if ! /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.system-extension.install' "$MACHINE_ENTITLEMENTS" 2>/dev/null | /usr/bin/grep -qx 'true'; then
-    printf 'vEGPU Machine host app is missing required entitlement: com.apple.developer.system-extension.install\n' >&2
+    printf 'PEGPU Machine host app is missing required entitlement: com.apple.developer.system-extension.install\n' >&2
     printf 'Machine app: %s\n' "$MACHINE_APP" >&2
     exit 1
   fi
-  MACHINE_SOURCE_DEST="$STAGE_MACHINE/Applications/vEGPU Machine.app/Contents/Resources/SourceBundles"
+  MACHINE_SOURCE_DEST="$STAGE_MACHINE/Applications/PEGPU Machine.app/Contents/Resources/SourceBundles"
   mkdir -p "$MACHINE_SOURCE_DEST"
   machine_source_count=0
   while IFS= read -r source_tar; do
@@ -75,21 +75,21 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
     machine_source_count=$((machine_source_count + 1))
   done < <(find "$(dirname "$MACHINE_APP")" -maxdepth 1 -type f \( -name '*source*.tar.gz' -o -name '*source*.tar.xz' -o -name '*source*.tgz' \) | sort)
   if [ "$REQUIRE_MACHINE_SOURCE" = "1" ] && [ "$machine_source_count" -eq 0 ]; then
-    printf 'Missing vEGPU Machine source tarball next to Machine app: %s\n' "$(dirname "$MACHINE_APP")" >&2
+    printf 'Missing PEGPU Machine source tarball next to Machine app: %s\n' "$(dirname "$MACHINE_APP")" >&2
     exit 1
   fi
-  /usr/bin/codesign --force --sign - --entitlements "$MACHINE_ENTITLEMENTS" "$STAGE_MACHINE/Applications/vEGPU Machine.app" >/dev/null
+  /usr/bin/codesign --force --sign - --entitlements "$MACHINE_ENTITLEMENTS" "$STAGE_MACHINE/Applications/PEGPU Machine.app" >/dev/null
 fi
 
-APP_LEGAL="$STAGE_APP/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated"
+APP_LEGAL="$STAGE_APP/Applications/PEGPU.app/Contents/Resources/PEGPURoot/legal/generated"
 test -f "$APP_LEGAL/NOTICES"
 test -f "$APP_LEGAL/LICENSES"
 test -f "$APP_LEGAL/GUEST-VM-INSTALL-NOTICES.md"
-test -f "$APP_LEGAL/source/vEGPU-app-source.tar.gz"
+test -f "$APP_LEGAL/source/PEGPU-app-source.tar.gz"
 test -f "$APP_LEGAL/source/display-runtime-source.tar.gz"
-test -f "$APP_LEGAL/source/vEGPU-app-source.NOTICES"
-test -f "$APP_LEGAL/source/vEGPU-app-source.LICENSES"
-test -f "$APP_LEGAL/source/vEGPU-app-source.manifest.json"
+test -f "$APP_LEGAL/source/PEGPU-app-source.NOTICES"
+test -f "$APP_LEGAL/source/PEGPU-app-source.LICENSES"
+test -f "$APP_LEGAL/source/PEGPU-app-source.manifest.json"
 test -f "$APP_LEGAL/source/display-runtime-source.NOTICES"
 test -f "$APP_LEGAL/source/display-runtime-source.LICENSES"
 test -f "$APP_LEGAL/source/display-runtime-source.manifest.json"
@@ -108,29 +108,29 @@ grep -F 'Package/Dependency: Go module: web-ui-app' "$APP_LEGAL/LICENSES" >/dev/
 grep -F 'Package/Dependency: Go module: gopkg.in/yaml.v3' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: SwiftPM: swiftterm' "$APP_LEGAL/LICENSES" >/dev/null
 grep -F 'Package/Dependency: SwiftPM: swift-argument-parser' "$APP_LEGAL/LICENSES" >/dev/null
-grep -F 'Component-Scope: Swift package used by vEGPU.app' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Component-Scope: Swift package used by PEGPU.app' "$APP_LEGAL/LICENSES" >/dev/null
 awk 'BEGIN{found=0; in_angle=0} /^Package\/Dependency: ANGLE$/ {in_angle=1} in_angle && /^License:/ {if ($0 == "License: BSD-3-Clause") found=1; in_angle=0} END{exit found ? 0 : 1}' "$APP_LEGAL/LICENSES"
-grep -F 'For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'For convenience, PEGPU.app Help can render external PEGPU Machine notices and licenses' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'visible architecture, repository, license, notice, and source boundary' "$APP_LEGAL/NOTICES" >/dev/null
-grep -F 'vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP_LEGAL/NOTICES" >/dev/null
-grep -F 'The app-visible LICENSES file is the consolidated license record for the installed vEGPU.app application/runtime distribution' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'PEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture' "$APP_LEGAL/NOTICES" >/dev/null
+grep -F 'The app-visible LICENSES file is the consolidated license record for the installed PEGPU.app application/runtime distribution' "$APP_LEGAL/NOTICES" >/dev/null
 grep -F 'The legal records for those source archive contents are generated next to each archive' "$APP_LEGAL/NOTICES" >/dev/null
-grep -F 'Machine/QEMU license text is not copied into this vEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
+grep -F 'Machine/QEMU license text is not copied into this PEGPU.app LICENSES file' "$APP_LEGAL/LICENSES" >/dev/null
 if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exit bad ? 0 : 1}' "$APP_LEGAL/LICENSES"; then
-  printf 'vEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks\n' >&2
+  printf 'PEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks\n' >&2
   exit 1
 fi
 if find "$APP_LEGAL/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
-  printf 'vEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files\n' >&2
+  printf 'PEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files\n' >&2
   exit 1
 fi
 if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier' "$APP_LEGAL/NOTICES"; then
-  printf 'vEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory\n' >&2
+  printf 'PEGPU.app NOTICES must be user-facing packaging/legal prose, not a raw generated audit inventory\n' >&2
   exit 1
 fi
-if grep -E '^- vEGPU Machine .*[(]missing[)]' "$APP_LEGAL/NOTICES"; then
-  printf 'vEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status\n' >&2
+if grep -E '^- PEGPU Machine .*[(]missing[)]' "$APP_LEGAL/NOTICES"; then
+  printf 'PEGPU.app NOTICES must not describe external Machine legal paths with build-time missing status\n' >&2
   exit 1
 fi
 if grep -E 'archives scanned|license/notice files harvested|license/notice files collected|Included License/Notice Files|Swift Package Pins|Go Modules|Bundle identifier|records found' "$APP_LEGAL/source/"*.NOTICES; then
@@ -151,7 +151,7 @@ set -e
 status="$(/usr/bin/csrutil status 2>/dev/null || true)"
 if ! printf '%s\n' "$status" | /usr/bin/grep -qi 'disabled'; then
   cat >&2 <<'TEXT'
-vEGPU requires System Integrity Protection (SIP) to be disabled before installation.
+PEGPU requires System Integrity Protection (SIP) to be disabled before installation.
 
 To disable SIP on Apple Silicon:
 1. Shut down the Mac.
@@ -160,8 +160,8 @@ To disable SIP on Apple Silicon:
 4. Run: csrutil disable
 5. Restart macOS and run this installer again.
 
-This is required because vEGPU Machine installs and loads an ad-hoc DriverKit
-host extension for PCIe/eGPU passthrough. Do not install vEGPU on a machine
+This is required because PEGPU Machine installs and loads an ad-hoc DriverKit
+host extension for PCIe/eGPU passthrough. Do not install PEGPU on a machine
 that holds sensitive data unless you accept that security tradeoff.
 TEXT
   exit 1
@@ -171,18 +171,18 @@ SCRIPT
   if [ "$scope" = "driver" ]; then
     cat >> "$dir/preinstall" <<'SCRIPT'
 
-VEGPU_INSTALLED_MACHINE="/Applications/vEGPU Machine.app"
-VEGPU_MACHINE_EXECUTABLE="$VEGPU_INSTALLED_MACHINE/Contents/MacOS/vEGPU Machine"
-VEGPU_DRIVER_ID="com.vegpu.machine.VFIOUserPCIDriver"
-VEGPU_DRIVER_REFRESH_MARKER="/tmp/com.vegpu.machine.pkg.driver-refresh-needed"
-VEGPU_DRIVER_LOG="/var/log/vegpu-driver-install.log"
+PEGPU_INSTALLED_MACHINE="/Applications/PEGPU Machine.app"
+PEGPU_MACHINE_EXECUTABLE="$PEGPU_INSTALLED_MACHINE/Contents/MacOS/PEGPU Machine"
+PEGPU_DRIVER_ID="com.pegpu.machine.VFIOUserPCIDriver"
+PEGPU_DRIVER_REFRESH_MARKER="/tmp/com.pegpu.machine.pkg.driver-refresh-needed"
+PEGPU_DRIVER_LOG="/var/log/pegpu-driver-install.log"
 
-rm -f "$VEGPU_DRIVER_REFRESH_MARKER"
-mkdir -p "$(dirname "$VEGPU_DRIVER_LOG")"
-touch "$VEGPU_DRIVER_LOG"
-chmod 0644 "$VEGPU_DRIVER_LOG" 2>/dev/null || true
-exec >>"$VEGPU_DRIVER_LOG" 2>&1
-echo "---- vEGPU Machine preinstall driver refresh $(date -u '+%Y-%m-%dT%H:%M:%SZ') ----"
+rm -f "$PEGPU_DRIVER_REFRESH_MARKER"
+mkdir -p "$(dirname "$PEGPU_DRIVER_LOG")"
+touch "$PEGPU_DRIVER_LOG"
+chmod 0644 "$PEGPU_DRIVER_LOG" 2>/dev/null || true
+exec >>"$PEGPU_DRIVER_LOG" 2>&1
+echo "---- PEGPU Machine preinstall driver refresh $(date -u '+%Y-%m-%dT%H:%M:%SZ') ----"
 
 run_with_timeout() {
   local seconds="$1"
@@ -223,18 +223,18 @@ run_as_console_user_with_timeout() {
 }
 
 driver_installed() {
-  /usr/bin/systemextensionsctl list 2>/dev/null | /usr/bin/grep -Fq "$VEGPU_DRIVER_ID"
+  /usr/bin/systemextensionsctl list 2>/dev/null | /usr/bin/grep -Fq "$PEGPU_DRIVER_ID"
 }
 
 force_uninstall_driver() {
-  /usr/bin/systemextensionsctl uninstall - "$VEGPU_DRIVER_ID"
+  /usr/bin/systemextensionsctl uninstall - "$PEGPU_DRIVER_ID"
 }
 
-touch "$VEGPU_DRIVER_REFRESH_MARKER"
-echo "vEGPU DriverKit component selected. Preparing macOS DriverKit extension before activation."
-if [ -x "$VEGPU_MACHINE_EXECUTABLE" ]; then
-  echo "Existing vEGPU Machine app found. Asking it to deactivate the current driver."
-  if run_as_console_user_with_timeout 20 "$VEGPU_MACHINE_EXECUTABLE" --driver-deactivate; then
+touch "$PEGPU_DRIVER_REFRESH_MARKER"
+echo "PEGPU DriverKit component selected. Preparing macOS DriverKit extension before activation."
+if [ -x "$PEGPU_MACHINE_EXECUTABLE" ]; then
+  echo "Existing PEGPU Machine app found. Asking it to deactivate the current driver."
+  if run_as_console_user_with_timeout 20 "$PEGPU_MACHINE_EXECUTABLE" --driver-deactivate; then
     echo "Existing macOS driver deactivation request completed."
   else
     echo "Graceful macOS driver deactivation failed or timed out."
@@ -246,12 +246,12 @@ if [ -x "$VEGPU_MACHINE_EXECUTABLE" ]; then
     fi
   fi
 else
-  echo "Existing vEGPU Machine app is missing."
+  echo "Existing PEGPU Machine app is missing."
   if driver_installed; then
     echo "Driver extension is still listed without its owning app; attempting forced system extension uninstall."
     force_uninstall_driver || echo "Forced macOS driver uninstall did not complete; continuing package replacement." >&2
   else
-    echo "No existing vEGPU DriverKit extension is listed; no preinstall driver removal needed."
+    echo "No existing PEGPU DriverKit extension is listed; no preinstall driver removal needed."
   fi
 fi
 SCRIPT
@@ -283,22 +283,22 @@ clear_app_attrs() {
   done
 }
 
-clear_app_attrs "/Applications/vEGPU.app"
-clear_app_attrs "/Applications/vEGPU Machine.app"
+clear_app_attrs "/Applications/PEGPU.app"
+clear_app_attrs "/Applications/PEGPU Machine.app"
 SCRIPT
 
   if [ "$scope" = "driver" ]; then
     cat >> "$dir/postinstall" <<'SCRIPT'
 
-VEGPU_MACHINE_EXECUTABLE="/Applications/vEGPU Machine.app/Contents/MacOS/vEGPU Machine"
-VEGPU_DRIVER_REFRESH_MARKER="/tmp/com.vegpu.machine.pkg.driver-refresh-needed"
-VEGPU_DRIVER_LOG="/var/log/vegpu-driver-install.log"
-VEGPU_DRIVER_ID="com.vegpu.machine.VFIOUserPCIDriver"
-mkdir -p "$(dirname "$VEGPU_DRIVER_LOG")"
-touch "$VEGPU_DRIVER_LOG"
-chmod 0644 "$VEGPU_DRIVER_LOG" 2>/dev/null || true
-exec >>"$VEGPU_DRIVER_LOG" 2>&1
-echo "---- vEGPU Machine postinstall driver activation $(date -u '+%Y-%m-%dT%H:%M:%SZ') ----"
+PEGPU_MACHINE_EXECUTABLE="/Applications/PEGPU Machine.app/Contents/MacOS/PEGPU Machine"
+PEGPU_DRIVER_REFRESH_MARKER="/tmp/com.pegpu.machine.pkg.driver-refresh-needed"
+PEGPU_DRIVER_LOG="/var/log/pegpu-driver-install.log"
+PEGPU_DRIVER_ID="com.pegpu.machine.VFIOUserPCIDriver"
+mkdir -p "$(dirname "$PEGPU_DRIVER_LOG")"
+touch "$PEGPU_DRIVER_LOG"
+chmod 0644 "$PEGPU_DRIVER_LOG" 2>/dev/null || true
+exec >>"$PEGPU_DRIVER_LOG" 2>&1
+echo "---- PEGPU Machine postinstall driver activation $(date -u '+%Y-%m-%dT%H:%M:%SZ') ----"
 
 run_with_timeout() {
   local seconds="$1"
@@ -339,29 +339,29 @@ run_as_console_user_with_timeout() {
 }
 
 log_driver_status() {
-  echo "Current macOS system extension state for $VEGPU_DRIVER_ID:"
-  if /usr/bin/systemextensionsctl list 2>/dev/null | /usr/bin/grep -F "$VEGPU_DRIVER_ID"; then
+  echo "Current macOS system extension state for $PEGPU_DRIVER_ID:"
+  if /usr/bin/systemextensionsctl list 2>/dev/null | /usr/bin/grep -F "$PEGPU_DRIVER_ID"; then
     return 0
   fi
   echo "Driver extension is not listed yet."
 }
 
-if [ ! -f "$VEGPU_DRIVER_REFRESH_MARKER" ]; then
-  echo "vEGPU Machine driver refresh was not requested; leaving existing driver state unchanged."
-elif [ -x "$VEGPU_MACHINE_EXECUTABLE" ]; then
-  echo "New vEGPU Machine app is installed. Asking it to activate the DriverKit extension."
-  if run_as_console_user_with_timeout 45 "$VEGPU_MACHINE_EXECUTABLE" --driver-activate; then
-    echo "vEGPU Machine macOS driver activation request submitted."
+if [ ! -f "$PEGPU_DRIVER_REFRESH_MARKER" ]; then
+  echo "PEGPU Machine driver refresh was not requested; leaving existing driver state unchanged."
+elif [ -x "$PEGPU_MACHINE_EXECUTABLE" ]; then
+  echo "New PEGPU Machine app is installed. Asking it to activate the DriverKit extension."
+  if run_as_console_user_with_timeout 45 "$PEGPU_MACHINE_EXECUTABLE" --driver-activate; then
+    echo "PEGPU Machine macOS driver activation request submitted."
     log_driver_status || true
   else
-    echo "vEGPU Machine macOS driver activation request failed. Open vEGPU Machine or vEGPU.app Runtime > Install Driver and retry after approving the extension in System Settings."
+    echo "PEGPU Machine macOS driver activation request failed. Open PEGPU Machine or PEGPU.app Runtime > Install Driver and retry after approving the extension in System Settings."
     log_driver_status || true
   fi
 else
-  echo "vEGPU Machine executable is missing after installation: $VEGPU_MACHINE_EXECUTABLE" >&2
+  echo "PEGPU Machine executable is missing after installation: $PEGPU_MACHINE_EXECUTABLE" >&2
   log_driver_status || true
 fi
-rm -f "$VEGPU_DRIVER_REFRESH_MARKER"
+rm -f "$PEGPU_DRIVER_REFRESH_MARKER"
 SCRIPT
   fi
 
@@ -403,15 +403,15 @@ with open(plist_path, "wb") as handle:
 PY
 }
 
-APP_COMPONENTS_PLIST="$WORK/vEGPU-app-components.plist"
-MACHINE_COMPONENTS_PLIST="$WORK/vEGPU-machine-components.plist"
+APP_COMPONENTS_PLIST="$WORK/PEGPU-app-components.plist"
+MACHINE_COMPONENTS_PLIST="$WORK/PEGPU-machine-components.plist"
 write_nonrelocatable_component_plist "$STAGE_APP" "$APP_COMPONENTS_PLIST"
 if [ "$INCLUDE_MACHINE" = "1" ]; then
   write_nonrelocatable_component_plist "$STAGE_MACHINE" "$MACHINE_COMPONENTS_PLIST"
 fi
 
-if [ -f "$ROOT/Resources/Assets/vEGPU-logo-transparent.png" ]; then
-  cp "$ROOT/Resources/Assets/vEGPU-logo-transparent.png" "$RESOURCES/vEGPU-logo-transparent.png"
+if [ -f "$ROOT/Resources/Assets/PEGPU-logo-transparent.png" ]; then
+  cp "$ROOT/Resources/Assets/PEGPU-logo-transparent.png" "$RESOURCES/PEGPU-logo-transparent.png"
 fi
 
 cat > "$RESOURCES/WELCOME.html" <<'HTML'
@@ -437,43 +437,43 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
 </head>
 <body>
   <div class="top">
-    <img src="vEGPU-logo-transparent.png" alt="">
+    <img src="PEGPU-logo-transparent.png" alt="">
     <div>
-      <h1>vEGPU</h1>
+      <h1>PEGPU</h1>
       <p>NVIDIA* eGPU passthrough and AI runtime orchestration for Apple Silicon Macs.</p>
     </div>
   </div>
-  <p class="footnote">* Compatibility and purpose labels only. vEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or any named company, protocol, project, or maintainer.</p>
+  <p class="footnote">* Compatibility and purpose labels only. PEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or any named company, protocol, project, or maintainer.</p>
 
   <h2>Important: SIP Must Be Disabled</h2>
-  <p class="warn">System Integrity Protection must be disabled before installing vEGPU Machine's DriverKit passthrough component. There is no useful installation path with SIP enabled: this installer checks SIP before installation and will stop on a SIP-enabled Mac.</p>
-  <p>vEGPU Machine uses an ad-hoc DriverKit system extension for PCIe/eGPU passthrough. Disabling SIP is a serious macOS security tradeoff.</p>
+  <p class="warn">System Integrity Protection must be disabled before installing PEGPU Machine's DriverKit passthrough component. There is no useful installation path with SIP enabled: this installer checks SIP before installation and will stop on a SIP-enabled Mac.</p>
+  <p>PEGPU Machine uses an ad-hoc DriverKit system extension for PCIe/eGPU passthrough. Disabling SIP is a serious macOS security tradeoff.</p>
   <p>To disable SIP on Apple Silicon: shut down the Mac, hold the power button until Startup Options appear, open Options &gt; Utilities &gt; Terminal, run <span class="code">csrutil disable</span>, restart macOS, and run this installer again.</p>
 
   <h2>What This Installer Installs</h2>
   <p>This installer places two related applications in <strong>/Applications</strong> and keeps their license, source, and runtime boundary visible.</p>
-  <h3>vEGPU.app</h3>
+  <h3>PEGPU.app</h3>
   <p>Apache-2.0 Swift/AppKit launcher and host-side application. It contains the UTM-derived embedded SPICE GUI display side, ANGLE/CocoaSpice integration, AI runtime controls, local routing helpers, app-side orchestration, notices, and app-side source/provenance archives.</p>
-  <p>Repository: <a href="https://github.com/openresearchtools/vEGPU">https://github.com/openresearchtools/vEGPU</a></p>
-  <h3>vEGPU Machine.app</h3>
+  <p>Repository: <a href="https://github.com/openresearchtools/PEGPU">https://github.com/openresearchtools/PEGPU</a></p>
+  <h3>PEGPU Machine.app</h3>
   <p>Separate QEMU/VFIO/DriverKit virtual-machine runtime and macOS driver host. It contains the Machine-side passthrough mechanics, QEMU-derived GPL source bundles, firmware/runtime payloads, guest tools, guest-driver materials, DriverKit activation helpers, and Machine-side notices.</p>
-  <p>Repository: <a href="https://github.com/openresearchtools/vEGPU-machine">https://github.com/openresearchtools/vEGPU-machine</a></p>
+  <p>Repository: <a href="https://github.com/openresearchtools/PEGPU-machine">https://github.com/openresearchtools/PEGPU-machine</a></p>
 
   <h2>Architecture and Source Boundary</h2>
-  <p class="boundary">vEGPU uses a stricter form of the UTM / UTM-QEMU-style separation: the frontend, AI/runtime control surface, display client, routing, and orchestration live in vEGPU.app, while the GPL-covered Machine/QEMU VM runtime, VFIO, DriverKit, firmware, and guest-driver mechanics live in the separate vEGPU Machine.app.</p>
-  <p>For convenience, vEGPU.app Help can render external vEGPU Machine notices and licenses from the installed vEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into its own bundle.</p>
+  <p class="boundary">PEGPU uses a stricter form of the UTM / UTM-QEMU-style separation: the frontend, AI/runtime control surface, display client, routing, and orchestration live in PEGPU.app, while the GPL-covered Machine/QEMU VM runtime, VFIO, DriverKit, firmware, and guest-driver mechanics live in the separate PEGPU Machine.app.</p>
+  <p>For convenience, PEGPU.app Help can render external PEGPU Machine notices and licenses from the installed PEGPU Machine.app. The Help menu marks those Machine-owned rows as EXTERNAL. PEGPU.app does not copy Machine legal text into its own bundle.</p>
   <p>The embedded display side is partially based on UTM app work. The Machine side builds on Scott J. Goldman's scottjg/qemu-vfio-apple as the main Apple VFIO/DriverKit/QEMU base, with additional QEMU-side visual-runtime work adapted from UTM QEMU and UTM virglrenderer.</p>
 
   <h2>Installation Behavior</h2>
-  <p>The Installation Type screen shows separate choices for vEGPU.app and vEGPU Machine.app. DriverKit extension refresh/activation is bundled under the Machine choice.</p>
-  <p>For combined releases, vEGPU Machine.app is selected by default when it is missing or older than the installer payload. DriverKit refresh/activation follows the Machine.app choice and is not run when the Machine.app choice is not selected.</p>
-  <p>If the installed vEGPU Machine app is the same or newer version, the Machine and DriverKit choices remain visible but are not selected by default.</p>
-  <p>When DriverKit refresh/activation is selected, the installer attempts to ask the existing vEGPU Machine app to deactivate the old DriverKit extension when possible. Forced removal is used only when an old extension is still listed and graceful deactivation is unavailable or did not complete.</p>
-  <p>The installer then asks the installed vEGPU Machine.app to submit a fresh DriverKit activation request and writes driver-install diagnostics to <span class="code">/var/log/vegpu-driver-install.log</span>.</p>
+  <p>The Installation Type screen shows separate choices for PEGPU.app and PEGPU Machine.app. DriverKit extension refresh/activation is bundled under the Machine choice.</p>
+  <p>For combined releases, PEGPU Machine.app is selected by default when it is missing or older than the installer payload. DriverKit refresh/activation follows the Machine.app choice and is not run when the Machine.app choice is not selected.</p>
+  <p>If the installed PEGPU Machine app is the same or newer version, the Machine and DriverKit choices remain visible but are not selected by default.</p>
+  <p>When DriverKit refresh/activation is selected, the installer attempts to ask the existing PEGPU Machine app to deactivate the old DriverKit extension when possible. Forced removal is used only when an old extension is still listed and graceful deactivation is unavailable or did not complete.</p>
+  <p>The installer then asks the installed PEGPU Machine.app to submit a fresh DriverKit activation request and writes driver-install diagnostics to <span class="code">/var/log/pegpu-driver-install.log</span>.</p>
   <p>macOS may still require approval in System Settings and/or a restart before the driver becomes active. This installer does not bypass Apple's system-extension approval flow.</p>
 
   <h2>More Information</h2>
-  <p class="links">Project website: <a href="https://vegpu.com">https://vegpu.com</a><br>Main app repository: <a href="https://github.com/openresearchtools/vEGPU">https://github.com/openresearchtools/vEGPU</a><br>Machine repository: <a href="https://github.com/openresearchtools/vEGPU-machine">https://github.com/openresearchtools/vEGPU-machine</a></p>
+  <p class="links">Project website: <a href="https://pegpu.com">https://pegpu.com</a><br>Main app repository: <a href="https://github.com/openresearchtools/PEGPU">https://github.com/openresearchtools/PEGPU</a><br>Machine repository: <a href="https://github.com/openresearchtools/PEGPU-machine">https://github.com/openresearchtools/PEGPU-machine</a></p>
 </body>
 </html>
 HTML
@@ -483,53 +483,53 @@ Finished.
 
 If DriverKit extension refresh/activation was selected, the installer attempted
 to deactivate the old macOS DriverKit extension and submit the new driver
-activation request through the installed vEGPU Machine.app. macOS may still
+activation request through the installed PEGPU Machine.app. macOS may still
 require approval in System Settings.
 
 Driver install log:
-/var/log/vegpu-driver-install.log
+/var/log/pegpu-driver-install.log
 
 If the Machine and DriverKit choice was selected, choose Restart to reboot now,
-or quit Installer and reboot later. Restart before launching vEGPU with eGPUs
-attached. If the driver still shows as pending after approval, open vEGPU.app
-and use Runtime > Install Driver to retry the same vEGPU Machine helper path.
+or quit Installer and reboot later. Restart before launching PEGPU with eGPUs
+attached. If the driver still shows as pending after approval, open PEGPU.app
+and use Runtime > Install Driver to retry the same PEGPU Machine helper path.
 
-Open vEGPU.app Help for app notices, app licenses, VM install notices, and
-external vEGPU Machine notices/licenses rendered from the installed
-vEGPU Machine.app. Those legal files list the installed source archive
+Open PEGPU.app Help for app notices, app licenses, VM install notices, and
+external PEGPU Machine notices/licenses rendered from the installed
+PEGPU Machine.app. Those legal files list the installed source archive
 locations.
 The Help menu marks Machine-owned legal rows as EXTERNAL.
 TEXT
 
 cat > "$RESOURCES/LICENSE.txt" <<'TEXT'
-vEGPU License, Source, and Third-Party Notice
+PEGPU License, Source, and Third-Party Notice
 =============================================
 
-This installer installs vEGPU and, when selected or included by the package,
-vEGPU Machine. They are related applications, but they are distributed with a
+This installer installs PEGPU and, when selected or included by the package,
+PEGPU Machine. They are related applications, but they are distributed with a
 visible architecture, repository, license, notice, and source boundary.
 
 Project website:
-https://vegpu.com
+https://pegpu.com
 
 
-1. vEGPU.app
+1. PEGPU.app
 ------------
 
-vEGPU.app is the host-side macOS application. It provides the Swift/AppKit
+PEGPU.app is the host-side macOS application. It provides the Swift/AppKit
 launcher, UTM-derived embedded SPICE display client, ANGLE/CocoaSpice display
 integration, local AI/runtime controls, model/runtime routing helpers,
 file/port/terminal UI, sidecar metrics, local networking helpers, and
 app-side orchestration.
 
 Repository:
-https://github.com/openresearchtools/vEGPU
+https://github.com/openresearchtools/PEGPU
 
-The vEGPU.app application code is distributed under the Apache License,
+The PEGPU.app application code is distributed under the Apache License,
 Version 2.0, except where an individual file or bundled component states a
 different license.
 
-vEGPU.app bundles and/or builds against app-side runtime components including
+PEGPU.app bundles and/or builds against app-side runtime components including
 SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work,
 Swift package dependencies, Go helper dependencies, and related support
 libraries. Those components keep their own license terms, including
@@ -539,17 +539,17 @@ and component-level notices remain authoritative.
 Installed app-side notices, runtime/distribution license records, source
 archives, and source-archive legal sidecars are available at:
 
-/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
+/Applications/PEGPU.app/Contents/Resources/PEGPURoot/legal/generated
 
-Key installed vEGPU.app legal/source files:
+Key installed PEGPU.app legal/source files:
 
 - NOTICES
 - LICENSES
 - GUEST-VM-INSTALL-NOTICES.md
-- source/vEGPU-app-source.tar.gz
-- source/vEGPU-app-source.NOTICES
-- source/vEGPU-app-source.LICENSES
-- source/vEGPU-app-source.manifest.json
+- source/PEGPU-app-source.tar.gz
+- source/PEGPU-app-source.NOTICES
+- source/PEGPU-app-source.LICENSES
+- source/PEGPU-app-source.manifest.json
 - source/display-runtime-source.tar.gz
 - source/display-runtime-source.NOTICES
 - source/display-runtime-source.LICENSES
@@ -557,7 +557,7 @@ Key installed vEGPU.app legal/source files:
 
 NOTICES explains the app/Machine split and where each app's legal and source
 records live. LICENSES is the consolidated license record for the installed
-vEGPU.app application/runtime distribution. Source archives are broader than
+PEGPU.app application/runtime distribution. Source archives are broader than
 the runtime closure: they can include upstream source trees, build recipes,
 backend implementations, generated inputs, tests, examples, and source-only
 build tools used for provenance or reproducible builds. The legal records for
@@ -565,11 +565,11 @@ those archive contents are generated next to each archive as NOTICES, LICENSES,
 and manifest sidecars.
 GUEST-VM-INSTALL-NOTICES.md describes Debian APT, GUI, DMA driver, and optional
 NVIDIA/CUDA install activity inside the Linux VM.
-The vEGPU.app Help menu also opens the installed legal files, which list the
+The PEGPU.app Help menu also opens the installed legal files, which list the
 bundled source/provenance archive locations.
-For convenience, vEGPU.app Help can render external vEGPU Machine notices and
-licenses from the installed vEGPU Machine.app. The Help menu marks those
-Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into
+For convenience, PEGPU.app Help can render external PEGPU Machine notices and
+licenses from the installed PEGPU Machine.app. The Help menu marks those
+Machine-owned rows as EXTERNAL. PEGPU.app does not copy Machine legal text into
 its own bundle.
 
 
@@ -591,18 +591,18 @@ TurboQuant llama.cpp-family runtime option:
 https://github.com/TheTom/llama-cpp-turboquant
 
 
-2. vEGPU Machine.app
+2. PEGPU Machine.app
 --------------------
 
-vEGPU Machine.app is the separate VM, DriverKit, VFIO, QEMU, firmware, and
-guest-tools runtime application used by vEGPU virtual machines. It owns the
+PEGPU Machine.app is the separate VM, DriverKit, VFIO, QEMU, firmware, and
+guest-tools runtime application used by PEGPU virtual machines. It owns the
 Machine-side passthrough mechanics and carries its own notices, license texts,
 and source bundles.
 
 Repository:
-https://github.com/openresearchtools/vEGPU-machine
+https://github.com/openresearchtools/PEGPU-machine
 
-vEGPU Machine includes and packages Machine-side components including patched
+PEGPU Machine includes and packages Machine-side components including patched
 QEMU, the Apple VFIO backend, the DriverKit host application, the
 VFIOUserPCIDriver DriverKit system extension, the embedded qemu-vfio-apple
 launcher/CLI, QEMU firmware and runtime payloads, bundled QEMU tools and
@@ -613,21 +613,21 @@ release.
 Installed Machine-side notices, license texts, and source bundles are
 available inside:
 
-/Applications/vEGPU Machine.app/Contents/Resources
+/Applications/PEGPU Machine.app/Contents/Resources
 
-Key installed vEGPU Machine legal/source files:
+Key installed PEGPU Machine legal/source files:
 
 - ThirdPartyNotices/NOTICES
 - ThirdPartyNotices/LICENSES
-- SourceBundles/vEGPU-Machine-<version>-source.tar.gz
+- SourceBundles/PEGPU-Machine-<version>-source.tar.gz
 - guest-tools/source/apple-dma-<version>.tar.gz
 
-For convenience, vEGPU.app Help can render these external vEGPU Machine notices
-and licenses from the installed vEGPU Machine.app. The Help menu marks those
-Machine-owned rows as EXTERNAL. vEGPU.app does not copy Machine legal text into
+For convenience, PEGPU.app Help can render these external PEGPU Machine notices
+and licenses from the installed PEGPU Machine.app. The Help menu marks those
+Machine-owned rows as EXTERNAL. PEGPU.app does not copy Machine legal text into
 its own bundle.
 
-vEGPU Machine is QEMU-derived and is distributed from a patch stack over
+PEGPU Machine is QEMU-derived and is distributed from a patch stack over
 recorded source layers. The source tree produced by that patch stack is
 GPL-covered QEMU-derived source unless an individual file, component, or patch
 hunk states a more specific license. QEMU as a whole is released under the
@@ -635,17 +635,17 @@ GNU General Public License, version 2. Individual files and bundled components
 may carry GPL, LGPL, BSD-style, MIT-style, UBDL, or other notices; those
 file-level and component-level notices remain authoritative.
 
-The recorded vEGPU Machine source layers are:
+The recorded PEGPU Machine source layers are:
 
 1. A recorded vanilla QEMU base.
 2. Scott J. Goldman's scottjg/qemu-vfio-apple wip layer.
 3. QEMU-side visual-runtime work adapted from utmapp/qemu and
    utmapp/virglrenderer.
-4. OpenResearchTools vEGPU Machine integration, packaging, guest-tools,
+4. OpenResearchTools PEGPU Machine integration, packaging, guest-tools,
    installer, notice, and release layers.
 
 Scott J. Goldman's scottjg/qemu-vfio-apple is the main Apple VFIO / DriverKit
-/ QEMU passthrough base for vEGPU Machine. vEGPU Machine keeps that provenance
+/ QEMU passthrough base for PEGPU Machine. PEGPU Machine keeps that provenance
 visible because Scott's project introduced the core Apple Silicon PCIe/eGPU
 passthrough structure: a macOS DriverKit host app and dext, QEMU-side Apple
 VFIO backend, embedded launcher, and guest-side apple_dma DMA companion driver.
@@ -668,22 +668,22 @@ https://gitlab.com/qemu-project/qemu
 License and architecture boundary
 ---------------------------------
 
-vEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture: the
+PEGPU uses a stricter form of the UTM / UTM-QEMU-style architecture: the
 frontend, AI/runtime control surface, display client, routing, and
 orchestration app is packaged separately from the GPL-covered Machine/QEMU
 VM/runtime stack. The two apps have separate repositories, notices, source
 archives, and runtime responsibilities.
 
-- vEGPU.app contains the Apache-licensed launcher, GUI, app-side display
+- PEGPU.app contains the Apache-licensed launcher, GUI, app-side display
   client, AI/runtime controls, local routing helpers, and orchestration code.
-- vEGPU Machine.app contains the GPL-covered QEMU-derived VM runtime,
+- PEGPU Machine.app contains the GPL-covered QEMU-derived VM runtime,
   Apple VFIO backend, DriverKit host extension, firmware/runtime payloads,
   and guest-driver packaging.
 
 The combined installer may install both applications into /Applications, but
 the repositories, notices, source archives, and runtime responsibilities remain
 separate. GPL-covered QEMU-derived code stays on the Machine side. App-side
-launcher, display, AI, and orchestration work stays in vEGPU.app unless an
+launcher, display, AI, and orchestration work stays in PEGPU.app unless an
 individual bundled component states otherwise.
 
 The installed license texts are the controlling terms for each app and bundled
@@ -694,7 +694,7 @@ stated in those licenses.
 No affiliation
 --------------
 
-vEGPU and vEGPU Machine are not endorsed by, sponsored by, or affiliated with
+PEGPU and PEGPU Machine are not endorsed by, sponsored by, or affiliated with
 Apple, NVIDIA, Fabrice Bellard, the QEMU project, Scott J. Goldman,
 scottjg/qemu-vfio-apple, UTM, utmapp/qemu, utmapp/virglrenderer, llama.cpp,
 llama-swap, GOST, TurboQuant, or their maintainers.
@@ -715,26 +715,26 @@ if [ "$INCLUDE_MACHINE" != "1" ]; then
 </head>
 <body>
   <div class="top">
-    <img src="vEGPU-logo-transparent.png" alt="">
+    <img src="PEGPU-logo-transparent.png" alt="">
     <div>
-      <h1>vEGPU</h1>
-      <p>This artifact installs vEGPU.app.</p>
+      <h1>PEGPU</h1>
+      <p>This artifact installs PEGPU.app.</p>
     </div>
   </div>
-  <p>Combined public releases also install vEGPU Machine.app, the QEMU/VFIO/DriverKit virtual machine runtime used by vEGPU.</p>
-  <p>More information: <a href="https://vegpu.com">vegpu.com</a>, <a href="https://github.com/openresearchtools/vEGPU">openresearchtools/vEGPU</a>, <a href="https://github.com/openresearchtools/vEGPU-machine">openresearchtools/vEGPU-machine</a>.</p>
-  <p style="color:#667085;font-size:11px">* Compatibility and purpose labels only. vEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or any named company, protocol, project, or maintainer.</p>
+  <p>Combined public releases also install PEGPU Machine.app, the QEMU/VFIO/DriverKit virtual machine runtime used by PEGPU.</p>
+  <p>More information: <a href="https://pegpu.com">pegpu.com</a>, <a href="https://github.com/openresearchtools/PEGPU">openresearchtools/PEGPU</a>, <a href="https://github.com/openresearchtools/PEGPU-machine">openresearchtools/PEGPU-machine</a>.</p>
+  <p style="color:#667085;font-size:11px">* Compatibility and purpose labels only. PEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or any named company, protocol, project, or maintainer.</p>
 </body>
 </html>
 HTML
 
   cat > "$RESOURCES/LICENSE.txt" <<'TEXT'
-vEGPU installs vEGPU.app.
+PEGPU installs PEGPU.app.
 
-vEGPU.app is the Swift/AppKit application and app-side display client.
+PEGPU.app is the Swift/AppKit application and app-side display client.
 Notices and source archives are installed inside:
 
-/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
+/Applications/PEGPU.app/Contents/Resources/PEGPURoot/legal/generated
 
 Canonical installed legal files:
 
@@ -742,22 +742,22 @@ Canonical installed legal files:
 - LICENSES
 - GUEST-VM-INSTALL-NOTICES.md
 
-This artifact package does not include vEGPU Machine.app. Combined releases
-include vEGPU Machine.app and its separate QEMU/VFIO/DriverKit source bundles.
-When vEGPU Machine.app is installed, vEGPU.app Help can render external vEGPU
-Machine notices and licenses from the installed vEGPU Machine.app without
-copying those Machine files into vEGPU.app.
+This artifact package does not include PEGPU Machine.app. Combined releases
+include PEGPU Machine.app and its separate QEMU/VFIO/DriverKit source bundles.
+When PEGPU Machine.app is installed, PEGPU.app Help can render external PEGPU
+Machine notices and licenses from the installed PEGPU Machine.app without
+copying those Machine files into PEGPU.app.
 The Help menu marks Machine-owned legal rows as EXTERNAL.
 
-The installed license texts are the controlling terms for vEGPU.app and bundled
+The installed license texts are the controlling terms for PEGPU.app and bundled
 app-side components, including any disclaimer of warranty and limitation of
 liability stated in those licenses.
 
 Project links:
 
-- https://vegpu.com
-- https://github.com/openresearchtools/vEGPU
-- https://github.com/openresearchtools/vEGPU-machine
+- https://pegpu.com
+- https://github.com/openresearchtools/PEGPU
+- https://github.com/openresearchtools/PEGPU-machine
 TEXT
 fi
 
@@ -766,9 +766,9 @@ pkgbuild \
   --component-plist "$APP_COMPONENTS_PLIST" \
   --scripts "$SCRIPTS_APP" \
   --install-location / \
-  --identifier com.vegpu.pkg.app \
+  --identifier com.pegpu.pkg.app \
   --version "$VERSION" \
-  "$COMPONENTS/vEGPU-app.pkg" >/dev/null
+  "$COMPONENTS/PEGPU-app.pkg" >/dev/null
 
 if [ "$INCLUDE_MACHINE" = "1" ]; then
   pkgbuild \
@@ -776,22 +776,22 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
     --component-plist "$MACHINE_COMPONENTS_PLIST" \
     --scripts "$SCRIPTS_MACHINE" \
     --install-location / \
-    --identifier com.vegpu.pkg.machine \
+    --identifier com.pegpu.pkg.machine \
     --version "$VERSION" \
-    "$COMPONENTS/vEGPU-machine.pkg" >/dev/null
+    "$COMPONENTS/PEGPU-machine.pkg" >/dev/null
   pkgbuild \
     --nopayload \
     --scripts "$SCRIPTS_DRIVER" \
-    --identifier com.vegpu.pkg.driver \
+    --identifier com.pegpu.pkg.driver \
     --version "$VERSION" \
-    "$COMPONENTS/vEGPU-driver.pkg" >/dev/null
+    "$COMPONENTS/PEGPU-driver.pkg" >/dev/null
 fi
 
 if [ "$INCLUDE_MACHINE" = "1" ]; then
   cat > "$WORK/Distribution.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-  <title>vEGPU</title>
+  <title>PEGPU</title>
   <options customize="always" require-scripts="true" rootVolumeOnly="true"/>
   <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
   <installation-check script="sipDisabled()"/>
@@ -806,7 +806,7 @@ function commandText(result) {
   return String(result);
 }
 
-var driverIdentifier = "com.vegpu.machine.VFIOUserPCIDriver";
+var driverIdentifier = "com.pegpu.machine.VFIOUserPCIDriver";
 var cachedDriverState = null;
 
 function safeRunText() {
@@ -833,7 +833,7 @@ function sipDisabledState() {
 function sipDisabled() {
   if (sipDisabledState()) { return true; }
   my.result.title = "System Integrity Protection must be disabled";
-  my.result.message = "vEGPU Machine uses an ad-hoc DriverKit system extension for PCIe/eGPU passthrough. There is no useful installation path with SIP enabled.\n\nTo disable SIP on Apple Silicon:\n1. Shut down the Mac.\n2. Hold the power button until Startup Options appear.\n3. Open Options > Utilities > Terminal.\n4. Run: csrutil disable\n5. Restart macOS.\n6. Run this installer again.";
+  my.result.message = "PEGPU Machine uses an ad-hoc DriverKit system extension for PCIe/eGPU passthrough. There is no useful installation path with SIP enabled.\n\nTo disable SIP on Apple Silicon:\n1. Shut down the Mac.\n2. Hold the power button until Startup Options appear.\n3. Open Options > Utilities > Terminal.\n4. Run: csrutil disable\n5. Restart macOS.\n6. Run this installer again.";
   return false;
 }
 
@@ -862,7 +862,7 @@ function driverState() {
     return cachedDriverState;
   }
 
-  var registeredBundle = shellText("/usr/bin/find /Library/SystemExtensions -maxdepth 6 -name 'com.vegpu.machine.VFIOUserPCIDriver.dext' -print -quit 2>/dev/null || true");
+  var registeredBundle = shellText("/usr/bin/find /Library/SystemExtensions -maxdepth 6 -name 'com.pegpu.machine.VFIOUserPCIDriver.dext' -print -quit 2>/dev/null || true");
   if (textContainsDriver(registeredBundle)) {
     cachedDriverState = "installed";
     return cachedDriverState;
@@ -890,7 +890,7 @@ function driverStatusUnknown() {
 }
 
 function machineNeedsInstall() {
-  var plistPath = "/Applications/vEGPU Machine.app/Contents/Info.plist";
+  var plistPath = "/Applications/PEGPU Machine.app/Contents/Info.plist";
   if (!system.files.fileExistsAtPath(plistPath)) {
     return true;
   }
@@ -914,38 +914,38 @@ function driverNeedsRefresh() {
   <license file="LICENSE.txt" mime-type="text/plain"/>
   <conclusion file="CONCLUSION.txt" mime-type="text/plain"/>
   <choices-outline>
-    <line choice="com.vegpu.status.sip"/>
-    <line choice="com.vegpu.status.machine.current"/>
-    <line choice="com.vegpu.status.machine.needs"/>
-    <line choice="com.vegpu.status.driver.installed"/>
-    <line choice="com.vegpu.status.driver.missing"/>
-    <line choice="com.vegpu.status.driver.unknown"/>
-    <line choice="com.vegpu.install.app"/>
-    <line choice="com.vegpu.install.machine"/>
+    <line choice="com.pegpu.status.sip"/>
+    <line choice="com.pegpu.status.machine.current"/>
+    <line choice="com.pegpu.status.machine.needs"/>
+    <line choice="com.pegpu.status.driver.installed"/>
+    <line choice="com.pegpu.status.driver.missing"/>
+    <line choice="com.pegpu.status.driver.unknown"/>
+    <line choice="com.pegpu.install.app"/>
+    <line choice="com.pegpu.install.machine"/>
   </choices-outline>
-  <choice id="com.vegpu.status.sip" title="SIP disabled" description="System Integrity Protection is disabled, so the DriverKit passthrough installer can continue. If SIP were enabled, this installer would stop before installation and show the Recovery instructions." start_selected="true" start_enabled="false" start_visible="true"/>
-  <choice id="com.vegpu.status.machine.current" title="vEGPU Machine.app already installed/current" description="The installed vEGPU Machine.app is the same version or newer than this package, so the Machine app file payload is not selected by default." start_selected="true" start_enabled="false" start_visible="!machineNeedsInstall()"/>
-  <choice id="com.vegpu.status.machine.needs" title="vEGPU Machine.app missing or older" description="vEGPU Machine.app is missing or older than this package, so the Machine app file payload is selected by default." start_selected="false" start_enabled="false" start_visible="machineNeedsInstall()"/>
-  <choice id="com.vegpu.status.driver.installed" title="DriverKit extension installed" description="Installer detected com.vegpu.machine.VFIOUserPCIDriver from systemextensionsctl or the registered /Library/SystemExtensions DriverKit bundle. DriverKit refresh runs only when the vEGPU Machine.app choice is selected." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
-  <choice id="com.vegpu.status.driver.missing" title="DriverKit extension not installed" description="Installer read the current DriverKit extension list and did not find com.vegpu.machine.VFIOUserPCIDriver. vEGPU Machine.app is selected so the installer can install or activate the DriverKit extension." start_selected="false" start_enabled="false" start_visible="driverStatusKnownMissing()"/>
-  <choice id="com.vegpu.status.driver.unknown" title="DriverKit extension status unavailable" description="Installer could not read DriverKit state on this screen. Leave vEGPU Machine.app unselected to keep the current driver state, or select it to force DriverKit refresh/activation. The install scripts log direct systemextensionsctl status during installation." start_selected="false" start_enabled="false" start_visible="driverStatusUnknown()"/>
-  <choice id="com.vegpu.install.app" title="vEGPU.app" description="Required main application installed in /Applications. Includes the launcher, GUI, app-side display client, AI/runtime controls, notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
-    <pkg-ref id="com.vegpu.pkg.app"/>
+  <choice id="com.pegpu.status.sip" title="SIP disabled" description="System Integrity Protection is disabled, so the DriverKit passthrough installer can continue. If SIP were enabled, this installer would stop before installation and show the Recovery instructions." start_selected="true" start_enabled="false" start_visible="true"/>
+  <choice id="com.pegpu.status.machine.current" title="PEGPU Machine.app already installed/current" description="The installed PEGPU Machine.app is the same version or newer than this package, so the Machine app file payload is not selected by default." start_selected="true" start_enabled="false" start_visible="!machineNeedsInstall()"/>
+  <choice id="com.pegpu.status.machine.needs" title="PEGPU Machine.app missing or older" description="PEGPU Machine.app is missing or older than this package, so the Machine app file payload is selected by default." start_selected="false" start_enabled="false" start_visible="machineNeedsInstall()"/>
+  <choice id="com.pegpu.status.driver.installed" title="DriverKit extension installed" description="Installer detected com.pegpu.machine.VFIOUserPCIDriver from systemextensionsctl or the registered /Library/SystemExtensions DriverKit bundle. DriverKit refresh runs only when the PEGPU Machine.app choice is selected." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
+  <choice id="com.pegpu.status.driver.missing" title="DriverKit extension not installed" description="Installer read the current DriverKit extension list and did not find com.pegpu.machine.VFIOUserPCIDriver. PEGPU Machine.app is selected so the installer can install or activate the DriverKit extension." start_selected="false" start_enabled="false" start_visible="driverStatusKnownMissing()"/>
+  <choice id="com.pegpu.status.driver.unknown" title="DriverKit extension status unavailable" description="Installer could not read DriverKit state on this screen. Leave PEGPU Machine.app unselected to keep the current driver state, or select it to force DriverKit refresh/activation. The install scripts log direct systemextensionsctl status during installation." start_selected="false" start_enabled="false" start_visible="driverStatusUnknown()"/>
+  <choice id="com.pegpu.install.app" title="PEGPU.app" description="Required main application installed in /Applications. Includes the launcher, GUI, app-side display client, AI/runtime controls, notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
+    <pkg-ref id="com.pegpu.pkg.app"/>
   </choice>
-  <choice id="com.vegpu.install.machine" title="vEGPU Machine.app + DriverKit refresh/activation" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications. DriverKit refresh/activation is bundled with this choice and does not run when this choice is not selected." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
-    <pkg-ref id="com.vegpu.pkg.machine"/>
-    <pkg-ref id="com.vegpu.pkg.driver"/>
+  <choice id="com.pegpu.install.machine" title="PEGPU Machine.app + DriverKit refresh/activation" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications. DriverKit refresh/activation is bundled with this choice and does not run when this choice is not selected." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
+    <pkg-ref id="com.pegpu.pkg.machine"/>
+    <pkg-ref id="com.pegpu.pkg.driver"/>
   </choice>
-  <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>
-  <pkg-ref id="com.vegpu.pkg.machine" version="$VERSION" onConclusion="RecommendRestart">vEGPU-machine.pkg</pkg-ref>
-  <pkg-ref id="com.vegpu.pkg.driver" version="$VERSION" onConclusion="RecommendRestart">vEGPU-driver.pkg</pkg-ref>
+  <pkg-ref id="com.pegpu.pkg.app" version="$VERSION" onConclusion="none">PEGPU-app.pkg</pkg-ref>
+  <pkg-ref id="com.pegpu.pkg.machine" version="$VERSION" onConclusion="RecommendRestart">PEGPU-machine.pkg</pkg-ref>
+  <pkg-ref id="com.pegpu.pkg.driver" version="$VERSION" onConclusion="RecommendRestart">PEGPU-driver.pkg</pkg-ref>
 </installer-gui-script>
 XML
 else
   cat > "$WORK/Distribution.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-  <title>vEGPU</title>
+  <title>PEGPU</title>
   <options customize="always" require-scripts="true" rootVolumeOnly="true"/>
   <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
   <installation-check script="sipDisabled()"/>
@@ -964,7 +964,7 @@ function sipDisabled() {
     return true;
   }
   my.result.title = "System Integrity Protection must be disabled";
-  my.result.message = "vEGPU releases require SIP to be disabled because combined releases install an ad-hoc DriverKit host extension.\n\nTo disable SIP on Apple Silicon:\n1. Shut down the Mac.\n2. Hold the power button until Startup Options appear.\n3. Open Options > Utilities > Terminal.\n4. Run: csrutil disable\n5. Restart macOS.\n6. Run this installer again.";
+  my.result.message = "PEGPU releases require SIP to be disabled because combined releases install an ad-hoc DriverKit host extension.\n\nTo disable SIP on Apple Silicon:\n1. Shut down the Mac.\n2. Hold the power button until Startup Options appear.\n3. Open Options > Utilities > Terminal.\n4. Run: csrutil disable\n5. Restart macOS.\n6. Run this installer again.";
   return false;
 }
   ]]></script>
@@ -972,12 +972,12 @@ function sipDisabled() {
   <license file="LICENSE.txt" mime-type="text/plain"/>
   <conclusion file="CONCLUSION.txt" mime-type="text/plain"/>
   <choices-outline>
-    <line choice="com.vegpu.install"/>
+    <line choice="com.pegpu.install"/>
   </choices-outline>
-  <choice id="com.vegpu.install" title="vEGPU.app" description="Main application: Apache-2.0 Swift/AppKit launcher, GUI, app-side display client, AI runtime controls, notices, and app-side source archives." start_selected="true">
-    <pkg-ref id="com.vegpu.pkg.app"/>
+  <choice id="com.pegpu.install" title="PEGPU.app" description="Main application: Apache-2.0 Swift/AppKit launcher, GUI, app-side display client, AI runtime controls, notices, and app-side source archives." start_selected="true">
+    <pkg-ref id="com.pegpu.pkg.app"/>
   </choice>
-  <pkg-ref id="com.vegpu.pkg.app" version="$VERSION" onConclusion="none">vEGPU-app.pkg</pkg-ref>
+  <pkg-ref id="com.pegpu.pkg.app" version="$VERSION" onConclusion="none">PEGPU-app.pkg</pkg-ref>
 </installer-gui-script>
 XML
 fi

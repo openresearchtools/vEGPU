@@ -1,17 +1,17 @@
-# vEGPU Guest VM Installation Notices
+# PEGPU Guest VM Installation Notices
 
-This notice describes software that vEGPU installs, configures, or asks Debian
+This notice describes software that PEGPU installs, configures, or asks Debian
 APT to install inside the Linux guest VM.
 
 It is intentionally scoped to the guest VM. It is not the license notice for
-`vEGPU.app` itself, and it is not the license notice for `vEGPU Machine.app`.
+`PEGPU.app` itself, and it is not the license notice for `PEGPU Machine.app`.
 Those notices remain in their own app legal bundles. This file is meant to make
 the guest-side install activity visible to users.
 
 ## Debian Base Image
 
-vEGPU downloads an official Debian cloud image for the runtime VM and verifies
-the image checksum recorded in the runtime manifest. vEGPU does not ship a
+PEGPU downloads an official Debian cloud image for the runtime VM and verifies
+the image checksum recorded in the runtime manifest. PEGPU does not ship a
 modified Debian disk image in this repository.
 
 The default runtime manifest currently points at Debian's official cloud image
@@ -36,11 +36,11 @@ https://security.debian.org/debian-security
 ```
 
 APT may install additional transitive dependencies selected by Debian at install
-time. The lists below name the direct packages requested by vEGPU scripts.
+time. The lists below name the direct packages requested by PEGPU scripts.
 
 ## First Boot and Runtime Control Packages
 
-On first boot, vEGPU installs the guest control-plane and sharing packages
+On first boot, PEGPU installs the guest control-plane and sharing packages
 needed for SSH, private networking, NFS sharing, kernel module management, and
 guest repair commands:
 
@@ -57,7 +57,7 @@ guest repair commands:
 - `sudo`
 - `tmux`
 
-When installing or refreshing the guest DMA driver, vEGPU also installs build
+When installing or refreshing the guest DMA driver, PEGPU also installs build
 support for DKMS modules:
 
 - `dkms`
@@ -65,14 +65,14 @@ support for DKMS modules:
 - `kmod`
 - `linux-headers-$(uname -r)` for the running kernel
 
-When the guest kernel is explicitly updated, vEGPU requests:
+When the guest kernel is explicitly updated, PEGPU requests:
 
 - `linux-image-arm64`
 - `linux-headers-arm64`
 
 ## GUI Desktop Packages
 
-When the VM is started in GUI mode, vEGPU runs the guest GUI ensure script. That
+When the VM is started in GUI mode, PEGPU runs the guest GUI ensure script. That
 script installs the XFCE, SPICE, Xorg, audio, browser, file manager, icon/theme,
 and supporting packages needed for the embedded desktop experience:
 
@@ -114,16 +114,16 @@ and supporting packages needed for the embedded desktop experience:
 - `greybird-gtk-theme`
 
 These packages are installed from Debian APT repositories and are not bundled by
-vEGPU. Their notices, licenses, and package metadata remain in the guest VM's
+PEGPU. Their notices, licenses, and package metadata remain in the guest VM's
 Debian package database and documentation directories.
 
-## vEGPU Scaling Helper
+## PEGPU Scaling Helper
 
-vEGPU may install the local `vegpu-scaling` helper inside the VM. This is
-vEGPU-owned MIT-licensed code used to adjust XFCE session scaling and expose a
+PEGPU may install the local `pegpu-scaling` helper inside the VM. This is
+PEGPU-owned MIT-licensed code used to adjust XFCE session scaling and expose a
 small GTK scaling app.
 
-When installed from the generated Debian package, `vegpu-scaling` declares these
+When installed from the generated Debian package, `pegpu-scaling` declares these
 Debian package dependencies instead of bundling them:
 
 - `python3`
@@ -136,23 +136,23 @@ Debian package dependencies instead of bundling them:
 The package installs its own copyright file at:
 
 ```text
-/usr/share/doc/vegpu-scaling/copyright
+/usr/share/doc/pegpu-scaling/copyright
 ```
 
 ## Guest DMA Driver Package
 
-vEGPU Machine supplies the guest DMA driver package that is installed inside the
+PEGPU Machine supplies the guest DMA driver package that is installed inside the
 VM. Current guest scripts look for Machine-provided packages named like:
 
 - `apple-dma-dkms_*.deb`
-- `vegpu-guest-dma-dkms_*.deb`
+- `pegpu-guest-dma-dkms_*.deb`
 
 The package builds and installs the guest DMA kernel module through DKMS for the
-VM kernel. vEGPU may install Debian DKMS/build/header packages listed above so
+VM kernel. PEGPU may install Debian DKMS/build/header packages listed above so
 the module can build against the running guest kernel.
 
-The DMA driver package is a vEGPU Machine guest artifact, not a Debian package
-downloaded from APT and not an app-side vEGPU notice. vEGPU Machine carries its
+The DMA driver package is a PEGPU Machine guest artifact, not a Debian package
+downloaded from APT and not an app-side PEGPU notice. PEGPU Machine carries its
 own notices, licenses, and source bundles for Machine-side and guest-driver
 artifacts.
 
@@ -178,16 +178,16 @@ Repository setup may install these Debian packages first:
 It also writes guest configuration files such as:
 
 - `/etc/modprobe.d/blacklist-nouveau.conf`
-- `/etc/apt/preferences.d/vegpu-nvidia-pin`
+- `/etc/apt/preferences.d/pegpu-nvidia-pin`
 - `/etc/apt/sources.list.d/cuda-debian13-sbsa.list`
 
-vEGPU does not bundle NVIDIA driver or CUDA toolkit packages in this repository.
+PEGPU does not bundle NVIDIA driver or CUDA toolkit packages in this repository.
 When those packages are installed, they are downloaded by APT from NVIDIA's
 repository inside the VM.
 
 ## Optional NVIDIA Driver and CUDA Installation
 
-If the user chooses to run vEGPU's NVIDIA/CUDA installer, the guest agent runs
+If the user chooses to run PEGPU's NVIDIA/CUDA installer, the guest agent runs
 APT inside the VM to install the currently pinned NVIDIA stack:
 
 ```text
@@ -221,7 +221,7 @@ as:
 ```sh
 apt list --installed
 dpkg-query -W
-apt-cache policy nvidia-open cuda-toolkit-13-2 vegpu-scaling
+apt-cache policy nvidia-open cuda-toolkit-13-2 pegpu-scaling
 ls /etc/apt/sources.list.d/
 ls /etc/apt/preferences.d/
 find /usr/share/doc -maxdepth 2 -name copyright

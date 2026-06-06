@@ -1,15 +1,15 @@
-# vEGPU
+# PEGPU
 
-vEGPU is an experimental macOS application for running NVIDIA Thunderbolt eGPUs
+PEGPU is an experimental macOS application for running NVIDIA Thunderbolt eGPUs
 through a Linux VM on Apple Silicon Macs. It is built as two related
 applications with an explicit license and architecture boundary.
 
 ## Applications
 
-- **vEGPU.app** is the Swift/AppKit launcher, UTM-derived embedded SPICE GUI
+- **PEGPU.app** is the Swift/AppKit launcher, UTM-derived embedded SPICE GUI
   display side, ANGLE/CocoaSpice integration, AI/runtime router,
   file/port/terminal UI, sidecar metrics, and host-side orchestration layer.
-- **vEGPU Machine.app** is the separate QEMU/VFIO/DriverKit runtime
+- **PEGPU Machine.app** is the separate QEMU/VFIO/DriverKit runtime
   application. It owns the patched QEMU launcher, macOS DriverKit host
   extension, firmware/runtime payloads, Linux guest-driver packages, and its
   own notices/source bundles.
@@ -20,31 +20,31 @@ separate.
 
 ## License And Source Boundary
 
-vEGPU.app's own application source code is distributed under the permissive
+PEGPU.app's own application source code is distributed under the permissive
 Apache License, Version 2.0.
-vEGPU uses a split related to UTM's app/runtime separation, but goes a step
+PEGPU uses a split related to UTM's app/runtime separation, but goes a step
 further: the frontend, AI runtime control surface, display client, routing, and
-orchestration live in vEGPU.app, while the GPL-covered Machine/QEMU runtime
-lives in the separate vEGPU Machine.app. The app-side display runtime includes
+orchestration live in PEGPU.app, while the GPL-covered Machine/QEMU runtime
+lives in the separate PEGPU Machine.app. The app-side display runtime includes
 SPICE, GLib, GStreamer, ANGLE, CocoaSpice, UTM-derived GUI display work, and
-related support libraries. Release packages carry the installed vEGPU.app
+related support libraries. Release packages carry the installed PEGPU.app
 distribution legal bundle, including scoped license blocks and corresponding
 source/provenance archives, inside:
 
 ```text
-/Applications/vEGPU.app/Contents/Resources/vEGPURoot/legal/generated
+/Applications/PEGPU.app/Contents/Resources/PEGPURoot/legal/generated
 ```
 
-vEGPU Machine.app is distributed from
-[openresearchtools/vEGPU-machine](https://github.com/openresearchtools/vEGPU-machine).
+PEGPU Machine.app is distributed from
+[openresearchtools/PEGPU-machine](https://github.com/openresearchtools/PEGPU-machine).
 It contains the QEMU/VFIO/DriverKit side and carries its own notices and source
 bundles inside:
 
 ```text
-/Applications/vEGPU Machine.app/Contents/Resources
+/Applications/PEGPU Machine.app/Contents/Resources
 ```
 
-vEGPU Machine builds on Scott J. Goldman's
+PEGPU Machine builds on Scott J. Goldman's
 [scottjg/qemu-vfio-apple](https://github.com/scottjg/qemu-vfio-apple), and also
 uses/adapts upstream QEMU and UTM/QEMU-side work from
 [qemu-project/qemu](https://gitlab.com/qemu-project/qemu),
@@ -52,12 +52,12 @@ uses/adapts upstream QEMU and UTM/QEMU-side work from
 [utmapp/virglrenderer](https://github.com/utmapp/virglrenderer). The app-side
 embedded GUI display integration is partially based on the main
 [utmapp/UTM](https://github.com/utmapp/UTM) app work and is generated from a
-pinned UTM base plus the vEGPU patch stack in `third_party/utm/patches`.
+pinned UTM base plus the PEGPU patch stack in `third_party/utm/patches`.
 
 GPL-covered QEMU-derived code stays on the Machine side. Apache-side
-launcher/display/AI code stays in this repository. The generated vEGPU.app
+launcher/display/AI code stays in this repository. The generated PEGPU.app
 `LICENSES` file is the app-visible distribution license bundle for installed
-vEGPU.app runtime payloads, helper programs, framework dependencies, and
+PEGPU.app runtime payloads, helper programs, framework dependencies, and
 app-managed runtime archives. Source archives installed under
 `legal/generated/source/` have adjacent generated `.NOTICES`, `.LICENSES`, and
 `.manifest.json` sidecars that cover the files inside those archives, including
@@ -67,39 +67,39 @@ notices remain authoritative.
 
 ## Runtime And Routing Provenance
 
-vEGPU is not a single upstream project with a new skin. It combines several
+PEGPU is not a single upstream project with a new skin. It combines several
 separate pieces, with notices and source/provenance kept in the app bundles:
 
 - **UTM app display work**:
   [utmapp/UTM](https://github.com/utmapp/UTM) is the main GUI foundation for
-  the embedded SPICE display side. vEGPU carries its UTM/CocoaSpice app-side
+  the embedded SPICE display side. PEGPU carries its UTM/CocoaSpice app-side
   changes as patches, then CI applies them to the pinned UTM base and builds
-  the SPICE/GLib/GStreamer/ANGLE frameworks from source. vEGPU does not bundle
+  the SPICE/GLib/GStreamer/ANGLE frameworks from source. PEGPU does not bundle
   UTM.app as an app.
 - **QEMU/VFIO Machine runtime**:
   [scottjg/qemu-vfio-apple](https://github.com/scottjg/qemu-vfio-apple),
   [qemu-project/qemu](https://gitlab.com/qemu-project/qemu),
   [utmapp/qemu](https://github.com/utmapp/qemu), and
   [utmapp/virglrenderer](https://github.com/utmapp/virglrenderer) are part of
-  the separate vEGPU Machine side, along with QEMU-derived GPL-covered source
+  the separate PEGPU Machine side, along with QEMU-derived GPL-covered source
   bundles and guest-driver packages.
 - **llama.cpp chat/runtime surface**:
   [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) provides the
   server conventions, OpenAI/llama.cpp-compatible APIs, web UI surface, and
-  runtime shape that vEGPU adapts for app-managed model discovery, downloads,
+  runtime shape that PEGPU adapts for app-managed model discovery, downloads,
   runtime launches, macOS/VM runtime pairs, and external GPU offload choices.
-  vEGPU release packages bundle the latest llama.cpp ARM64 build available at
-  vEGPU release time from
+  PEGPU release packages bundle the latest llama.cpp ARM64 build available at
+  PEGPU release time from
   [openresearchtools/llama-cpp-arm64-builds](https://github.com/openresearchtools/llama-cpp-arm64-builds);
   additional llama.cpp versions remain user-managed through `/core`.
 - **llama-swap-style model routing**:
   [mostlygeek/llama-swap](https://github.com/mostlygeek/llama-swap) is the
-  basis for the routing idea. vEGPU modifies that model so multiple aliases and
+  basis for the routing idea. PEGPU modifies that model so multiple aliases and
   sessions can route through configured macOS and VM runtimes rather than a
   single fixed `llama-server` process.
 - **GOST-style local networking**:
   [ginuerzh/gost](https://github.com/ginuerzh/gost) is the provenance for the
-  localhost TCP/UDP forwarding model. vEGPU keeps a trimmed local proxy for
+  localhost TCP/UDP forwarding model. PEGPU keeps a trimmed local proxy for
   Mac-to-VM and VM-to-Mac routing; it is limited to the forwarding behavior the
   app needs.
 - **TurboQuant runtime option**:
@@ -109,7 +109,7 @@ separate pieces, with notices and source/provenance kept in the app bundles:
 
 ## Installer
 
-The release package installs vEGPU.app and, when needed, vEGPU Machine.app.
+The release package installs PEGPU.app and, when needed, PEGPU Machine.app.
 The Installation Type screen shows Machine.app files and DriverKit refresh as
 separate choices. Machine.app is selected by default when it is missing or older
 than the payload, or when the installer can confirm that the DriverKit extension
@@ -131,7 +131,7 @@ direct `systemextensionsctl list` status, and shows a final summary telling the
 user to restart macOS before using eGPU passthrough. The installer can be closed
 so the restart can happen later.
 
-System Integrity Protection must be disabled before installation. vEGPU uses an
+System Integrity Protection must be disabled before installation. PEGPU uses an
 ad-hoc DriverKit host extension for PCIe/eGPU passthrough, which is a serious
 security tradeoff.
 
@@ -150,20 +150,20 @@ installable payload into the release `.pkg`.
 
 ## Links
 
-- Website: [vegpu.com](https://vegpu.com)
-- vEGPU app repository: [openresearchtools/vEGPU](https://github.com/openresearchtools/vEGPU)
-- vEGPU Machine repository: [openresearchtools/vEGPU-machine](https://github.com/openresearchtools/vEGPU-machine)
+- Website: [pegpu.com](https://pegpu.com)
+- PEGPU app repository: [openresearchtools/PEGPU](https://github.com/openresearchtools/PEGPU)
+- PEGPU Machine repository: [openresearchtools/PEGPU-machine](https://github.com/openresearchtools/PEGPU-machine)
 - Upstream breakthrough: [scottjg/qemu-vfio-apple](https://github.com/scottjg/qemu-vfio-apple)
 - Upstream QEMU source: [qemu-project/qemu](https://gitlab.com/qemu-project/qemu)
 - UTM QEMU source: [utmapp/qemu](https://github.com/utmapp/qemu)
 - UTM virglrenderer source: [utmapp/virglrenderer](https://github.com/utmapp/virglrenderer)
 - UTM app foundation: [utmapp/UTM](https://github.com/utmapp/UTM)
 - AI runtime: [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
-- vEGPU llama.cpp ARM64 builds: [openresearchtools/llama-cpp-arm64-builds](https://github.com/openresearchtools/llama-cpp-arm64-builds)
+- PEGPU llama.cpp ARM64 builds: [openresearchtools/llama-cpp-arm64-builds](https://github.com/openresearchtools/llama-cpp-arm64-builds)
 - Routing provenance: [mostlygeek/llama-swap](https://github.com/mostlygeek/llama-swap)
 - Local proxy provenance: [ginuerzh/gost](https://github.com/ginuerzh/gost)
 - TurboQuant runtime option: [TheTom/llama-cpp-turboquant](https://github.com/TheTom/llama-cpp-turboquant)
 
-vEGPU is not endorsed by, sponsored by, or affiliated with Apple, NVIDIA, QEMU,
+PEGPU is not endorsed by, sponsored by, or affiliated with Apple, NVIDIA, QEMU,
 UTM, llama.cpp, llama-swap, GOST, TurboQuant, Scott J. Goldman, or their
 maintainers.

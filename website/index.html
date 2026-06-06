@@ -3,29 +3,29 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>vEGPU - NVIDIA eGPUs on Apple Silicon Macs</title>
+    <title>PEGPU - eGPU passthrough runtime for Apple Silicon Macs</title>
     <meta
       name="description"
-      content="vEGPU is a personal project for running NVIDIA Thunderbolt eGPUs on Apple Silicon Macs through a Linux VM, patched QEMU, DriverKit, and AI runtime orchestration."
+      content="PEGPU is a very unofficial, very experimental passthrough runtime for getting NVIDIA Thunderbolt eGPUs doing useful work on macOS through Linux virtualization."
     >
     <meta name="theme-color" content="#020202">
-    <meta property="og:title" content="vEGPU">
-    <meta property="og:description" content="NVIDIA eGPU compute and display sessions on Apple Silicon Macs, powered by Linux virtualization.">
+    <meta property="og:title" content="PEGPU">
+    <meta property="og:description" content="A very unofficial passthrough runtime for NVIDIA Thunderbolt eGPUs on Apple Silicon Macs.">
     <meta property="og:image" content="assets/slides/gui.webp">
-    <link rel="icon" href="assets/vegpu-logo.png">
+    <link rel="icon" href="assets/pegpu-logo.png">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <canvas id="signal-canvas" aria-hidden="true"></canvas>
 
     <header class="site-header" aria-label="Primary navigation">
-      <a class="brand" href="#top" aria-label="vEGPU home">
+      <a class="brand" href="#top" aria-label="PEGPU home">
         <span class="brand-mark" aria-hidden="true">
-          <img src="assets/vegpu-logo.png" alt="">
+          <img src="assets/pegpu-logo.png" alt="">
         </span>
-        <span>vEGPU</span>
+        <span>PEGPU</span>
       </a>
-      <a class="github-button" href="https://github.com/openresearchtools/vEGPU" target="_blank" rel="noopener" aria-label="Open vEGPU on GitHub">
+      <a class="github-button" href="https://github.com/openresearchtools/pegpu" target="_blank" rel="noopener" aria-label="Open PEGPU on GitHub">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.04-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23.96-.27 1.98-.4 3-.4s2.05.14 3 .4c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.69.82.58C20.56 21.8 24 17.3 24 12 24 5.37 18.63 0 12 0Z"></path>
         </svg>
@@ -38,17 +38,17 @@
         <div class="hero-noise" aria-hidden="true"></div>
         <div class="hero-content">
           <p class="eyebrow">Apple Silicon<span class="mark">*</span> + Thunderbolt<span class="mark">*</span> + NVIDIA<span class="mark">*</span> + macOS<span class="mark">*</span> + Linux VM<span class="mark">*</span></p>
-          <h1 id="hero-title">vEGPU</h1>
+          <h1 id="hero-title">PEGPU</h1>
           <p class="hero-copy">
-            A very unofficial, very experimental, very personal runtime for getting NVIDIA eGPUs doing useful work on macOS through Linux virtualization.
+            A very unofficial, very experimental passthrough runtime for getting NVIDIA Thunderbolt eGPUs doing useful work on macOS through Linux virtualization.
           </p>
           <div class="hero-actions" aria-label="Project links">
-            <a class="button primary" href="https://github.com/openresearchtools/vEGPU">vEGPU repo</a>
-            <a class="button" href="https://github.com/openresearchtools/vEGPU-machine">vEGPU Machine</a>
+            <a class="button primary" href="https://github.com/openresearchtools/pegpu">PEGPU repo</a>
+            <a class="button" href="https://github.com/openresearchtools/pegpu-machine">PEGPU Machine</a>
             <a class="button quiet" href="#story">Read the story</a>
           </div>
           <p class="hero-footnote">
-            * Compatibility/purpose labels only. vEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, macOS, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, or any other named company, protocol, project, or maintainer.
+            * Compatibility/purpose labels only. PEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, macOS, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, or any other named company, protocol, project, or maintainer.
           </p>
         </div>
       </section>
@@ -78,17 +78,17 @@
         <div class="section-kicker">what this is</div>
         <h2 id="story-title">Thunderbolt eGPU passthrough for Macs that were never supposed to have it.</h2>
         <p class="lead">
-          <a class="text-link" href="https://scottjg.com/posts/2026-05-05-egpu-mac-gaming/">Scott J. Goldman</a> found the wild bit: a way to pass Thunderbolt eGPU PCIe devices into a Linux VM on Apple Silicon by combining customized QEMU with a macOS DriverKit host extension. vEGPU builds on that base and tries to turn the whole thing into something you can actually live with.
+          <a class="text-link" href="https://scottjg.com/posts/2026-05-05-egpu-mac-gaming/">Scott J. Goldman</a> found the wild bit: a way to pass Thunderbolt eGPU PCIe devices into a Linux VM on Apple Silicon by combining customized QEMU with a macOS DriverKit host extension. PEGPU builds on that base and tries to turn the whole thing into something you can actually live with.
         </p>
         <div class="split">
           <article>
-            <h3>vEGPU Machine</h3>
+            <h3>PEGPU Machine</h3>
             <p>
               The GPL side. It owns the patched QEMU runtime, the DriverKit/VFIO mechanics, firmware, guest DMA driver package, VM launch shape, and the UTM/QEMU-side mechanics that make accelerated visual sessions possible.
             </p>
           </article>
           <article>
-            <h3>vEGPU</h3>
+            <h3>PEGPU</h3>
             <p>
               The comfort layer. Native macOS UI, UTM-derived GUI display integration, ANGLE and CocoaSpice support, sidecar metrics, embedded file manager, SSH terminal, VM setup, port routing, web UI tabs, llama.cpp RPC orchestration, llama-swap style runtime management, and less ritual around starting the thing.
             </p>
@@ -96,16 +96,16 @@
         </div>
       </section>
 
-      <section class="screenshot-band" aria-label="vEGPU interface screenshots">
-        <div class="screenshot-carousel" data-carousel aria-roledescription="carousel" aria-label="vEGPU interface screenshots">
+      <section class="screenshot-band" aria-label="PEGPU interface screenshots">
+        <div class="screenshot-carousel" data-carousel aria-roledescription="carousel" aria-label="PEGPU interface screenshots">
           <div class="screenshot-frame" aria-live="polite">
             <div class="screenshot-stage">
-              <img class="carousel-slide is-active" data-slide="0" src="assets/slides/gui.webp" alt="vEGPU GUI display view with Linux desktop, host metrics, VM metrics, and NVIDIA GPU status." width="3394" height="2336" fetchpriority="high" decoding="async">
-              <img class="carousel-slide" data-slide="1" src="assets/slides/external-display.webp" alt="vEGPU GUI tab context menu showing external display session shortcuts for NVIDIA eGPUs." width="3170" height="2192" loading="eager" decoding="async">
-              <img class="carousel-slide" data-slide="2" src="assets/slides/runtime.webp" alt="vEGPU Runtime view showing server controls and runtime status." width="3394" height="2336" loading="lazy" decoding="async">
-              <img class="carousel-slide" data-slide="3" src="assets/slides/models.webp" alt="vEGPU Models view for local model and runtime management." width="3394" height="2336" loading="lazy" decoding="async">
-              <img class="carousel-slide" data-slide="4" src="assets/slides/chat.webp" alt="vEGPU Chat view for local AI runtime interaction." width="3194" height="2204" loading="lazy" decoding="async">
-              <img class="carousel-slide" data-slide="5" src="assets/slides/files.webp" alt="vEGPU Files view for browsing shared Mac and Linux files." width="3194" height="2204" loading="lazy" decoding="async">
+              <img class="carousel-slide is-active" data-slide="0" src="assets/slides/gui.webp" alt="PEGPU GUI display view with Linux desktop, host metrics, VM metrics, and NVIDIA GPU status." width="3394" height="2336" fetchpriority="high" decoding="async">
+              <img class="carousel-slide" data-slide="1" src="assets/slides/external-display.webp" alt="PEGPU GUI tab context menu showing external display session shortcuts for NVIDIA eGPUs." width="3170" height="2192" loading="eager" decoding="async">
+              <img class="carousel-slide" data-slide="2" src="assets/slides/runtime.webp" alt="PEGPU Runtime view showing server controls and runtime status." width="3394" height="2336" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="3" src="assets/slides/models.webp" alt="PEGPU Models view for local model and runtime management." width="3394" height="2336" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="4" src="assets/slides/chat.webp" alt="PEGPU Chat view for local AI runtime interaction." width="3194" height="2204" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="5" src="assets/slides/files.webp" alt="PEGPU Files view for browsing shared Mac and Linux files." width="3194" height="2204" loading="lazy" decoding="async">
               <button class="carousel-arrow previous" type="button" data-carousel-previous aria-label="Show previous screenshot"><span aria-hidden="true">&lsaquo;</span></button>
               <button class="carousel-arrow next" type="button" data-carousel-next aria-label="Show next screenshot"><span aria-hidden="true">&rsaquo;</span></button>
             </div>
@@ -117,13 +117,13 @@
                 <strong>External displays.</strong> Secondary-click in the GUI tab to turn on external display sessions on eGPUs. There is no fixed limit: each GPU has its own external display session, and every monitor connected to that GPU shares the same session so Linux/NVIDIA settings can extend or mirror them. Move into a session with the app-shown shortcuts for that GPU, from <span class="key-combo" aria-label="Option Command 2"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>2</kbd></span> through <span class="key-combo" aria-label="Option Command 9"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>9</kbd></span>; <span class="key-combo" aria-label="Option Command 1"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>1</kbd></span> always releases control back to the Mac. The main Mac-driven GUI does not lock the pointer because it uses absolute mouse mirroring directly on the screen.
               </p>
               <p class="carousel-caption" data-caption="2">
-                <strong>Runtime.</strong> The Runtime view starts and stops the vEGPU Machine server, shows whether the VM/control routes are alive, and keeps Mac, guest, network, disk, and VM GPU telemetry in one place. It also launches the recipe-based Debian setup and NVIDIA/CUDA helper install flow, because the download does not ship a bundled VM or preinstalled GPU driver stack.
+                <strong>Runtime.</strong> The Runtime view starts and stops the PEGPU Machine server, shows whether the VM/control routes are alive, and keeps Mac, guest, network, disk, and VM GPU telemetry in one place. It also launches the recipe-based Debian setup and NVIDIA/CUDA helper install flow, because the download does not ship a bundled VM or preinstalled GPU driver stack.
               </p>
               <p class="carousel-caption" data-caption="3">
                 <strong>Models.</strong> The Models view manages model files and llama.cpp launches. Pick the Mac backend, the Linux/eGPU backend, or a split run where llama.cpp RPC bridges host and guest; TurboQuant is only the optional llama.cpp build/flag path for KV-cache quantization, not a separate GPU target. The UI assembles the real launch details: devices, RPC endpoint, GPU layers, tensor split, and cache type.
               </p>
               <p class="carousel-caption" data-caption="4">
-                <strong>Chat.</strong> The Chat tab talks to the currently loaded model through the local OpenAI-compatible route. It is there to test the selected model, backend, and split inference path from inside vEGPU before you point another app at the same runtime.
+                <strong>Chat.</strong> The Chat tab talks to the currently loaded model through the local OpenAI-compatible route. It is there to test the selected model, backend, and split inference path from inside PEGPU before you point another app at the same runtime.
               </p>
               <p class="carousel-caption" data-caption="5">
                 <strong>Files.</strong> The Files tab is a two-pane Mac and Linux file manager for the shared runtime paths. It handles browsing, drag/drop copy or move, transfer jobs, mount repair, and Finder handoff, so moving models, downloads, outputs, and VM files does not require falling back to ad hoc scp commands every time.
@@ -163,7 +163,7 @@
             <span class="feature-code">OPS</span>
             <h3>Recipe-based Debian runtime</h3>
             <p>
-              vEGPU downloads the official Debian cloud image and scripts the setup. It does not ship a bundled VM and it does not vendor NVIDIA drivers or CUDA. The helper only installs from NVIDIA repositories inside Linux.
+              PEGPU downloads the official Debian cloud image and scripts the setup. It does not ship a bundled VM and it does not vendor NVIDIA drivers or CUDA. The helper only installs from NVIDIA repositories inside Linux.
             </p>
           </article>
           <article>
@@ -183,7 +183,7 @@
           <article class="warning-card hard">
             <h3>Never unplug an eGPU while QEMU is running</h3>
             <p>
-              Stop the server from vEGPU, quit the tray runtime, or in the worst case kill QEMU from Activity Monitor. Do not yank the Thunderbolt cable while the VM server is alive. That is how you buy yourself a frozen Mac and a reboot.
+              Stop the server from PEGPU, quit the tray runtime, or in the worst case kill QEMU from Activity Monitor. Do not yank the Thunderbolt cable while the VM server is alive. That is how you buy yourself a frozen Mac and a reboot.
             </p>
           </article>
           <article class="warning-card">
@@ -205,22 +205,22 @@
         <div class="section-kicker">first run</div>
         <h2 id="setup-title">Installation is the strange part, so here is the path through macOS security.</h2>
         <p class="lead setup-lead">
-          vEGPU is experimental kernel-driver-adjacent software for Apple Silicon Macs with SIP disabled, and the DriverKit extension is ad hoc signed. The warnings below are expected for this kind of package, but they are still real security decisions.
+          PEGPU is experimental kernel-driver-adjacent software for Apple Silicon Macs with SIP disabled, and the DriverKit extension is ad hoc signed. The warnings below are expected for this kind of package, but they are still real security decisions.
         </p>
         <ol class="setup-guide">
           <li class="setup-guide-item">
             <div class="setup-copy setup-visible">
               <strong>Disable SIP on Apple Silicon.</strong>
-              Shut down, boot to startup options, open Recovery Terminal, run <code>csrutil disable</code>, restart, and understand the security cost before continuing. vEGPU depends on an experimental DriverKit/VFIO path for Thunderbolt PCIe passthrough, so SIP must be disabled before macOS will allow the required host-side extension flow.
+              Shut down, boot to startup options, open Recovery Terminal, run <code>csrutil disable</code>, restart, and understand the security cost before continuing. PEGPU depends on an experimental DriverKit/VFIO path for Thunderbolt PCIe passthrough, so SIP must be disabled before macOS will allow the required host-side extension flow.
             </div>
           </li>
           <li class="setup-guide-item has-images">
             <div class="setup-copy setup-visible">
               <strong>Unblock the downloaded package.</strong>
-              The package installs both vEGPU and vEGPU Machine. Because it comes from GitHub and the DriverKit side is ad hoc signed, macOS may block the first launch. If macOS says the package was not opened, go to System Settings, Privacy &amp; Security, and choose Open Anyway for the blocked vEGPU package. You can also remove the quarantine flag from the download in Terminal:
+              The package installs both PEGPU and PEGPU Machine. Because it comes from GitHub and the DriverKit side is ad hoc signed, macOS may block the first launch. If macOS says the package was not opened, go to System Settings, Privacy &amp; Security, and choose Open Anyway for the blocked PEGPU package. You can also remove the quarantine flag from the download in Terminal:
               <div class="setup-command-block">
-                <code>xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg</code>
-                <button class="copy-command" type="button" data-copy-value="xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg">Copy</button>
+                <code>xattr -dr com.apple.quarantine ~/Downloads/pegpu*.pkg</code>
+                <button class="copy-command" type="button" data-copy-value="xattr -dr com.apple.quarantine ~/Downloads/pegpu*.pkg">Copy</button>
               </div>
             </div>
             <details class="setup-disclosure">
@@ -230,19 +230,19 @@
               <div class="setup-expanded">
                 <div class="setup-shot-grid quad" aria-label="Gatekeeper unblock flow">
                   <figure class="setup-shot">
-                    <img src="assets/setup/gatekeeper-blocked.webp" alt="macOS warning that the vEGPU package was not opened because Apple could not verify it." width="744" height="824" loading="lazy" decoding="async">
+                    <img src="assets/setup/gatekeeper-blocked.webp" alt="macOS warning that the PEGPU package was not opened because Apple could not verify it." width="744" height="824" loading="lazy" decoding="async">
                     <figcaption>Initial block</figcaption>
                   </figure>
                   <figure class="setup-shot wide">
-                    <img src="assets/setup/privacy-open-anyway.webp" alt="Privacy and Security settings showing Open Anyway for the blocked vEGPU package." width="1670" height="1206" loading="lazy" decoding="async">
+                    <img src="assets/setup/privacy-open-anyway.webp" alt="Privacy and Security settings showing Open Anyway for the blocked PEGPU package." width="1670" height="1206" loading="lazy" decoding="async">
                     <figcaption>Open Anyway</figcaption>
                   </figure>
                   <figure class="setup-shot">
-                    <img src="assets/setup/gatekeeper-confirm-open.webp" alt="macOS confirmation dialog asking whether to open the vEGPU package anyway." width="744" height="956" loading="lazy" decoding="async">
+                    <img src="assets/setup/gatekeeper-confirm-open.webp" alt="macOS confirmation dialog asking whether to open the PEGPU package anyway." width="744" height="956" loading="lazy" decoding="async">
                     <figcaption>Confirm open</figcaption>
                   </figure>
                   <figure class="setup-shot">
-                    <img src="assets/setup/privacy-password.webp" alt="Privacy and Security password prompt to allow opening the vEGPU package." width="744" height="900" loading="lazy" decoding="async">
+                    <img src="assets/setup/privacy-password.webp" alt="Privacy and Security password prompt to allow opening the PEGPU package." width="744" height="900" loading="lazy" decoding="async">
                     <figcaption>Admin approval</figcaption>
                   </figure>
                 </div>
@@ -271,7 +271,7 @@
           <li class="setup-guide-item has-images">
             <div class="setup-copy setup-visible">
               <strong>Approve the DriverKit extension.</strong>
-              When vEGPU Machine asks to use a new driver extension, click <em>Open System Settings</em>, not OK. OK closes the alert without opening the approval page. In Driver Extensions, enable <code>vEGPU Machine</code>, approve the System Extensions prompt, and confirm the toggle is on.
+              When PEGPU Machine asks to use a new driver extension, click <em>Open System Settings</em>, not OK. OK closes the alert without opening the approval page. In Driver Extensions, enable <code>PEGPU Machine</code>, approve the System Extensions prompt, and confirm the toggle is on.
             </div>
             <details class="setup-disclosure">
               <summary>
@@ -280,7 +280,7 @@
               <div class="setup-expanded">
                 <div class="setup-shot-grid driver-flow" aria-label="DriverKit extension approval flow">
                   <figure class="setup-shot">
-                    <img src="assets/setup/driver-extension-password.webp" alt="Password prompt saying vEGPU Machine is trying to modify a System Extension." width="744" height="836" loading="lazy" decoding="async">
+                    <img src="assets/setup/driver-extension-password.webp" alt="Password prompt saying PEGPU Machine is trying to modify a System Extension." width="744" height="836" loading="lazy" decoding="async">
                     <figcaption>Allow modification</figcaption>
                   </figure>
                   <figure class="setup-shot callout-shot">
@@ -288,7 +288,7 @@
                     <figcaption>Choose Open System Settings</figcaption>
                   </figure>
                   <figure class="setup-shot">
-                    <img src="assets/setup/driver-extension-disabled.webp" alt="Driver Extensions settings showing the vEGPU Machine extension toggle off." width="942" height="936" loading="lazy" decoding="async">
+                    <img src="assets/setup/driver-extension-disabled.webp" alt="Driver Extensions settings showing the PEGPU Machine extension toggle off." width="942" height="936" loading="lazy" decoding="async">
                     <figcaption>Toggle on</figcaption>
                   </figure>
                   <figure class="setup-shot">
@@ -296,7 +296,7 @@
                     <figcaption>Confirm system change</figcaption>
                   </figure>
                   <figure class="setup-shot">
-                    <img src="assets/setup/driver-extension-enabled.webp" alt="Driver Extensions settings showing the vEGPU Machine extension enabled." width="944" height="930" loading="lazy" decoding="async">
+                    <img src="assets/setup/driver-extension-enabled.webp" alt="Driver Extensions settings showing the PEGPU Machine extension enabled." width="944" height="930" loading="lazy" decoding="async">
                     <figcaption>Enabled</figcaption>
                   </figure>
                 </div>
@@ -305,7 +305,7 @@
           </li>
           <li class="setup-guide-item has-images">
             <div class="setup-copy setup-visible">
-              <strong>Start vEGPU with no eGPU plugged in.</strong>
+              <strong>Start PEGPU with no eGPU plugged in.</strong>
               Let it fetch the official Debian cloud image, expand the disk, run cloud-init, install base packages, and load the Linux DMA guest driver.
               <span class="setup-subtitle">Allow the first-run helpers.</span>
               Local Network access is required for the private Mac-to-VM connection: SSH control, web UI tabs, proxy routes, runtime RPC, file sharing, and guest setup all depend on it. The Linux share password prompt mounts the VM home folder over the private vmnet NFS link. The sleep guard helper prevents macOS sleep while PCIe passthrough is active, because sleep can wedge or panic the machine.
@@ -317,7 +317,7 @@
               <div class="setup-expanded">
                 <div class="setup-shot-grid helper-flow" aria-label="First-run local network, file share, and sleep guard prompts">
                   <figure class="setup-shot">
-                    <img src="assets/setup/local-network.webp" alt="macOS Local Network permission prompt explaining vEGPU needs private connection access to the Linux VM." width="744" height="820" loading="lazy" decoding="async">
+                    <img src="assets/setup/local-network.webp" alt="macOS Local Network permission prompt explaining PEGPU needs private connection access to the Linux VM." width="744" height="820" loading="lazy" decoding="async">
                     <figcaption>Allow Local Network</figcaption>
                   </figure>
                   <figure class="setup-shot">
@@ -325,7 +325,7 @@
                     <figcaption>Mount Linux share</figcaption>
                   </figure>
                   <figure class="setup-shot">
-                    <img src="assets/setup/sleep-guard.webp" alt="Password prompt for installing the vEGPU sleep guard helper." width="744" height="1072" loading="lazy" decoding="async">
+                    <img src="assets/setup/sleep-guard.webp" alt="Password prompt for installing the PEGPU sleep guard helper." width="744" height="1072" loading="lazy" decoding="async">
                     <figcaption>Install sleep guard</figcaption>
                   </figure>
                 </div>
@@ -335,7 +335,7 @@
           <li class="setup-guide-item">
             <div class="setup-copy setup-visible">
               <strong>Install NVIDIA support inside the VM.</strong>
-              The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. vEGPU does not ship those packages. If you use NVIDIA cards, run the helper inside vEGPU after the first Debian boot finishes. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal.
+              The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. PEGPU does not ship those packages. If you use NVIDIA cards, run the helper inside PEGPU after the first Debian boot finishes. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal.
             </div>
             <details class="setup-disclosure">
               <summary>
@@ -344,11 +344,11 @@
               <div class="setup-expanded">
                 <div class="setup-shot-grid nvidia-flow" aria-label="NVIDIA Linux driver installer flow">
                   <figure class="setup-shot">
-                    <img src="assets/setup/nvidia-driver-card-booting.webp" alt="vEGPU GPU card showing Booting status and the Run Installer button." width="484" height="356" loading="lazy" decoding="async">
+                    <img src="assets/setup/nvidia-driver-card-booting.webp" alt="PEGPU GPU card showing Booting status and the Run Installer button." width="484" height="356" loading="lazy" decoding="async">
                     <figcaption>Run Installer</figcaption>
                   </figure>
                   <figure class="setup-shot">
-                    <img src="assets/setup/nvidia-driver-install-confirm.webp" alt="vEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button." width="1122" height="814" loading="lazy" decoding="async">
+                    <img src="assets/setup/nvidia-driver-install-confirm.webp" alt="PEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button." width="1122" height="814" loading="lazy" decoding="async">
                     <figcaption>Install Driver confirmation</figcaption>
                   </figure>
                 </div>
@@ -359,12 +359,11 @@
             <div class="setup-copy setup-visible">
               <strong>Stop the VM, attach eGPUs, then launch the server with them attached.</strong>
               If Sidecar does not show the cards, stop the server, unplug the eGPUs, wait 5 seconds, plug them back in, wait another 5 seconds, and launch again. This does not reinstall the VM; it gives macOS another clean chance to hand the PCIe devices to QEMU.
-              <span class="setup-highlight">Then enjoy the GPUs. For app-specific workflows such as launching external display sessions on eGPUs, check the carousel above for the GUI menu and shortcut flow.</span>
             </div>
           </li>
         </ol>
         <p class="setup-note">
-          vEGPU does not ship a pre-made VM, and it does not pre-install GPU vendor drivers, because licensing and distribution of VM images, NVIDIA drivers, and CUDA packages gets complicated fast. First startup can take half an hour depending on the Mac and network because it fetches a clean Debian cloud image from the official Debian repository, then uses scripts to install packages and drivers from their official repositories. NVIDIA/CUDA installation can add another 20-ish minutes, and only runs if you explicitly click the NVIDIA driver install helper and accept the script and terms. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal. Headless mode skips the XFCE dependency tree if all you want is compute, SSH, and terminal work.
+          PEGPU does not ship a pre-made VM, and it does not pre-install GPU vendor drivers, because licensing and distribution of VM images, NVIDIA drivers, and CUDA packages gets complicated fast. First startup can take half an hour depending on the Mac and network because it fetches a clean Debian cloud image from the official Debian repository, then uses scripts to install packages and drivers from their official repositories. NVIDIA/CUDA installation can add another 20-ish minutes, and only runs if you explicitly click the NVIDIA driver install helper and accept the script and terms. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal. Headless mode skips the XFCE dependency tree if all you want is compute, SSH, and terminal work.
         </p>
       </section>
 
@@ -377,25 +376,25 @@
             <strong>scottjg/qemu-vfio-apple</strong>
             <em>Star it, follow it, help the driver side get better.</em>
           </a>
-          <a href="https://github.com/openresearchtools/vEGPU-machine">
+          <a href="https://github.com/openresearchtools/pegpu-machine">
             <span>GPL runtime</span>
-            <strong>openresearchtools/vEGPU-machine</strong>
+            <strong>openresearchtools/pegpu-machine</strong>
             <em>Patched QEMU, DriverKit host, guest tools, VM mechanics.</em>
           </a>
-          <a href="https://github.com/openresearchtools/vEGPU">
+          <a href="https://github.com/openresearchtools/pegpu">
             <span>launcher, GUI, AI layer</span>
-            <strong>openresearchtools/vEGPU</strong>
+            <strong>openresearchtools/pegpu</strong>
             <em>Native launcher plus the UTM-derived GUI display side, ANGLE/CocoaSpice integration, files, ports, and model tooling.</em>
           </a>
           <a href="https://github.com/utmapp/UTM">
             <span>main GUI foundation</span>
             <strong>utmapp/UTM</strong>
-            <em>The main UTM app work that vEGPU's embedded GUI display side builds from.</em>
+            <em>The main UTM app work that PEGPU's embedded GUI display side builds from.</em>
           </a>
           <a href="https://github.com/utmapp/qemu">
             <span>QEMU display mechanics</span>
             <strong>utmapp/qemu</strong>
-            <em>QEMU-side mechanics used by the vEGPU Machine runtime.</em>
+            <em>QEMU-side mechanics used by the PEGPU Machine runtime.</em>
           </a>
           <a href="https://github.com/utmapp/virglrenderer">
             <span>rendering work</span>
@@ -427,14 +426,14 @@
           <div class="section-kicker">license reality</div>
           <h3 id="license-title">GPL stuff stays GPL. The launcher side stays separate.</h3>
           <p>
-            vEGPU follows the UTM and UTM-QEMU style split, just with a harder boundary: vEGPU Machine handles the GPL DriverKit/QEMU/VM mechanics, while vEGPU handles the launcher, GUI, and AI runtime layers. The package keeps that boundary visible in the installed apps, Help menu, notices, source archives, and license files.
+            PEGPU follows the UTM and UTM-QEMU style split, just with a harder boundary: PEGPU Machine handles the GPL DriverKit/QEMU/VM mechanics, while PEGPU handles the launcher, GUI, and AI runtime layers. The package keeps that boundary visible in the installed apps, Help menu, notices, source archives, and license files.
           </p>
           <p>
-            vEGPU.app ships an app-visible distribution LICENSES file for the installed runtime payloads, helper programs, framework dependencies, and app-managed runtime archives. Source archives installed with the app have adjacent NOTICES, LICENSES, and manifest sidecars for the files inside those archives, including source-only build inputs used to reproduce app-side artifacts. vEGPU Machine.app carries its own external Machine/QEMU notices, licenses, and source bundles.
+            PEGPU.app ships an app-visible distribution LICENSES file for the installed runtime payloads, helper programs, framework dependencies, and app-managed runtime archives. Source archives installed with the app have adjacent NOTICES, LICENSES, and manifest sidecars for the files inside those archives, including source-only build inputs used to reproduce app-side artifacts. PEGPU Machine.app carries its own external Machine/QEMU notices, licenses, and source bundles.
           </p>
           <div class="license-mini">
-            <span><strong>vEGPU Machine:</strong> QEMU patch stack, Scott's VFIO/DriverKit base, UTM/QEMU display-session mechanics, guest driver mechanics.</span>
-            <span><strong>vEGPU:</strong> native macOS app, UTM-derived GUI display code, ANGLE/CocoaSpice, sidecar, routing, model/runtime controls.</span>
+            <span><strong>PEGPU Machine:</strong> QEMU patch stack, Scott's VFIO/DriverKit base, UTM/QEMU display-session mechanics, guest driver mechanics.</span>
+            <span><strong>PEGPU:</strong> native macOS app, UTM-derived GUI display code, ANGLE/CocoaSpice, sidecar, routing, model/runtime controls.</span>
           </div>
           <p class="forking-note">
             Forking note: respect upstream copyrights and licenses. For my added work, reuse it however you want as long as the original projects' license obligations are handled correctly.
@@ -449,20 +448,20 @@
           Issues, discussions, stars, forks, bug reports, better driver ideas, weird monitor reports, and build fixes are welcome. I built this because I wanted Apple Silicon Macs to use the eGPUs I already had, and because local AI hardware piles are more fun when they are not trapped on one side of an operating system wall.
         </p>
         <div class="cta-actions">
-          <a class="button primary" href="https://github.com/openresearchtools/vEGPU/issues">Browse existing issues</a>
-          <a class="button" href="https://github.com/openresearchtools/vEGPU/discussions">Open discussions</a>
+          <a class="button primary" href="https://github.com/openresearchtools/pegpu/issues">Browse existing issues</a>
+          <a class="button" href="https://github.com/openresearchtools/pegpu/discussions">Open discussions</a>
         </div>
       </section>
     </main>
 
     <footer class="site-footer" aria-label="Site footer">
-      <span>vEGPU.com</span>
+      <span>pegpu.com</span>
       <span>Very unofficial. Very experimental. Very personal.</span>
       <div class="footer-policy overlay-host" data-overlay-host>
         <a class="policy-trigger overlay-trigger" href="#privacy-policy-overlay" aria-expanded="false" aria-controls="privacy-policy-overlay">Cookie &amp; Privacy Policy</a>
         <div class="policy-overlay" id="privacy-policy-overlay" role="dialog" aria-label="Cookie and privacy policy">
           <p><em>Last updated: 31 May 2026</em></p>
-          <p>At <strong>vegpu.com</strong>, your privacy is respected. This site is designed to be simple and does not collect personal data or use tracking technologies.</p>
+          <p>At <strong>pegpu.com</strong>, your privacy is respected. This site is designed to be simple and does not collect personal data or use tracking technologies.</p>
           <p><strong>What data we collect</strong></p>
           <ul>
             <li><strong>We do not set cookies.</strong></li>
@@ -473,9 +472,9 @@
           <p>This website is hosted using <strong><a href="https://pages.github.com/" target="_blank" rel="noopener">GitHub Pages</a></strong>, a service provided by GitHub, Inc. When you visit this site, GitHub may collect limited technical information automatically, such as your IP address and basic request data, in order to operate the service securely and reliably.</p>
           <p>For details, please see the <strong><a href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement" target="_blank" rel="noopener">GitHub Privacy Statement</a></strong>.</p>
           <p><strong>Links to other websites</strong></p>
-          <p>This site may contain links to external websites. vEGPU is not responsible for the privacy practices or content of those external sites.</p>
+          <p>This site may contain links to external websites. PEGPU is not responsible for the privacy practices or content of those external sites.</p>
           <p><strong>Your rights</strong></p>
-          <p>Under UK GDPR, you have rights relating to your personal data. Since this site does not collect personal data, there is no information for vEGPU to provide or erase. If you have concerns about how GitHub processes technical data when serving this site, please review GitHub's privacy policy.</p>
+          <p>Under UK GDPR, you have rights relating to your personal data. Since this site does not collect personal data, there is no information for PEGPU to provide or erase. If you have concerns about how GitHub processes technical data when serving this site, please review GitHub's privacy policy.</p>
         </div>
       </div>
     </footer>

@@ -69,7 +69,7 @@ func (m *RuntimeManager) ListReleases(ctx context.Context, family string) ([]Run
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "vEGPU-web-ui-app")
+	req.Header.Set("User-Agent", "PEGPU-web-ui-app")
 	resp, err := m.runtime.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -221,7 +221,7 @@ func (m *RuntimeManager) downloadAndInstallArchive(ctx context.Context, platform
 	if err != nil {
 		return ManagedRuntime{}, err
 	}
-	req.Header.Set("User-Agent", "vEGPU-web-ui-app")
+	req.Header.Set("User-Agent", "PEGPU-web-ui-app")
 	resp, err := m.runtime.client.Do(req)
 	if err != nil {
 		return ManagedRuntime{}, err

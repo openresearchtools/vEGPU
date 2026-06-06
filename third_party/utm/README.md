@@ -1,6 +1,6 @@
 # UTM Patch Stack
 
-The clean vEGPU app repository keeps normal vEGPU code directly in this branch,
+The clean PEGPU app repository keeps normal PEGPU code directly in this branch,
 but keeps UTM/CocoaSpice-derived display changes as patches.
 
 Base:

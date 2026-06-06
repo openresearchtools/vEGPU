@@ -602,7 +602,7 @@ func modelCopyRoots(model ModelConfig) (string, string, error) {
 			}
 			macRoot = root
 		}
-		return macRoot, "/home/vegpu/.cache/huggingface/hub", nil
+			return macRoot, "/home/pegpu/.cache/huggingface/hub", nil
 	case "lmstudio":
 		macRoot := macLMStudioRoot()
 		if location == modelLocationMac {
@@ -612,7 +612,7 @@ func modelCopyRoots(model ModelConfig) (string, string, error) {
 			}
 			macRoot = root
 		}
-		return macRoot, "/home/vegpu/.lmstudio/models", nil
+			return macRoot, "/home/pegpu/.lmstudio/models", nil
 	default:
 		return "", "", fmt.Errorf("copy is only supported for Hugging Face and LM Studio models")
 	}

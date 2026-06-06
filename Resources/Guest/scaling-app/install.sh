@@ -42,7 +42,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-if [ "${VEGPU_SCALING_SKIP_DEPS:-0}" != "1" ] && command -v apt-get >/dev/null 2>&1; then
+if [ "${PEGPU_SCALING_SKIP_DEPS:-0}" != "1" ] && command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   apt-get install -y \
@@ -54,11 +54,11 @@ if [ "${VEGPU_SCALING_SKIP_DEPS:-0}" != "1" ] && command -v apt-get >/dev/null 2
     x11-xserver-utils
 fi
 
-install_file 0755 "$ROOT/bin/vegpu-scaling" "$PREFIX/bin/vegpu-scaling"
-install_file 0644 "$ROOT/src/vegpu_scaling.py" "$PREFIX/lib/vegpu-scaling/vegpu_scaling.py"
-install_file 0644 "$ROOT/share/applications/vegpu-scaling.desktop" "$PREFIX/share/applications/vegpu-scaling.desktop"
-install_file 0644 "$ROOT/share/icons/hicolor/scalable/apps/vegpu-scaling.svg" "$PREFIX/share/icons/hicolor/scalable/apps/vegpu-scaling.svg"
-rm -f /etc/xdg/autostart/vegpu-scaling-reapply.desktop
+install_file 0755 "$ROOT/bin/pegpu-scaling" "$PREFIX/bin/pegpu-scaling"
+install_file 0644 "$ROOT/src/pegpu_scaling.py" "$PREFIX/lib/pegpu-scaling/pegpu_scaling.py"
+install_file 0644 "$ROOT/share/applications/pegpu-scaling.desktop" "$PREFIX/share/applications/pegpu-scaling.desktop"
+install_file 0644 "$ROOT/share/icons/hicolor/scalable/apps/pegpu-scaling.svg" "$PREFIX/share/icons/hicolor/scalable/apps/pegpu-scaling.svg"
+rm -f /etc/xdg/autostart/pegpu-scaling-reapply.desktop
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -t -f "$PREFIX/share/icons/hicolor" >/dev/null 2>&1 || true
@@ -67,17 +67,17 @@ if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$PREFIX/share/applications" >/dev/null 2>&1 || true
 fi
 
-DESKTOP_USER="${VEGPU_SCALING_DESKTOP_USER:-vegpu}"
+DESKTOP_USER="${PEGPU_SCALING_DESKTOP_USER:-pegpu}"
 if getent passwd "$DESKTOP_USER" >/dev/null 2>&1; then
   DESKTOP_HOME="$(getent passwd "$DESKTOP_USER" | cut -d: -f6)"
   if [ -n "$DESKTOP_HOME" ]; then
-    desktop_file="$DESKTOP_HOME/Desktop/vegpu-scaling.desktop"
+    desktop_file="$DESKTOP_HOME/Desktop/pegpu-scaling.desktop"
     install -d -o "$DESKTOP_USER" -g "$DESKTOP_USER" "$DESKTOP_HOME/Desktop"
     install -o "$DESKTOP_USER" -g "$DESKTOP_USER" -m 0755 \
-      "$PREFIX/share/applications/vegpu-scaling.desktop" \
+      "$PREFIX/share/applications/pegpu-scaling.desktop" \
       "$desktop_file"
     trust_desktop_file "$DESKTOP_USER" "$desktop_file"
   fi
 fi
 
-printf 'Installed vegpu-scaling to %s/bin/vegpu-scaling\n' "$PREFIX"
+printf 'Installed pegpu-scaling to %s/bin/pegpu-scaling\n' "$PREFIX"

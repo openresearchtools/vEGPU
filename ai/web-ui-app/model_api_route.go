@@ -40,11 +40,11 @@ func NewModelAPIRouteSync(appDir string) *ModelAPIRouteSync {
 }
 
 func defaultAppDataDir(appDir string) string {
-	if v := strings.TrimSpace(os.Getenv("VEGPU_APP_DATA_DIR")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("PEGPU_APP_DATA_DIR")); v != "" {
 		return expandPath(v)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, "Library", "Application Support", "vEGPU", "Machine")
+		return filepath.Join(home, "Library", "Application Support", "pegpu", "Machine")
 	}
 	return appDir
 }

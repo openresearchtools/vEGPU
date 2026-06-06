@@ -274,7 +274,7 @@ func (r *RuntimeService) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	runProbe("bridge", bridgeDeviceProbeTimeout, func(probeCtx context.Context) ([]DeviceInfo, error) {
 		devices, err := r.BridgeDevicesIfRunning(probeCtx)
 		for i := range devices {
-			devices[i].Location = "vEGPU VM"
+			devices[i].Location = "PEGPU VM"
 		}
 		return devices, err
 	})

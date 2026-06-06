@@ -242,24 +242,24 @@ p {
 }
 
 h1 {
-  --title-glow-green: rgba(101, 255, 122, 0.34);
-  --title-glow-cyan: rgba(94, 231, 255, 0.22);
+  --title-glow-green: rgba(101, 255, 122, 0.22);
+  --title-glow-cyan: rgba(94, 231, 255, 0.14);
   position: relative;
   isolation: isolate;
   width: fit-content;
   max-width: 100%;
   margin: 0;
   color: #f8fff6;
-  font-size: 8.25rem;
-  line-height: 0.9;
+  font-size: 5.35rem;
+  line-height: 0.96;
   letter-spacing: 0;
   text-transform: none;
   background:
     linear-gradient(180deg, #ffffff 0%, #ecffef 34%, #a8ffb3 64%, #5ee7ff 112%);
   background-clip: text;
   filter:
-    drop-shadow(0 0 8px var(--title-glow-green))
-    drop-shadow(0 0 24px var(--title-glow-cyan));
+    drop-shadow(0 0 6px var(--title-glow-green))
+    drop-shadow(0 0 16px var(--title-glow-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -267,16 +267,16 @@ h1 {
 h1::before {
   position: absolute;
   left: 0.03em;
-  right: -0.08em;
-  bottom: -0.08em;
+  bottom: -0.12em;
   z-index: -1;
-  height: 0.055em;
+  width: min(58%, 11rem);
+  height: 0.035em;
   content: "";
   background:
     linear-gradient(90deg, var(--green), var(--cyan) 54%, transparent 100%);
   box-shadow:
-    0 0 12px rgba(101, 255, 122, 0.36),
-    0 0 20px rgba(94, 231, 255, 0.18);
+    0 0 8px rgba(101, 255, 122, 0.3),
+    0 0 14px rgba(94, 231, 255, 0.14);
   transform: skewX(-10deg);
 }
 
@@ -285,10 +285,10 @@ h1::after {
 }
 
 .hero-copy {
-  width: min(770px, 100%);
-  margin: 1.3rem 0 0;
+  width: min(820px, 100%);
+  margin: 1.5rem 0 0;
   color: #d9ded7;
-  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+  font-size: clamp(1.05rem, 1.7vw, 1.25rem);
 }
 
 .hero-footnote {
@@ -908,17 +908,6 @@ h1::after {
   color: #fff;
 }
 
-.setup-highlight {
-  display: block;
-  margin-top: 0.82rem;
-  padding: 0.68rem 0.78rem;
-  border: 1px solid rgba(101, 255, 122, 0.24);
-  border-left: 3px solid rgba(101, 255, 122, 0.72);
-  border-radius: 7px;
-  background: rgba(101, 255, 122, 0.055);
-  color: #d8f6d6;
-}
-
 .setup-copy em {
   color: #fff;
   font-style: normal;
@@ -1219,7 +1208,7 @@ h1::after {
   }
 
   h1 {
-    font-size: 6.6rem;
+    font-size: 4.85rem;
   }
 }
 
@@ -1246,7 +1235,7 @@ h1::after {
   }
 
   h1 {
-    font-size: 4.2rem;
+    font-size: 3.85rem;
   }
 
   .hero-actions,
@@ -1334,7 +1323,7 @@ h1::after {
 
 @media (max-width: 380px) {
   h1 {
-    font-size: 3.65rem;
+    font-size: 3.25rem;
   }
 }
 
