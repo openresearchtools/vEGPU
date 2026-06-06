@@ -30,7 +30,8 @@ bad_artifacts="$(
     -path './Resources/Assets/PEGPU.icns' -o \
     -path './Resources/Assets/PEGPU-logo-transparent.png' -o \
     -path './Resources/Assets/PEGPU-tray.png' -o \
-    -path './website/assets/pegpu-logo.png' \
+    -path './website/assets/pegpu-logo.png' -o \
+    -path './website/assets/setup/pegpu-logo.png' \
   \) -prune -o -type f \( \
     -name '*.app' -o \
     -name '*.pkg' -o \
@@ -68,7 +69,8 @@ binary_payloads="$(
       -path './Resources/Assets/PEGPU.icns' -o \
       -path './Resources/Assets/PEGPU-logo-transparent.png' -o \
       -path './Resources/Assets/PEGPU-tray.png' -o \
-      -path './website/assets/pegpu-logo.png' \
+      -path './website/assets/pegpu-logo.png' -o \
+      -path './website/assets/setup/pegpu-logo.png' \
     \) -prune -o -type f -print0 |
     xargs -0 file |
     grep -E 'Mach-O|Debian binary package|current ar archive|Zip archive|xar archive|gzip compressed|XZ compressed|PNG image|JPEG image|Apple icon' || true
