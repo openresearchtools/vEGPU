@@ -112,7 +112,7 @@ on:
       prerelease:
         description: "Mark the GitHub release as prerelease."
         required: true
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -968,7 +968,7 @@ jobs:
       release_version: ${{ inputs.release_version || '0.1.0' }}
       build_number: ${{ inputs.build_number || github.run_number }}
       publish_release: false
-      prerelease: true
+      prerelease: ${{ inputs.prerelease || false }}
 
   package:
     name: Package installer
