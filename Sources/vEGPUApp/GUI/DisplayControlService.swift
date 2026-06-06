@@ -243,12 +243,7 @@ final class DisplayControlService: @unchecked Sendable {
             let remote = "/tmp/vegpu-scaling-app-\(UUID().uuidString)-\(package.lastPathComponent)"
             try await ssh.scpToGuest(localPath: package.path, remotePath: remote)
             let aptOptions = "-o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600"
-            let command = [
-                "sudo -n /usr/local/libexec/vegpu/vegpu-agent repair-packages || true",
-                aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions),
-                "rm -f \(shellQuote(remote))"
-            ].joined(separator: " && ")
-            _ = try await ssh.ssh(command, timeout: 60)
+            _ = try await ssh.ssh("\(aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions)) && rm -f \(shellQuote(remote))", timeout: 60)
             return
         }
         let files: [(String, String)] = [

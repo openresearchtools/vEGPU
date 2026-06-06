@@ -29,12 +29,8 @@ public final class GuestSyncService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "guest-sync", message: "Refreshing guest scripts"))
         _ = try await ssh.ssh("mkdir -p /tmp/vegpu-sync")
         try await syncGuestScripts()
-        await bestEffortGuestSyncStep(stage: "guest-sync", message: "Refreshing guest GUI assets") {
-            try await syncGuiAssets()
-        }
-        await bestEffortGuestSyncStep(stage: "guest-tools", message: "Installing or refreshing display scaling helper") {
-            try await syncScalingApp()
-        }
+        try await syncGuiAssets()
+        try await syncScalingApp()
         try await syncBundledLlamaRuntimeSeed()
         if !force, let runtimePid, markerMatches(runtimePid: runtimePid, fingerprint: fingerprint) {
             if await guestDriverReady() {
@@ -82,20 +78,6 @@ public final class GuestSyncService: @unchecked Sendable {
         return true
     }
 
-    private func bestEffortGuestSyncStep(stage: String, message: String, operation: () async throws -> Void) async {
-        do {
-            progress.report(ProgressEvent(stage: stage, message: message))
-            try await operation()
-        } catch {
-            progress.report(ProgressEvent(
-                stage: stage,
-                message: "\(message) skipped",
-                detail: firstLine(String(describing: error)),
-                level: .warning
-            ))
-        }
-    }
-
     private func syncGuestScripts() async throws {
         let guestDir = paths.resources.appendingPathComponent("Guest", isDirectory: true)
         let scripts: [(String, String)] = [
@@ -135,7 +117,9 @@ public final class GuestSyncService: @unchecked Sendable {
             try await ssh.scpToGuest(localPath: package.path, remotePath: remote)
             let aptOptions = "-o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600"
             let command = [
-                "sudo -n /usr/local/libexec/vegpu/vegpu-agent repair-packages || true",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) -f install -y",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a",
                 aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions),
                 "rm -f \(shellQuote(remote))"
             ].joined(separator: " && ")

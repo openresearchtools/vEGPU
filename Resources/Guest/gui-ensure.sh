@@ -23,14 +23,6 @@ apt_get() {
       [ -n "$output" ] && printf '%s\n' "$output" >&2
       return 0
     fi
-    if printf '%s\n' "$output" | grep -qiE 'dpkg was interrupted|you must manually run.*dpkg --configure -a|needs to be reinstalled, but I can.t find an archive|very bad inconsistent state'; then
-      printf '[gui-ensure] dpkg state interrupted; repairing package database (%s/120)\n' "$attempt" >&2
-      if [ -x /usr/local/libexec/vegpu/vegpu-agent ]; then
-        /usr/local/libexec/vegpu/vegpu-agent repair-packages >/dev/null 2>&1 || true
-      fi
-      sleep 2
-      continue
-    fi
     if printf '%s\n' "$output" | grep -qiE 'Could not get lock|Unable to lock directory|Unable to acquire|is held by process|is another process using it|dpkg frontend lock'; then
       printf '[gui-ensure] apt lock busy; waiting for current package operation (%s/120)\n' "$attempt" >&2
       sleep 5
@@ -77,9 +69,6 @@ install_scaling_app() {
     package="$candidate"
   done
   if [ -n "$package" ] && [ -f "$package" ]; then
-    if [ -x /usr/local/libexec/vegpu/vegpu-agent ]; then
-      /usr/local/libexec/vegpu/vegpu-agent repair-packages >/dev/null 2>&1 || true
-    fi
     if ! dpkg -i "$package" >/dev/null 2>&1; then
       apt_get install -y -f >/dev/null 2>&1 || true
       dpkg -i "$package" >/dev/null 2>&1 || true
