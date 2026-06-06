@@ -11,26 +11,26 @@ struct SSHTerminalSession: NSViewRepresentable {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> LocalProcessTerminalView {
-        let terminal = FocusableLocalProcessTerminalView(frame: .zero)
+    func makeNSView(context: Context) -> TerminalContainerView {
+        let container = TerminalContainerView(frame: .zero)
         let networkStore = NetworkStateStore(paths: paths)
         let ssh = SSHClient(paths: paths, networkStore: networkStore, role: .human)
-        terminal.startProcess(
+        container.terminal.startProcess(
             executable: "/usr/bin/ssh",
             args: ssh.args(command: "cd ~; exec bash -l", tty: true),
             environment: Terminal.getEnvironmentVariables(termName: "xterm-256color")
         )
-        return terminal
+        return container
     }
 
-    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
+    func updateNSView(_ nsView: TerminalContainerView, context: Context) {
         guard let input, context.coordinator.lastInputID != input.id else { return }
         context.coordinator.lastInputID = input.id
-        nsView.send(txt: input.text)
+        nsView.terminal.send(txt: input.text)
     }
 
-    static func dismantleNSView(_ nsView: LocalProcessTerminalView, coordinator: Coordinator) {
-        nsView.terminate()
+    static func dismantleNSView(_ nsView: TerminalContainerView, coordinator: Coordinator) {
+        nsView.terminal.terminate()
     }
 
     final class Coordinator {
@@ -38,19 +38,40 @@ struct SSHTerminalSession: NSViewRepresentable {
     }
 }
 
-private final class FocusableLocalProcessTerminalView: LocalProcessTerminalView {
+final class TerminalContainerView: NSView {
+    let terminal = LocalProcessTerminalView(frame: .zero)
+
     override var acceptsFirstResponder: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        addSubview(terminal)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        addSubview(terminal)
+    }
+
+    override func layout() {
+        super.layout()
+        terminal.frame = bounds
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.window?.firstResponder !== self else { return }
-            self.window?.makeFirstResponder(self)
-        }
+        focusTerminal()
     }
 
     override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
+        focusTerminal()
         super.mouseDown(with: event)
+    }
+
+    private func focusTerminal() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            _ = self.window?.makeFirstResponder(self.terminal)
+        }
     }
 }
