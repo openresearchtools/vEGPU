@@ -261,7 +261,18 @@ public final class GuestSyncService: @unchecked Sendable {
                 hasher.update(data: data)
             }
         }
-        for package in manifest.driver.dkmsPackages + manifest.guestPackages {
+        for package in manifest.driver.dkmsPackages {
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data(package.path.utf8))
+            if let local = manifestStore.resolvePackage(package) {
+                hasher.update(data: Data([0]))
+                hasher.update(data: Data(try sha512Hex(of: URL(fileURLWithPath: local)).utf8))
+            } else {
+                hasher.update(data: Data([0]))
+                hasher.update(data: Data("missing".utf8))
+            }
+        }
+        for package in manifest.guestPackages {
             hasher.update(data: Data([0]))
             hasher.update(data: Data(package.path.utf8))
             hasher.update(data: Data([0]))

@@ -207,7 +207,7 @@ driver_dkms_installed() {
 
 install_driver_dkms_packages() {
   if manifest_has_dkms_packages; then
-    install_manifest_packages '.driver.dkmsPackages'
+    install_driver_manifest_packages
   elif [ -d "$PACKAGE_DIR" ]; then
     local packages=()
     mapfile -t packages < <(find "$PACKAGE_DIR" -maxdepth 1 -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'vegpu-guest-dma-dkms_*.deb' \) -print 2>/dev/null | sort)
@@ -737,6 +737,30 @@ install_manifest_packages() {
     expected="$(printf '%s' "$row" | cut -f2)"
     file="$STATE_DIR/$rel"
     verify_package "$file" "$expected"
+    files+=("$file")
+  done
+  if [ "${#files[@]}" -gt 0 ]; then
+    repair_dpkg_state || true
+    dpkg_install "${files[@]}" || apt_get -f install -y
+    repair_dpkg_state || true
+  fi
+}
+
+install_driver_manifest_packages() {
+  local manifest
+  manifest="$(manifest_path)"
+  [ -f "$manifest" ] || return 0
+  mapfile -t rows < <(jq -r '.driver.dkmsPackages[]? | if type == "string" then . else .path end' "$manifest")
+  [ "${#rows[@]}" -gt 0 ] || return 0
+  local files=()
+  for rel in "${rows[@]}"; do
+    local file
+    case "$rel" in
+      packages/*) ;;
+      *) log "refusing package path outside packages/: $rel"; return 1 ;;
+    esac
+    file="$STATE_DIR/$rel"
+    [ -f "$file" ] || { log "missing package $file"; return 1; }
     files+=("$file")
   done
   if [ "${#files[@]}" -gt 0 ]; then
