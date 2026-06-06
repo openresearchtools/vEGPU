@@ -551,6 +551,53 @@ h1::after {
   transform: translateX(0);
 }
 
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: grid;
+  width: 2.7rem;
+  height: 3.35rem;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(2, 2, 2, 0.58);
+  color: #f4fbf1;
+  cursor: pointer;
+  font-size: 2rem;
+  line-height: 1;
+  transform: translateY(-50%);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  backdrop-filter: blur(14px);
+}
+
+.carousel-arrow.previous {
+  left: 0.8rem;
+}
+
+.carousel-arrow.next {
+  right: 0.8rem;
+}
+
+.carousel-arrow:hover,
+.carousel-arrow:focus-visible {
+  border-color: rgba(101, 255, 122, 0.68);
+  background: rgba(101, 255, 122, 0.13);
+  color: var(--green);
+  box-shadow: 0 0 22px rgba(101, 255, 122, 0.18);
+}
+
+.carousel-arrow.previous:hover,
+.carousel-arrow.previous:focus-visible {
+  transform: translate(-2px, -50%);
+}
+
+.carousel-arrow.next:hover,
+.carousel-arrow.next:focus-visible {
+  transform: translate(2px, -50%);
+}
+
 .carousel-dots {
   display: flex;
   justify-content: center;
@@ -1067,6 +1114,20 @@ h1::after {
   .section {
     padding-top: 4rem;
     padding-bottom: 4rem;
+  }
+
+  .carousel-arrow {
+    width: 2.2rem;
+    height: 2.8rem;
+    font-size: 1.55rem;
+  }
+
+  .carousel-arrow.previous {
+    left: 0.45rem;
+  }
+
+  .carousel-arrow.next {
+    right: 0.45rem;
   }
 
   .setup-disclosure > summary {

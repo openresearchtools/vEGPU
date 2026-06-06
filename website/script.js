@@ -84,67 +84,145 @@ if (carousel) {
   const slides = Array.from(carousel.querySelectorAll("[data-slide]"));
   const dots = Array.from(carousel.querySelectorAll("[data-slide-dot]"));
   const captions = Array.from(carousel.querySelectorAll("[data-caption]"));
+  const previousButton = carousel.querySelector("[data-carousel-previous]");
+  const nextButton = carousel.querySelector("[data-carousel-next]");
+  const carouselFrame = carousel.querySelector(".screenshot-frame") || carousel;
+  const autoplayDelay = 8400;
   let activeSlide = 0;
   let carouselTimer = 0;
   let userPinnedSlide = false;
   let carouselInView = false;
+  let transitionToken = 0;
 
   function setCarouselSlide(index) {
     activeSlide = (index + slides.length) % slides.length;
+    const activeSlideId = slides[activeSlide]?.dataset.slide || String(activeSlide);
+    if (slides[activeSlide]) {
+      slides[activeSlide].loading = "eager";
+    }
 
     slides.forEach((slide, slideIndex) => {
       slide.classList.toggle("is-active", slideIndex === activeSlide);
     });
 
-    dots.forEach((dot, dotIndex) => {
-      const isActive = dotIndex === activeSlide;
+    dots.forEach((dot) => {
+      const isActive = dot.dataset.slideDot === activeSlideId;
       dot.classList.toggle("is-active", isActive);
       dot.setAttribute("aria-selected", String(isActive));
     });
 
-    captions.forEach((caption, captionIndex) => {
-      caption.classList.toggle("is-active", captionIndex === activeSlide);
+    captions.forEach((caption) => {
+      caption.classList.toggle("is-active", caption.dataset.caption === activeSlideId);
     });
   }
 
+  function shouldAutoplay() {
+    return !prefersReducedMotion.matches && !userPinnedSlide && carouselInView && !document.hidden && slides.length > 1;
+  }
+
+  async function prepareSlide(index) {
+    const slide = slides[(index + slides.length) % slides.length];
+    if (!slide) return;
+
+    slide.loading = "eager";
+
+    if (slide.complete && slide.naturalWidth > 0) {
+      return;
+    }
+
+    if (typeof slide.decode === "function") {
+      try {
+        await slide.decode();
+      } catch (_error) {
+        // A failed decode should not trap the carousel; the browser can still try to paint the image.
+      }
+    }
+  }
+
+  async function advanceCarousel() {
+    stopCarousel();
+    if (!shouldAutoplay()) {
+      return;
+    }
+
+    const token = transitionToken + 1;
+    transitionToken = token;
+    const nextSlide = activeSlide + 1;
+    await prepareSlide(nextSlide);
+
+    if (transitionToken !== token || !shouldAutoplay()) {
+      return;
+    }
+
+    setCarouselSlide(nextSlide);
+    startCarousel();
+  }
+
   function stopCarousel() {
-    window.clearInterval(carouselTimer);
+    window.clearTimeout(carouselTimer);
     carouselTimer = 0;
   }
 
   function startCarousel() {
     stopCarousel();
-    if (prefersReducedMotion.matches || userPinnedSlide || !carouselInView || slides.length < 2) {
+    if (!shouldAutoplay()) {
       return;
     }
 
-    carouselTimer = window.setInterval(() => {
-      setCarouselSlide(activeSlide + 1);
-    }, 8400);
+    carouselTimer = window.setTimeout(advanceCarousel, autoplayDelay);
   }
 
   dots.forEach((dot) => {
-    dot.addEventListener("click", () => {
+    dot.addEventListener("click", (event) => {
+      event.preventDefault();
       userPinnedSlide = true;
+      transitionToken += 1;
       stopCarousel();
-      setCarouselSlide(Number(dot.dataset.slideDot || 0));
+      const slideIndex = slides.findIndex((slide) => slide.dataset.slide === dot.dataset.slideDot);
+      setCarouselSlide(slideIndex >= 0 ? slideIndex : 0);
     });
+  });
+
+  function setPinnedSlide(index) {
+    userPinnedSlide = true;
+    transitionToken += 1;
+    stopCarousel();
+    setCarouselSlide(index);
+  }
+
+  previousButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    setPinnedSlide(activeSlide - 1);
+  });
+
+  nextButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    setPinnedSlide(activeSlide + 1);
   });
 
   const carouselObserver = new IntersectionObserver(
     (entries) => {
-      carouselInView = entries.some((entry) => entry.isIntersecting);
+      carouselInView = entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.35);
       if (carouselInView) {
         startCarousel();
       } else {
+        transitionToken += 1;
         stopCarousel();
       }
     },
-    { threshold: 0.35 }
+    { threshold: [0, 0.35, 0.7] }
   );
 
-  carouselObserver.observe(carousel);
+  carouselObserver.observe(carouselFrame);
   prefersReducedMotion.addEventListener("change", startCarousel);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      transitionToken += 1;
+      stopCarousel();
+    } else {
+      startCarousel();
+    }
+  });
 }
 
 const overlayHosts = Array.from(document.querySelectorAll("[data-overlay-host]"));
