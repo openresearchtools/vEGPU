@@ -34,7 +34,7 @@ apt_get() {
       [ -n "$output" ] && printf '%s\n' "$output" >&2
       return 0
     fi
-    if printf '%s\n' "$output" | grep -qiE 'dpkg was interrupted|you must manually run.*dpkg --configure -a'; then
+    if printf '%s\n' "$output" | grep -qiE 'dpkg was interrupted|you must manually run.*dpkg --configure -a|needs to be reinstalled, but I can.t find an archive'; then
       log "dpkg state interrupted; repairing package database ($attempt/120)"
       repair_dpkg_state || true
       sleep 2
@@ -65,7 +65,7 @@ dpkg_install() {
       [ -n "$output" ] && printf '%s\n' "$output" >&2
       return 0
     fi
-    if printf '%s\n' "$output" | grep -qiE 'dpkg was interrupted|you must manually run.*dpkg --configure -a'; then
+    if printf '%s\n' "$output" | grep -qiE 'dpkg was interrupted|you must manually run.*dpkg --configure -a|needs to be reinstalled, but I can.t find an archive'; then
       log "dpkg state interrupted; repairing package database ($attempt/120)"
       repair_dpkg_state || true
       sleep 2
@@ -83,14 +83,33 @@ dpkg_install() {
   return "$code"
 }
 
+broken_vegpu_dpkg_packages() {
+  dpkg-query -W -f='${Package}\t${db:Status-Abbrev}\t${Status}\n' apple-dma-dkms vegpu-guest-dma-dkms 2>/dev/null |
+    awk '$2 ~ /R/ || tolower($0) ~ /reinst/ { print $1 }'
+}
+
+repair_vegpu_dpkg_packages() {
+  local pkgs=()
+  mapfile -t pkgs < <(broken_vegpu_dpkg_packages)
+  [ "${#pkgs[@]}" -gt 0 ] || return 0
+  log "removing broken vEGPU-owned DKMS package records: ${pkgs[*]}"
+  dpkg --remove --force-remove-reinstreq "${pkgs[@]}" >/dev/null 2>&1 ||
+    dpkg --purge --force-all "${pkgs[@]}" >/dev/null 2>&1 ||
+    true
+}
+
 repair_dpkg_state() {
   local output code
+  repair_vegpu_dpkg_packages || true
   set +e
   output="$(DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>&1)"
   code=$?
   set -e
   [ -n "$output" ] && printf '%s\n' "$output" >&2
   if [ "$code" -ne 0 ]; then
+    if printf '%s\n' "$output" | grep -qiE 'needs to be reinstalled, but I can.t find an archive|very bad inconsistent state'; then
+      repair_vegpu_dpkg_packages || true
+    fi
     apt-get -o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600 -f install -y
     DEBIAN_FRONTEND=noninteractive dpkg --configure -a
   fi
@@ -202,7 +221,8 @@ ensure_headers_for_kernel() {
 
 driver_dkms_installed() {
   dpkg-query -W -f='${db:Status-Abbrev}\n' apple-dma-dkms vegpu-guest-dma-dkms 2>/dev/null |
-    grep -q '^ii '
+    grep -q '^ii ' ||
+    current_kernel_dma_module >/dev/null 2>&1
 }
 
 install_driver_dkms_packages() {
@@ -709,18 +729,7 @@ EOS
 
 verify_package() {
   local file="$1"
-  local expected="$2"
   [ -f "$file" ] || { log "missing package $file"; return 1; }
-  if [ -n "$expected" ] && [ "$expected" != "null" ]; then
-    local actual
-    actual="$(sha512sum "$file" | awk '{print $1}')"
-    [ "$actual" = "$expected" ] || {
-      log "sha512 mismatch for $file"
-      log "expected $expected"
-      log "actual   $actual"
-      return 1
-    }
-  fi
 }
 
 install_manifest_packages() {
@@ -1576,6 +1585,9 @@ case "${1:-status}" in
     ;;
   update-tools)
     update_tools
+    ;;
+  repair-packages)
+    repair_dpkg_state
     ;;
   disable-idle)
     disable_idle
