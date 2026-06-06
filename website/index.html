@@ -337,6 +337,23 @@
               <strong>Install NVIDIA support inside the VM.</strong>
               The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. vEGPU does not ship those packages. If you use NVIDIA cards, run the helper inside vEGPU after the first Debian boot finishes. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal.
             </div>
+            <details class="setup-disclosure">
+              <summary>
+                <span>Show NVIDIA installer screenshots</span>
+              </summary>
+              <div class="setup-expanded">
+                <div class="setup-shot-grid nvidia-flow" aria-label="NVIDIA Linux driver installer flow">
+                  <figure class="setup-shot">
+                    <img src="assets/setup/nvidia-driver-card-booting.webp" alt="vEGPU GPU card showing Booting status and the Run Installer button." width="484" height="356" loading="lazy" decoding="async">
+                    <figcaption>Run Installer</figcaption>
+                  </figure>
+                  <figure class="setup-shot">
+                    <img src="assets/setup/nvidia-driver-install-confirm.webp" alt="vEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button." width="1122" height="814" loading="lazy" decoding="async">
+                    <figcaption>Install Driver confirmation</figcaption>
+                  </figure>
+                </div>
+              </div>
+            </details>
           </li>
           <li class="setup-guide-item">
             <div class="setup-copy setup-visible">

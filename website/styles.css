@@ -970,6 +970,10 @@ h1::after {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.setup-shot-grid.nvidia-flow {
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+}
+
 .setup-shot-grid .wide {
   grid-column: span 2;
 }
@@ -1264,7 +1268,8 @@ h1::after {
   .setup-shot-grid.single,
   .setup-shot-grid.quad,
   .setup-shot-grid.driver-flow,
-  .setup-shot-grid.helper-flow {
+  .setup-shot-grid.helper-flow,
+  .setup-shot-grid.nvidia-flow {
     grid-template-columns: 1fr;
   }
 
