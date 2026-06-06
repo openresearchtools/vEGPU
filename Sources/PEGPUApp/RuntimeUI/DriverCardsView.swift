@@ -56,6 +56,7 @@ private struct DriverStatusCard: View {
             Text(state.detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -132,12 +133,14 @@ private struct NvidiaStatusCard: View {
             Text(state.detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
                 .lineLimit(2)
             if !output.isEmpty {
                 ScrollView(.horizontal) {
                     Text(output)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.white)
+                        .textSelection(.enabled)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }

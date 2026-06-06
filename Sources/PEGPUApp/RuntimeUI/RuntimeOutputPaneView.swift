@@ -33,6 +33,7 @@ struct RuntimeOutputPaneView: View {
                     Text(log.outputLines.isEmpty ? "Runtime output will appear here." : log.outputLines.joined(separator: "\n"))
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(Color(nsColor: .textColor))
+                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
                         .id("output-bottom")
@@ -81,6 +82,7 @@ private struct ProgressDockView: View {
             Text(detailText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
                 .lineLimit(2)
         }
         .padding(.horizontal, 14)

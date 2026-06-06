@@ -7,6 +7,7 @@ struct ManifestPaneView: View {
         ScrollView {
             Text(manifest.manifestSummary)
                 .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
         }

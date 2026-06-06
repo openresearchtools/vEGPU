@@ -177,6 +177,70 @@ apply_kernel_policy() {
   apt-mark unhold linux-image-arm64 linux-headers-arm64 >/dev/null 2>&1 || true
 }
 
+grow_root_filesystem() {
+  local root_source rootdev root_type disk_name part_num output code attempt
+  if ! command -v growpart >/dev/null 2>&1 || ! command -v resize2fs >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt_get update
+    apt_get install -y cloud-guest-utils e2fsprogs util-linux
+  fi
+
+  root_source="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+  root_type="$(findmnt -n -o FSTYPE / 2>/dev/null || true)"
+  [ -n "$root_source" ] || { log "root filesystem source is unavailable"; return 0; }
+  rootdev="$(readlink -f "$root_source" 2>/dev/null || printf '%s\n' "$root_source")"
+  [ -b "$rootdev" ] || { log "root filesystem source is not a block device: $root_source"; return 0; }
+
+  disk_name="$(lsblk -no PKNAME "$rootdev" 2>/dev/null | awk 'NF { print $1; exit }')"
+  part_num="$(lsblk -no PARTN "$rootdev" 2>/dev/null | awk 'NF { print $1; exit }')"
+  if [ -n "$disk_name" ] && [ -n "$part_num" ]; then
+    if command -v growpart >/dev/null 2>&1; then
+      set +e
+      output="$(growpart "/dev/$disk_name" "$part_num" 2>&1)"
+      code=$?
+      set -e
+      [ -n "$output" ] && log "$output"
+      if [ "$code" -ne 0 ] && ! printf '%s\n' "$output" | grep -qiE 'NOCHANGE|no change|must supply partition-number'; then
+        log "growpart failed for /dev/$disk_name partition $part_num"
+      fi
+      partprobe "/dev/$disk_name" >/dev/null 2>&1 || blockdev --rereadpt "/dev/$disk_name" >/dev/null 2>&1 || true
+    else
+      log "growpart is unavailable; root partition growth skipped"
+    fi
+  else
+    log "root parent disk/partition number unavailable for $rootdev"
+  fi
+
+  case "$root_type" in
+    ext2|ext3|ext4)
+      command -v resize2fs >/dev/null 2>&1 || { log "resize2fs is unavailable"; return 0; }
+      for attempt in $(seq 1 24); do
+        set +e
+        output="$(resize2fs "$rootdev" 2>&1)"
+        code=$?
+        set -e
+        [ -n "$output" ] && log "$output"
+        if [ "$code" -eq 0 ] || printf '%s\n' "$output" | grep -qiE 'nothing to do|already.*size'; then
+          return 0
+        fi
+        if printf '%s\n' "$output" | grep -qiE 'device or resource busy|try again|temporarily unavailable'; then
+          sleep 2
+          continue
+        fi
+        return "$code"
+      done
+      log "resize2fs did not settle for $rootdev"
+      return 1
+      ;;
+    xfs)
+      command -v xfs_growfs >/dev/null 2>&1 && xfs_growfs / || log "xfs_growfs is unavailable"
+      ;;
+    *)
+      log "root filesystem type $root_type does not need PEGPU resize handling"
+      ;;
+  esac
+}
+
 install_dkms_prereqs() {
   export DEBIAN_FRONTEND=noninteractive
   apt_get update
@@ -1579,6 +1643,9 @@ case "${1:-status}" in
     ;;
   apply-kernel-policy)
     apply_kernel_policy
+    ;;
+  grow-root-filesystem)
+    grow_root_filesystem
     ;;
   ingest-manifest)
     shift

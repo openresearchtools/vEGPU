@@ -124,6 +124,10 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         const style = document.createElement('style');
         style.textContent = `
             html, body { min-height: 100%; color-scheme: light dark; background: Canvas; }
+            html, body, body * {
+                -webkit-user-select: text !important;
+                user-select: text !important;
+            }
             @media (prefers-color-scheme: dark) {
                 html, body { background: #0e0d0c !important; }
             }

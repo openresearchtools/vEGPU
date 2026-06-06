@@ -10,6 +10,7 @@ struct PEGPUApp: App {
             RootView(model: appDelegate.model)
                 .background(WindowBinder(appDelegate: appDelegate))
                 .frame(minWidth: 760, minHeight: 680)
+                .textSelection(.enabled)
                 .task {
                     appDelegate.configure(model: appDelegate.model)
                 }

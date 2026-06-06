@@ -168,14 +168,24 @@ public final class SSHClient: @unchecked Sendable {
     public func waitForCloudInit(timeout: TimeInterval = 1_200) async throws {
         let started = Date()
         var lastDetail = ""
+        var reportedResizeWarning = false
         while Date().timeIntervalSince(started) < timeout {
             let result = try? await runner.run("/usr/bin/ssh", args(command: "cloud-init status --format=json 2>/dev/null || cloud-init status --long 2>&1"))
             let text = ((result?.stdout.isEmpty == false ? result?.stdout : result?.stderr) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let parsed = parseCloudInitStatus(text)
-            if parsed.status == "done", parsed.ok {
+            if parsed.status == "done", parsed.ok || parsed.resizefsOnly {
+                if parsed.resizefsOnly {
+                    reportCloudInitResizefsWarningOnce(&reportedResizeWarning)
+                    await repairCloudInitResizefsWarning()
+                }
                 return
             }
             if parsed.status == "error" || !parsed.ok {
+                if parsed.resizefsOnly {
+                    reportCloudInitResizefsWarningOnce(&reportedResizeWarning)
+                    await repairCloudInitResizefsWarning()
+                    return
+                }
                 throw RuntimeError.message("cloud-init failed\n\(text)\n\(await cloudInitDiagnostics())")
             }
             let detail = parsed.detail ?? "\(Int(Date().timeIntervalSince(started)))s elapsed"
@@ -188,16 +198,48 @@ public final class SSHClient: @unchecked Sendable {
         throw RuntimeError.message("Timed out waiting for cloud-init\n\(await cloudInitDiagnostics())")
     }
 
-    private func parseCloudInitStatus(_ text: String) -> (status: String?, ok: Bool, detail: String?) {
+    private func parseCloudInitStatus(_ text: String) -> (status: String?, ok: Bool, detail: String?, resizefsOnly: Bool) {
         if let data = text.data(using: .utf8),
            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let errors = object["errors"] as? [Any] ?? []
             let recoverable = object["recoverable_errors"] as? [String: [Any]] ?? [:]
-            return (object["status"] as? String, errors.isEmpty && recoverable.values.flatMap { $0 }.isEmpty, object["extended_status"] as? String ?? object["status"] as? String)
+            let status = object["status"] as? String
+            let detail = object["extended_status"] as? String ?? status
+            let errorText = (errors + recoverable.values.flatMap { $0 }).map { String(describing: $0) }
+            let hasErrors = !errorText.isEmpty
+            return (status, !hasErrors, detail, hasErrors && errorText.allSatisfy(isCloudInitResizefsWarning))
         }
         let done = text.range(of: #"status:\s*done"#, options: [.regularExpression, .caseInsensitive]) != nil
         let error = text.range(of: #"status:\s*error"#, options: [.regularExpression, .caseInsensitive]) != nil
-        return (done ? "done" : (error ? "error" : nil), !error, firstLine(text))
+        return (done ? "done" : (error ? "error" : nil), !error, firstLine(text), error && isCloudInitResizefsWarning(text))
+    }
+
+    private func isCloudInitResizefsWarning(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        guard lower.contains("resizefs") || lower.contains("resize2fs") else {
+            return false
+        }
+        guard lower.contains("/dev/vda1") else {
+            return false
+        }
+        return lower.contains("device or resource busy") ||
+            lower.contains("failed to resize filesystem") ||
+            lower.contains("cc_resizefs.py")
+    }
+
+    private func reportCloudInitResizefsWarningOnce(_ reported: inout Bool) {
+        if !reported {
+            progress.report(ProgressEvent(
+                stage: "cloud-init",
+                message: "Repairing Linux root filesystem growth",
+                detail: "cloud-init resizefs reported a mounted-root warning"
+            ))
+            reported = true
+        }
+    }
+
+    private func repairCloudInitResizefsWarning() async {
+        _ = try? await runner.run("/usr/bin/ssh", args(command: agentCommand(["grow-root-filesystem"])), timeout: 120)
     }
 
     private func cloudInitDiagnostics() async -> String {

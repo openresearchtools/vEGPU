@@ -115,6 +115,9 @@ public final class CloudInitService: @unchecked Sendable {
         ssh_pwauth: false
         disable_root: true
         package_update: false
+        growpart:
+          mode: off
+        resize_rootfs: false
         write_files:
           - path: /usr/local/libexec/pegpu/pegpu-agent
             owner: root:root

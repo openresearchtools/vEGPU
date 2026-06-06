@@ -1,3 +1,4 @@
+import AppKit
 import SwiftTerm
 import SwiftUI
 import PEGPUCore
@@ -11,7 +12,7 @@ struct SSHTerminalSession: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> LocalProcessTerminalView {
-        let terminal = LocalProcessTerminalView(frame: .zero)
+        let terminal = FocusableLocalProcessTerminalView(frame: .zero)
         let networkStore = NetworkStateStore(paths: paths)
         let ssh = SSHClient(paths: paths, networkStore: networkStore, role: .human)
         terminal.startProcess(
@@ -34,5 +35,22 @@ struct SSHTerminalSession: NSViewRepresentable {
 
     final class Coordinator {
         var lastInputID: UUID?
+    }
+}
+
+private final class FocusableLocalProcessTerminalView: LocalProcessTerminalView {
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window?.firstResponder !== self else { return }
+            self.window?.makeFirstResponder(self)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
     }
 }

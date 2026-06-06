@@ -31,10 +31,11 @@ mkdir -p /run/pegpu/shares /var/lib/pegpu /usr/local/libexec/pegpu
 /usr/local/libexec/pegpu/pegpu-agent disable-idle || true
 
 apt_get update
-apt_get install -y openssh-server ca-certificates curl jq gnupg iptables nfs-common nfs-kernel-server rpcbind kmod sudo tmux
+apt_get install -y openssh-server ca-certificates curl jq gnupg iptables nfs-common nfs-kernel-server rpcbind kmod sudo tmux cloud-guest-utils e2fsprogs util-linux
 
 mkdir -p /run/pegpu/shares /var/lib/pegpu /usr/local/libexec/pegpu
 
+/usr/local/libexec/pegpu/pegpu-agent grow-root-filesystem || true
 /usr/local/libexec/pegpu/pegpu-agent ingest-seed-bundle || true
 /usr/local/libexec/pegpu/pegpu-agent apply-kernel-policy
 

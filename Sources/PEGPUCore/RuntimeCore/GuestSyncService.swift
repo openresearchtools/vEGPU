@@ -29,6 +29,7 @@ public final class GuestSyncService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "guest-sync", message: "Refreshing guest scripts"))
         _ = try await ssh.ssh("mkdir -p /tmp/pegpu-sync")
         try await syncGuestScripts()
+        await growRootFilesystem()
         try await syncGuiAssets()
         try await syncScalingApp()
         try await syncBundledLlamaRuntimeSeed()
@@ -93,6 +94,20 @@ public final class GuestSyncService: @unchecked Sendable {
             let remote = "/tmp/pegpu-sync/\(name)"
             try await ssh.scpToGuest(localPath: source, remotePath: remote)
             _ = try await ssh.ssh("sudo -n install -d \(shellQuote(URL(fileURLWithPath: destination).deletingLastPathComponent().path)) && sudo -n install -m 0755 \(shellQuote(remote)) \(shellQuote(destination))")
+        }
+    }
+
+    private func growRootFilesystem() async {
+        progress.report(ProgressEvent(stage: "disk", message: "Ensuring Linux root filesystem can use the expanded runtime disk"))
+        do {
+            _ = try await ssh.agent(["grow-root-filesystem"], timeout: 600)
+        } catch {
+            progress.report(ProgressEvent(
+                stage: "disk",
+                message: "Linux root filesystem growth needs attention",
+                detail: firstLine(String(describing: error)),
+                level: .error
+            ))
         }
     }
 
