@@ -25,7 +25,8 @@ public final class GuestSyncService: @unchecked Sendable {
     @discardableResult
     public func sync(force: Bool = false, runtimePid: Int32? = nil) async throws -> Bool {
         let manifest = try manifestStore.load()
-        let fingerprint = try guestSyncFingerprint(manifest: manifest)
+        let driverPackages = manifestStore.driverDKMSPackages()
+        let fingerprint = try guestSyncFingerprint(manifest: manifest, driverPackages: driverPackages)
         progress.report(ProgressEvent(stage: "guest-sync", message: "Refreshing guest scripts"))
         _ = try await ssh.ssh("mkdir -p /tmp/pegpu-sync")
         try await syncGuestScripts()
@@ -55,7 +56,7 @@ public final class GuestSyncService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "guest-sync", message: "Applying runtime manifest"))
         _ = try await ssh.agent(["ingest-manifest", "/tmp/pegpu-sync/manifest.json"])
 
-        try await syncPackages(kind: "driver DKMS", packages: manifest.driver.dkmsPackages)
+        try await syncPackages(kind: "driver DKMS", packages: driverPackages)
         try await syncPackages(kind: "guest", packages: manifest.guestPackages)
         progress.report(ProgressEvent(stage: "guest-tools", message: "Installing or refreshing guest tools"))
         _ = try await ssh.agent(["update-tools"])
@@ -184,7 +185,7 @@ public final class GuestSyncService: @unchecked Sendable {
     private func syncPackages(kind: String, packages: [ManifestPackage]) async throws {
         for package in packages {
             guard let local = manifestStore.resolvePackage(package) else {
-                throw RuntimeError.message("Missing \(kind) package referenced by manifest: \(package.path)")
+                throw RuntimeError.message("Missing \(kind) package: \(package.path)")
             }
             let remote = "/tmp/pegpu-sync/\(URL(fileURLWithPath: package.path).lastPathComponent)"
             progress.report(ProgressEvent(stage: "guest-sync", message: "Uploading \(kind) package", detail: URL(fileURLWithPath: package.path).lastPathComponent))
@@ -238,7 +239,7 @@ public final class GuestSyncService: @unchecked Sendable {
             status["driverReady"] as? String == "yes"
     }
 
-    private func guestSyncFingerprint(manifest: RuntimeManifest) throws -> String {
+    private func guestSyncFingerprint(manifest: RuntimeManifest, driverPackages: [ManifestPackage]) throws -> String {
         var hasher = SHA256()
         hasher.update(data: try JSON.encoder.encode(manifest))
         let guestDir = paths.resources.appendingPathComponent("Guest", isDirectory: true)
@@ -276,7 +277,7 @@ public final class GuestSyncService: @unchecked Sendable {
                 hasher.update(data: data)
             }
         }
-        for package in manifest.driver.dkmsPackages {
+        for package in driverPackages {
             hasher.update(data: Data([0]))
             hasher.update(data: Data(package.path.utf8))
             if let local = manifestStore.resolvePackage(package) {

@@ -86,7 +86,7 @@ public final class MachineService: @unchecked Sendable {
         }
         progress.report(ProgressEvent(stage: "cloud-init", message: "Creating cloud-init seed ISO"))
         let config = configStore.effective()
-        _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiAppearance: config.guiAppearance, force: true)
+        _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiRetina: config.guiRetina, guiAppearance: config.guiAppearance, force: true)
     }
 
     public func startMachine() async throws {
@@ -232,7 +232,7 @@ public final class MachineService: @unchecked Sendable {
             }
             try secrets.save(updated)
             let config = configStore.effective()
-            _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiAppearance: config.guiAppearance, force: true)
+            _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiRetina: config.guiRetina, guiAppearance: config.guiAppearance, force: true)
             return updated
         }
 
@@ -242,7 +242,7 @@ public final class MachineService: @unchecked Sendable {
         _ = try await ssh.ssh("printf %s \(shellQuote(payload)) | base64 -d | sudo -n chpasswd", timeout: 30)
         try secrets.save(updated)
         let config = configStore.effective()
-        _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiAppearance: config.guiAppearance, force: true)
+        _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiRetina: config.guiRetina, guiAppearance: config.guiAppearance, force: true)
         progress.report(ProgressEvent(stage: "password", message: "Linux password changed", detail: SSHClient.user, level: .success))
         return updated
     }
@@ -365,7 +365,7 @@ public final class MachineService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "start", message: "Starting PEGPU runtime"))
         try await initMachine()
         let config = configStore.effective()
-        _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiAppearance: config.guiAppearance, force: true)
+        _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiRetina: config.guiRetina, guiAppearance: config.guiAppearance, force: true)
         let tools = try ToolResolver().resolve()
         let network = networkStore.launcherNetwork(toolPaths: tools)
         _ = try await share.ensureHostShare(config.shareRoot)

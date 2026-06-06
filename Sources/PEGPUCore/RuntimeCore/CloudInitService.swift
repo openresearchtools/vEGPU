@@ -18,7 +18,7 @@ public final class CloudInitService: @unchecked Sendable {
     }
 
     @discardableResult
-    public func createSeedIso(mode: RuntimeLaunchMode = .headless, guiAppearance: GUIAppearance = .dark, force: Bool = false) async throws -> String {
+    public func createSeedIso(mode: RuntimeLaunchMode = .headless, guiRetina: Bool = MachineConfig.defaultGuiRetina, guiAppearance: GUIAppearance = .dark, force: Bool = false) async throws -> String {
         _ = try await ssh.ensureKey()
         let machineSecrets = try secrets.ensure()
         let publicKey = try String(contentsOfFile: "\(ssh.privateKeyPath).pub", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -30,7 +30,7 @@ public final class CloudInitService: @unchecked Sendable {
         try FileManager.default.createDirectory(at: seedDir, withIntermediateDirectories: true)
         try "instance-id: pegpu-machine-vmnet-static-v3-\(mode.rawValue)\nlocal-hostname: pegpu-runtime\n".write(to: seedDir.appendingPathComponent("meta-data"), atomically: true, encoding: .utf8)
         try networkConfig().write(to: seedDir.appendingPathComponent("network-config"), atomically: true, encoding: .utf8)
-        try userData(publicKey: publicKey, password: machineSecrets.linuxPassword, mode: mode, guiAppearance: guiAppearance).write(to: seedDir.appendingPathComponent("user-data"), atomically: true, encoding: .utf8)
+        try userData(publicKey: publicKey, password: machineSecrets.linuxPassword, mode: mode, guiRetina: guiRetina, guiAppearance: guiAppearance).write(to: seedDir.appendingPathComponent("user-data"), atomically: true, encoding: .utf8)
         try writeSeedGuestBundle(seedDir: seedDir)
         try? FileManager.default.removeItem(at: files.seedIso)
         _ = try await runner.runChecked("/usr/bin/hdiutil", ["makehybrid", "-iso", "-joliet", "-default-volume-name", "cidata", "-o", files.seedIso.path, seedDir.path])
@@ -61,7 +61,7 @@ public final class CloudInitService: @unchecked Sendable {
         """
     }
 
-    private func userData(publicKey: String, password: String, mode: RuntimeLaunchMode, guiAppearance: GUIAppearance) throws -> String {
+    private func userData(publicKey: String, password: String, mode: RuntimeLaunchMode, guiRetina: Bool, guiAppearance: GUIAppearance) throws -> String {
         let agent = try String(contentsOf: paths.resources.appendingPathComponent("Guest/pegpu-agent.sh"), encoding: .utf8)
         let firstBoot = try String(contentsOf: paths.resources.appendingPathComponent("Guest/pegpu-firstboot.sh"), encoding: .utf8)
         let llamaRuntimeReconcile = try String(contentsOf: paths.resources.appendingPathComponent("Guest/reconcile-llama-runtimes.sh"), encoding: .utf8)
@@ -87,7 +87,7 @@ public final class CloudInitService: @unchecked Sendable {
                 content: \(base64($0))
             """
         } ?? ""
-        let guiRunCommand = mode == .gui ? "\n  - [ env, PEGPU_FORCE_SPICE_ON_LAUNCH=1, PEGPU_GUI_APPEARANCE=\(guiAppearance.rawValue), /usr/local/sbin/pegpu-gui-ensure.sh ]" : ""
+        let guiRunCommand = mode == .gui ? "\n  - [ env, PEGPU_FORCE_SPICE_ON_LAUNCH=1, PEGPU_GUI_RETINA=\(guiRetina ? "1" : "0"), PEGPU_GUI_APPEARANCE=\(guiAppearance.rawValue), /usr/local/sbin/pegpu-gui-ensure.sh ]" : ""
         return """
         #cloud-config
         users:
@@ -209,10 +209,11 @@ public final class CloudInitService: @unchecked Sendable {
 
     private func writeSeedGuestBundle(seedDir: URL) throws {
         let manifest = try manifestStore.load()
+        let driverPackages = manifestStore.driverDKMSPackages()
         let bundle = seedDir.appendingPathComponent("pegpu", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         try JSON.write(manifest, to: bundle.appendingPathComponent("manifest.json"))
-        let packages = manifest.driver.dkmsPackages + manifest.guestPackages
+        let packages = driverPackages + manifest.guestPackages
         for package in packages {
             try copySeedPackage(bundle: bundle, package: package)
         }
@@ -220,7 +221,7 @@ public final class CloudInitService: @unchecked Sendable {
 
     private func copySeedPackage(bundle: URL, package: ManifestPackage) throws {
         guard let source = manifestStore.resolvePackage(package) else {
-            throw RuntimeError.message("Missing guest package referenced by manifest: \(package.path)")
+            throw RuntimeError.message("Missing guest package: \(package.path)")
         }
         let destination = bundle.appendingPathComponent(package.path).standardizedFileURL
         let root = bundle.standardizedFileURL.path + "/"

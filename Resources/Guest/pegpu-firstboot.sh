@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+set -Eeuxo pipefail
 export DEBIAN_FRONTEND=noninteractive
+FIRSTBOOT_LOG=/var/log/pegpu-firstboot.log
+mkdir -p /var/log
+exec > >(tee -a "$FIRSTBOOT_LOG") 2>&1
+trap 'code=$?; printf "[firstboot] failed at line %s: %s (exit %s)\n" "$LINENO" "$BASH_COMMAND" "$code" >&2' ERR
 
 apt_get() {
   local attempt output code
@@ -53,7 +57,7 @@ systemctl enable ssh
 /usr/local/libexec/pegpu/pegpu-agent configure-audio-rtp || true
 usermod -aG dialout pegpu || true
 usermod -aG dialout pegpuctl || true
-/usr/local/libexec/pegpu/pegpu-agent configure-nvidia-repos
+/usr/local/libexec/pegpu/pegpu-agent prepare-nvidia-repos || true
 /usr/local/libexec/pegpu/pegpu-agent export-linux-home-nfs || true
 systemctl restart ssh
 /usr/local/libexec/pegpu/pegpu-agent update-tools || true

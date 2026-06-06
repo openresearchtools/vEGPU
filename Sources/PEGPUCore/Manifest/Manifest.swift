@@ -131,6 +131,10 @@ public final class ManifestStore: @unchecked Sendable {
             .first { FileManager.default.fileExists(atPath: $0) }
     }
 
+    public func driverDKMSPackages() -> [ManifestPackage] {
+        discoveredDriverDKMSPackages()
+    }
+
     public func guestToolRoots() -> [URL] {
         let roots = [
             URL(fileURLWithPath: VfioApp.resourcesPath("guest-tools")),
@@ -138,6 +142,28 @@ public final class ManifestStore: @unchecked Sendable {
         ]
         var seen = Set<String>()
         return roots.filter { seen.insert($0.path).inserted }
+    }
+
+    private func discoveredDriverDKMSPackages() -> [ManifestPackage] {
+        var out: [ManifestPackage] = []
+        var seen = Set<String>()
+        for root in guestToolRoots() {
+            let packages = root.appendingPathComponent("packages", isDirectory: true)
+            guard let items = try? FileManager.default.contentsOfDirectory(at: packages, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else {
+                continue
+            }
+            for item in items where isDriverDKMSDeb(item.lastPathComponent) {
+                let relative = "packages/\(item.lastPathComponent)"
+                guard seen.insert(relative).inserted else { continue }
+                out.append(ManifestPackage(path: relative))
+            }
+        }
+        return out.sorted { $0.path < $1.path }
+    }
+
+    private func isDriverDKMSDeb(_ name: String) -> Bool {
+        name.hasSuffix(".deb") &&
+            (name.hasPrefix("apple-dma-dkms_") || name.hasPrefix("pegpu-guest-dma-dkms_"))
     }
 
     private func ensureManifestFile() throws {

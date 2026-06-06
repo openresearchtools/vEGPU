@@ -186,6 +186,15 @@ public final class SSHClient: @unchecked Sendable {
                     await repairCloudInitResizefsWarning()
                     return
                 }
+                if parsed.scriptsUserFailure {
+                    progress.report(ProgressEvent(
+                        stage: "cloud-init",
+                        message: "Continuing after cloud-init firstboot failure",
+                        detail: "Guest sync will refresh PEGPU tools and report the failing runtime step",
+                        level: .error
+                    ))
+                    return
+                }
                 throw RuntimeError.message("cloud-init failed\n\(text)\n\(await cloudInitDiagnostics())")
             }
             let detail = parsed.detail ?? "\(Int(Date().timeIntervalSince(started)))s elapsed"
@@ -198,7 +207,7 @@ public final class SSHClient: @unchecked Sendable {
         throw RuntimeError.message("Timed out waiting for cloud-init\n\(await cloudInitDiagnostics())")
     }
 
-    private func parseCloudInitStatus(_ text: String) -> (status: String?, ok: Bool, detail: String?, resizefsOnly: Bool) {
+    private func parseCloudInitStatus(_ text: String) -> (status: String?, ok: Bool, detail: String?, resizefsOnly: Bool, scriptsUserFailure: Bool) {
         if let data = text.data(using: .utf8),
            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let errors = object["errors"] as? [Any] ?? []
@@ -207,11 +216,23 @@ public final class SSHClient: @unchecked Sendable {
             let detail = object["extended_status"] as? String ?? status
             let errorText = (errors + recoverable.values.flatMap { $0 }).map { String(describing: $0) }
             let hasErrors = !errorText.isEmpty
-            return (status, !hasErrors, detail, hasErrors && errorText.allSatisfy(isCloudInitResizefsWarning))
+            return (
+                status,
+                !hasErrors,
+                detail,
+                hasErrors && errorText.allSatisfy(isCloudInitResizefsWarning),
+                hasErrors && errorText.allSatisfy(isCloudInitScriptsUserFailure)
+            )
         }
         let done = text.range(of: #"status:\s*done"#, options: [.regularExpression, .caseInsensitive]) != nil
         let error = text.range(of: #"status:\s*error"#, options: [.regularExpression, .caseInsensitive]) != nil
-        return (done ? "done" : (error ? "error" : nil), !error, firstLine(text), error && isCloudInitResizefsWarning(text))
+        return (
+            done ? "done" : (error ? "error" : nil),
+            !error,
+            firstLine(text),
+            error && isCloudInitResizefsWarning(text),
+            error && isCloudInitScriptsUserFailure(text)
+        )
     }
 
     private func isCloudInitResizefsWarning(_ text: String) -> Bool {
@@ -225,6 +246,16 @@ public final class SSHClient: @unchecked Sendable {
         return lower.contains("device or resource busy") ||
             lower.contains("failed to resize filesystem") ||
             lower.contains("cc_resizefs.py")
+    }
+
+    private func isCloudInitScriptsUserFailure(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        guard lower.contains("scripts-user") || lower.contains("cc_scripts_user.py") || lower.contains("runcmd") else {
+            return false
+        }
+        return lower.contains("runparts: 1 failures") ||
+            lower.contains("failed to run module scripts-user") ||
+            lower.contains("runtimeerror")
     }
 
     private func reportCloudInitResizefsWarningOnce(_ reported: inout Bool) {
@@ -246,7 +277,9 @@ public final class SSHClient: @unchecked Sendable {
         let command = [
             "cloud-init status --long 2>&1 || true",
             "echo '--- cloud-init-output.log ---'",
-            "tail -n 160 /var/log/cloud-init-output.log 2>/dev/null || true"
+            "tail -n 160 /var/log/cloud-init-output.log 2>/dev/null || true",
+            "echo '--- pegpu-firstboot.log ---'",
+            "tail -n 160 /var/log/pegpu-firstboot.log 2>/dev/null || true"
         ].joined(separator: "; ")
         return ((try? await runner.run("/usr/bin/ssh", args(command: command))).map { $0.stdout.isEmpty ? $0.stderr : $0.stdout }) ?? ""
     }

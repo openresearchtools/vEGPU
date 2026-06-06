@@ -1,16 +1,14 @@
+import AppKit
 import SwiftUI
 
 struct ManifestPaneView: View {
     @ObservedObject var manifest: RuntimeManifestState
 
     var body: some View {
-        ScrollView {
-            Text(manifest.manifestSummary)
-                .font(.system(.body, design: .monospaced))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-        }
+        SelectableTextPane(
+            text: manifest.manifestSummary,
+            font: .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        )
         .frame(
             maxWidth: .infinity,
             minHeight: RuntimePaneSizing.minHeight,

@@ -166,11 +166,6 @@ update_agent() {
   install -m 0755 "$source" /usr/local/libexec/pegpu/pegpu-agent
 }
 
-manifest_has_dkms_packages() {
-  [ -f "$MANIFEST_FILE" ] || return 1
-  jq -e '(.driver.dkmsPackages // []) | length > 0' "$MANIFEST_FILE" >/dev/null 2>&1
-}
-
 apply_kernel_policy() {
   rm -f "$PIN_FILE"
   log "kernel packages are DKMS-managed; leaving Debian kernel updates enabled"
@@ -270,9 +265,7 @@ driver_dkms_installed() {
 }
 
 install_driver_dkms_packages() {
-  if manifest_has_dkms_packages; then
-    install_driver_manifest_packages
-  elif [ -d "$PACKAGE_DIR" ]; then
+  if [ -d "$PACKAGE_DIR" ]; then
     local packages=()
     mapfile -t packages < <(find "$PACKAGE_DIR" -maxdepth 1 -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'pegpu-guest-dma-dkms_*.deb' \) -print 2>/dev/null | sort)
     if [ "${#packages[@]}" -gt 0 ]; then
@@ -406,7 +399,7 @@ ensure_driver_persistence() {
   touch "$STATE_DIR/driver-persistent"
 }
 
-configure_nvidia_repos() {
+prepare_nvidia_repos() {
   mkdir -p /etc/modprobe.d /etc/apt/preferences.d
   if [ -f /etc/modprobe.d/blacklist-nouveau.conf ] &&
      [ -f "$NVIDIA_PIN_FILE" ] &&
@@ -441,12 +434,16 @@ Pin-Priority: 1001
 EOS
 
   apt_get update
-  for package in nvidia-driver-pinning-595.71.05 nvidia-open cuda-toolkit-13-2; do
-    apt-cache show "$package" >/dev/null || { log "NVIDIA package not resolvable after repo setup: $package"; return 1; }
-  done
   if dpkg-query -W xserver-xorg-video-nouveau >/dev/null 2>&1; then
     apt_get purge -y xserver-xorg-video-nouveau || true
   fi
+}
+
+configure_nvidia_repos() {
+  prepare_nvidia_repos
+  for package in nvidia-driver-pinning-595.71.05 nvidia-open cuda-toolkit-13-2; do
+    apt-cache show "$package" >/dev/null || { log "NVIDIA package not resolvable after repo setup: $package"; return 1; }
+  done
 }
 
 install_nvidia_stack() {
@@ -801,30 +798,6 @@ install_manifest_packages() {
     expected="$(printf '%s' "$row" | cut -f2)"
     file="$STATE_DIR/$rel"
     verify_package "$file" "$expected"
-    files+=("$file")
-  done
-  if [ "${#files[@]}" -gt 0 ]; then
-    repair_dpkg_state || true
-    dpkg_install "${files[@]}" || apt_get -f install -y
-    repair_dpkg_state || true
-  fi
-}
-
-install_driver_manifest_packages() {
-  local manifest
-  manifest="$(manifest_path)"
-  [ -f "$manifest" ] || return 0
-  mapfile -t rows < <(jq -r '.driver.dkmsPackages[]? | if type == "string" then . else .path end' "$manifest")
-  [ "${#rows[@]}" -gt 0 ] || return 0
-  local files=()
-  for rel in "${rows[@]}"; do
-    local file
-    case "$rel" in
-      packages/*) ;;
-      *) log "refusing package path outside packages/: $rel"; return 1 ;;
-    esac
-    file="$STATE_DIR/$rel"
-    [ -f "$file" ] || { log "missing package $file"; return 1; }
     files+=("$file")
   done
   if [ "${#files[@]}" -gt 0 ]; then
@@ -1682,6 +1655,9 @@ case "${1:-status}" in
     ;;
   configure-nvidia-repos)
     configure_nvidia_repos
+    ;;
+  prepare-nvidia-repos)
+    prepare_nvidia_repos
     ;;
   install-nvidia-stack)
     install_nvidia_stack

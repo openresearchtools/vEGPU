@@ -39,6 +39,8 @@ public enum GUIAppearance: String, Codable, CaseIterable, Identifiable, Sendable
 }
 
 public struct MachineConfig: Codable, Equatable, Sendable {
+    public static let defaultGuiRetina = true
+
     public var cpuMode: CpuMode
     public var cpuCount: Int
     public var memoryMiB: Int
@@ -69,7 +71,7 @@ public struct MachineConfig: Codable, Equatable, Sendable {
         case macShareGuestPath
     }
 
-    public init(cpuMode: CpuMode = .auto, cpuCount: Int = 8, memoryMiB: Int = 8192, startRuntimeAtLogin: Bool = false, shareRoot: String = NSHomeDirectory(), launchMode: RuntimeLaunchMode = .headless, guiRetina: Bool = true, guiResolutionMode: GUIResolutionMode = .nativeFit, guiDensity: GUIDensity = .comfort, guiAppearance: GUIAppearance = .dark, linuxHomeShareEnabled: Bool = true, linuxHomeMountPath: String = defaultLinuxHomeMountPath, macShareGuestPath: String = guestShareRoot) {
+    public init(cpuMode: CpuMode = .auto, cpuCount: Int = 8, memoryMiB: Int = 8192, startRuntimeAtLogin: Bool = false, shareRoot: String = NSHomeDirectory(), launchMode: RuntimeLaunchMode = .headless, guiRetina: Bool = MachineConfig.defaultGuiRetina, guiResolutionMode: GUIResolutionMode = .nativeFit, guiDensity: GUIDensity = .comfort, guiAppearance: GUIAppearance = .dark, linuxHomeShareEnabled: Bool = true, linuxHomeMountPath: String = defaultLinuxHomeMountPath, macShareGuestPath: String = guestShareRoot) {
         self.cpuMode = cpuMode
         self.cpuCount = cpuCount
         self.memoryMiB = memoryMiB
@@ -93,7 +95,7 @@ public struct MachineConfig: Codable, Equatable, Sendable {
         self.startRuntimeAtLogin = try container.decodeIfPresent(Bool.self, forKey: .startRuntimeAtLogin) ?? false
         self.shareRoot = try container.decodeIfPresent(String.self, forKey: .shareRoot) ?? NSHomeDirectory()
         self.launchMode = try container.decodeIfPresent(RuntimeLaunchMode.self, forKey: .launchMode) ?? .headless
-        self.guiRetina = try container.decodeIfPresent(Bool.self, forKey: .guiRetina) ?? true
+        self.guiRetina = try container.decodeIfPresent(Bool.self, forKey: .guiRetina) ?? Self.defaultGuiRetina
         self.guiResolutionMode = try container.decodeIfPresent(GUIResolutionMode.self, forKey: .guiResolutionMode) ?? .nativeFit
         self.guiDensity = try container.decodeIfPresent(GUIDensity.self, forKey: .guiDensity) ?? .comfort
         self.guiAppearance = try container.decodeIfPresent(GUIAppearance.self, forKey: .guiAppearance) ?? .dark

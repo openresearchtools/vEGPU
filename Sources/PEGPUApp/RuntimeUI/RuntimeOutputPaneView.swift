@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import PEGPUCore
 
@@ -28,21 +29,12 @@ struct RuntimeOutputPaneView: View {
 
             Divider()
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(log.outputLines.isEmpty ? "Runtime output will appear here." : log.outputLines.joined(separator: "\n"))
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(Color(nsColor: .textColor))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(14)
-                        .id("output-bottom")
-                }
-                .onChange(of: log.outputLines.count) { _, _ in
-                    proxy.scrollTo("output-bottom", anchor: .bottom)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            SelectableTextPane(
+                text: outputText,
+                font: .monospacedSystemFont(ofSize: 12, weight: .regular),
+                autoScrollToBottom: true
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(
             maxWidth: .infinity,
@@ -60,6 +52,10 @@ struct RuntimeOutputPaneView: View {
         if log.commandState == "error" { return .red }
         if log.commandState.hasPrefix("exit") { return .green }
         return .secondary
+    }
+
+    private var outputText: String {
+        log.outputLines.isEmpty ? "Runtime output will appear here." : log.outputLines.joined(separator: "\n")
     }
 }
 
