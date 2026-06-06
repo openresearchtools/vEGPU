@@ -11,7 +11,7 @@
     <meta name="theme-color" content="#020202">
     <meta property="og:title" content="vEGPU">
     <meta property="og:description" content="NVIDIA eGPU compute and display sessions on Apple Silicon Macs, powered by Linux virtualization.">
-    <meta property="og:image" content="assets/vegpu-hero.png">
+    <meta property="og:image" content="assets/slides/gui.webp">
     <link rel="icon" href="assets/vegpu-logo.png">
     <link rel="stylesheet" href="styles.css">
   </head>
@@ -101,35 +101,40 @@
           <div class="screenshot-frame" aria-live="polite">
             <div class="screenshot-stage">
               <img class="carousel-slide is-active" data-slide="0" src="assets/slides/gui.webp" alt="vEGPU GUI display view with Linux desktop, host metrics, VM metrics, and NVIDIA GPU status." width="3394" height="2336" fetchpriority="high" decoding="async">
-              <img class="carousel-slide" data-slide="1" src="assets/slides/runtime.webp" alt="vEGPU Runtime view showing server controls and runtime status." width="3394" height="2336" loading="lazy" decoding="async">
-              <img class="carousel-slide" data-slide="2" src="assets/slides/models.webp" alt="vEGPU Models view for local model and runtime management." width="3394" height="2336" loading="lazy" decoding="async">
-              <img class="carousel-slide" data-slide="3" src="assets/slides/chat.webp" alt="vEGPU Chat view for local AI runtime interaction." width="3194" height="2204" loading="lazy" decoding="async">
-              <img class="carousel-slide" data-slide="4" src="assets/slides/files.webp" alt="vEGPU Files view for browsing shared Mac and Linux files." width="3194" height="2204" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="1" src="assets/slides/external-display.webp" alt="vEGPU GUI tab context menu showing external display session shortcuts for NVIDIA eGPUs." width="3170" height="2192" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="2" src="assets/slides/runtime.webp" alt="vEGPU Runtime view showing server controls and runtime status." width="3394" height="2336" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="3" src="assets/slides/models.webp" alt="vEGPU Models view for local model and runtime management." width="3394" height="2336" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="4" src="assets/slides/chat.webp" alt="vEGPU Chat view for local AI runtime interaction." width="3194" height="2204" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="5" src="assets/slides/files.webp" alt="vEGPU Files view for browsing shared Mac and Linux files." width="3194" height="2204" loading="lazy" decoding="async">
             </div>
             <div class="carousel-captions" aria-live="polite">
               <p class="carousel-caption is-active" data-caption="0">
-                <strong>GUI.</strong> The internal Linux desktop is rendered inside the macOS app through the UTM-derived SPICE, ANGLE, and CocoaSpice path, so setup and normal GUI work stay accelerated without using the passed-through NVIDIA card for the desktop. Secondary-click on the GUI display exposes screen/session controls, while external Xorg sessions can still run on physical monitors driven by the eGPU.
+                <strong>GUI.</strong> The internal Linux desktop is rendered inside the macOS app through the UTM-derived SPICE, ANGLE, and CocoaSpice path, so setup and normal GUI work stay accelerated without using the passed-through NVIDIA card for the desktop.
               </p>
               <p class="carousel-caption" data-caption="1">
-                <strong>Runtime.</strong> The Runtime view starts and stops the vEGPU Machine server, shows whether the VM/control routes are alive, and keeps Mac, guest, network, disk, and VM GPU telemetry in one place. It also launches the recipe-based Debian setup and NVIDIA/CUDA helper install flow, because the download does not ship a bundled VM or preinstalled GPU driver stack.
+                <strong>External displays.</strong> Secondary-click in the GUI tab to turn on external display sessions on eGPUs. There is no fixed limit: each GPU has its own external display session, and every monitor connected to that GPU shares the same session so Linux/NVIDIA settings can extend or mirror them. Move into a session with the app-shown Option-Command-2/3/4/5/6/7/8/9 shortcut for that GPU; Option-Command-1 always releases control back to the Mac. The main Mac-driven GUI does not lock the pointer because it uses absolute mouse mirroring directly on the screen.
               </p>
               <p class="carousel-caption" data-caption="2">
-                <strong>Models.</strong> The Models view manages model files and llama.cpp launches. Pick the Mac backend, the Linux/eGPU backend, or a split run where llama.cpp RPC bridges host and guest; TurboQuant is only the optional llama.cpp build/flag path for KV-cache quantization, not a separate GPU target. The UI assembles the real launch details: devices, RPC endpoint, GPU layers, tensor split, and cache type.
+                <strong>Runtime.</strong> The Runtime view starts and stops the vEGPU Machine server, shows whether the VM/control routes are alive, and keeps Mac, guest, network, disk, and VM GPU telemetry in one place. It also launches the recipe-based Debian setup and NVIDIA/CUDA helper install flow, because the download does not ship a bundled VM or preinstalled GPU driver stack.
               </p>
               <p class="carousel-caption" data-caption="3">
-                <strong>Chat.</strong> The Chat tab talks to the currently loaded model through the local OpenAI-compatible route. It is there to test the selected model, backend, and split inference path from inside vEGPU before you point another app at the same runtime.
+                <strong>Models.</strong> The Models view manages model files and llama.cpp launches. Pick the Mac backend, the Linux/eGPU backend, or a split run where llama.cpp RPC bridges host and guest; TurboQuant is only the optional llama.cpp build/flag path for KV-cache quantization, not a separate GPU target. The UI assembles the real launch details: devices, RPC endpoint, GPU layers, tensor split, and cache type.
               </p>
               <p class="carousel-caption" data-caption="4">
+                <strong>Chat.</strong> The Chat tab talks to the currently loaded model through the local OpenAI-compatible route. It is there to test the selected model, backend, and split inference path from inside vEGPU before you point another app at the same runtime.
+              </p>
+              <p class="carousel-caption" data-caption="5">
                 <strong>Files.</strong> The Files tab is a two-pane Mac and Linux file manager for the shared runtime paths. It handles browsing, drag/drop copy or move, transfer jobs, mount repair, and Finder handoff, so moving models, downloads, outputs, and VM files does not require falling back to ad hoc scp commands every time.
               </p>
             </div>
           </div>
           <div class="carousel-dots" role="tablist" aria-label="Choose screenshot">
             <button class="carousel-dot is-active" type="button" data-slide-dot="0" role="tab" aria-selected="true" aria-label="Show GUI screenshot"></button>
-            <button class="carousel-dot" type="button" data-slide-dot="1" role="tab" aria-selected="false" aria-label="Show Runtime screenshot"></button>
-            <button class="carousel-dot" type="button" data-slide-dot="2" role="tab" aria-selected="false" aria-label="Show Models screenshot"></button>
-            <button class="carousel-dot" type="button" data-slide-dot="3" role="tab" aria-selected="false" aria-label="Show Chat screenshot"></button>
-            <button class="carousel-dot" type="button" data-slide-dot="4" role="tab" aria-selected="false" aria-label="Show Files screenshot"></button>
+            <button class="carousel-dot" type="button" data-slide-dot="1" role="tab" aria-selected="false" aria-label="Show external display screenshot"></button>
+            <button class="carousel-dot" type="button" data-slide-dot="2" role="tab" aria-selected="false" aria-label="Show Runtime screenshot"></button>
+            <button class="carousel-dot" type="button" data-slide-dot="3" role="tab" aria-selected="false" aria-label="Show Models screenshot"></button>
+            <button class="carousel-dot" type="button" data-slide-dot="4" role="tab" aria-selected="false" aria-label="Show Chat screenshot"></button>
+            <button class="carousel-dot" type="button" data-slide-dot="5" role="tab" aria-selected="false" aria-label="Show Files screenshot"></button>
           </div>
         </div>
       </section>
@@ -196,27 +201,113 @@
 
       <section class="section setup" id="setup" aria-labelledby="setup-title">
         <div class="section-kicker">first run</div>
-        <h2 id="setup-title">The first boot is slow because VMs and drivers are not prebaked.</h2>
-        <ol class="steps">
-          <li>
-            <strong>Disable SIP on Apple Silicon.</strong>
-            Shut down. Hold the power button until startup options appear. Open Options, then Utilities, then Terminal. Run <code>csrutil disable</code>, restart, and understand the security cost before continuing.
+        <h2 id="setup-title">Installation is the strange part, so here is the path through macOS security.</h2>
+        <p class="lead setup-lead">
+          vEGPU is experimental kernel-driver-adjacent software for Apple Silicon Macs with SIP disabled, and the DriverKit extension is ad hoc signed. The warnings below are expected for this kind of package, but they are still real security decisions.
+        </p>
+        <ol class="setup-guide">
+          <li class="setup-guide-item text-only">
+            <div class="setup-copy">
+              <strong>Disable SIP first.</strong>
+              Shut down the Mac, hold the power button until startup options appear, open Options, then Utilities, then Terminal. Run <code>csrutil disable</code>, restart, and only continue if you accept the security tradeoff.
+            </div>
           </li>
-          <li>
-            <strong>Run the vEGPU installer and allow macOS to open it.</strong>
-            The downloaded installer installs both vEGPU and vEGPU Machine. Because the build comes from GitHub and the DriverKit side is ad-hoc signed, Gatekeeper may block the first launch. Use right-click Open, or open System Settings, Privacy & Security, then choose Open Anyway for the blocked app.
+          <li class="setup-guide-item media-step">
+            <div class="setup-copy">
+              <strong>Unblock the downloaded package.</strong>
+              If macOS says the package was not opened, go to System Settings, Privacy &amp; Security, and choose Open Anyway for the blocked vEGPU package. You can also remove the quarantine flag from the download in Terminal:
+              <span class="setup-command"><code>xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg</code></span>
+            </div>
+            <div class="setup-shot-grid quad" aria-label="Gatekeeper unblock flow">
+              <figure class="setup-shot">
+                <img src="assets/setup/gatekeeper-blocked.webp" alt="macOS warning that the vEGPU package was not opened because Apple could not verify it." width="744" height="824" loading="lazy" decoding="async">
+                <figcaption>Initial block</figcaption>
+              </figure>
+              <figure class="setup-shot wide">
+                <img src="assets/setup/privacy-open-anyway.webp" alt="Privacy and Security settings showing Open Anyway for the blocked vEGPU package." width="1670" height="1206" loading="lazy" decoding="async">
+                <figcaption>Open Anyway</figcaption>
+              </figure>
+              <figure class="setup-shot">
+                <img src="assets/setup/gatekeeper-confirm-open.webp" alt="macOS confirmation dialog asking whether to open the vEGPU package anyway." width="744" height="956" loading="lazy" decoding="async">
+                <figcaption>Confirm open</figcaption>
+              </figure>
+              <figure class="setup-shot">
+                <img src="assets/setup/privacy-password.webp" alt="Privacy and Security password prompt to allow opening the vEGPU package." width="744" height="900" loading="lazy" decoding="async">
+                <figcaption>Admin approval</figcaption>
+              </figure>
+            </div>
           </li>
-          <li>
-            <strong>Start vEGPU with no eGPU plugged in.</strong>
-            Let it fetch the official Debian cloud image, expand the disk, run cloud-init, install base packages, and load the Linux DMA guest driver.
+          <li class="setup-guide-item media-step">
+            <div class="setup-copy">
+              <strong>Install the package.</strong>
+              The installer password notice is the normal macOS authorization prompt for a <code>.pkg</code>. It installs both vEGPU and vEGPU Machine, including the host pieces that let QEMU and the DriverKit extension talk to Thunderbolt PCIe hardware.
+            </div>
+            <div class="setup-shot-grid single" aria-label="Package installer authorization prompt">
+              <figure class="setup-shot">
+                <img src="assets/setup/pkg-install-password.webp" alt="macOS Installer password prompt for installing new software." width="744" height="836" loading="lazy" decoding="async">
+                <figcaption>Normal package authorization</figcaption>
+              </figure>
+            </div>
           </li>
-          <li>
-            <strong>Install NVIDIA support inside the VM.</strong>
-            The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. vEGPU does not ship those packages.
+          <li class="setup-guide-item media-step">
+            <div class="setup-copy">
+              <strong>Approve the DriverKit extension.</strong>
+              When vEGPU Machine asks to use a new driver extension, click <em>Open System Settings</em>, not OK. OK closes the alert without opening the approval page. In Driver Extensions, enable <code>vEGPU Machine</code>, approve the System Extensions prompt, and confirm the toggle is on.
+            </div>
+            <div class="setup-shot-grid driver-flow" aria-label="DriverKit extension approval flow">
+              <figure class="setup-shot">
+                <img src="assets/setup/driver-extension-password.webp" alt="Password prompt saying vEGPU Machine is trying to modify a System Extension." width="744" height="836" loading="lazy" decoding="async">
+                <figcaption>Allow modification</figcaption>
+              </figure>
+              <figure class="setup-shot callout-shot">
+                <img src="assets/setup/driver-extension-open-settings.webp" alt="macOS driver extension alert with Open System Settings button below OK." width="744" height="888" loading="lazy" decoding="async">
+                <figcaption>Choose Open System Settings</figcaption>
+              </figure>
+              <figure class="setup-shot">
+                <img src="assets/setup/driver-extension-disabled.webp" alt="Driver Extensions settings showing the vEGPU Machine extension toggle off." width="942" height="936" loading="lazy" decoding="async">
+                <figcaption>Toggle on</figcaption>
+              </figure>
+              <figure class="setup-shot">
+                <img src="assets/setup/system-extension-password.webp" alt="System Extensions password prompt to allow modifying a system extension." width="744" height="836" loading="lazy" decoding="async">
+                <figcaption>Confirm system change</figcaption>
+              </figure>
+              <figure class="setup-shot">
+                <img src="assets/setup/driver-extension-enabled.webp" alt="Driver Extensions settings showing the vEGPU Machine extension enabled." width="944" height="930" loading="lazy" decoding="async">
+                <figcaption>Enabled</figcaption>
+              </figure>
+            </div>
           </li>
-          <li>
-            <strong>Stop the VM, attach eGPUs, then launch the server with them attached.</strong>
-            If Sidecar does not show the cards, stop the server, unplug, wait, plug, wait, and launch the server again. This does not reinstall the VM; it just gives macOS another clean chance to hand the PCIe devices to QEMU.
+          <li class="setup-guide-item media-step">
+            <div class="setup-copy">
+              <strong>Allow the first-run helpers.</strong>
+              Local Network access is required for the private Mac-to-VM connection: SSH control, web UI tabs, proxy routes, runtime RPC, file sharing, and guest setup all depend on it. The Linux share password prompt mounts the VM home folder over the private vmnet NFS link. The sleep guard helper prevents macOS sleep while PCIe passthrough is active, because sleep can wedge or panic the machine.
+            </div>
+            <div class="setup-shot-grid helper-flow" aria-label="First-run local network, file share, and sleep guard prompts">
+              <figure class="setup-shot">
+                <img src="assets/setup/local-network.webp" alt="macOS Local Network permission prompt explaining vEGPU needs private connection access to the Linux VM." width="744" height="820" loading="lazy" decoding="async">
+                <figcaption>Allow Local Network</figcaption>
+              </figure>
+              <figure class="setup-shot">
+                <img src="assets/setup/linux-share.webp" alt="Password prompt for mounting the Linux home folder over the private vmnet NFS link." width="744" height="1008" loading="lazy" decoding="async">
+                <figcaption>Mount Linux share</figcaption>
+              </figure>
+              <figure class="setup-shot">
+                <img src="assets/setup/sleep-guard.webp" alt="Password prompt for installing the vEGPU sleep guard helper." width="744" height="1072" loading="lazy" decoding="async">
+                <figcaption>Install sleep guard</figcaption>
+              </figure>
+            </div>
+          </li>
+          <li class="setup-guide-item text-only">
+            <div class="setup-copy">
+              <strong>Boot and set up the VM without eGPUs attached.</strong>
+              Let vEGPU fetch the official Debian cloud image, expand the disk, run cloud-init, install base packages, and load the Linux DMA guest driver. If you use NVIDIA cards, run the helper inside vEGPU to install NVIDIA's Debian repository packages and CUDA support through apt.
+            </div>
+          </li>
+          <li class="setup-guide-item text-only">
+            <div class="setup-copy">
+              <strong>Stop the VM, attach eGPUs, then launch the server.</strong>
+              If Sidecar does not show the cards, stop the server, unplug the eGPUs, wait 5 seconds, plug them back in, wait another 5 seconds, and launch again. This does not reinstall the VM; it gives macOS a clean chance to hand the PCIe devices to QEMU.
+            </div>
           </li>
         </ol>
         <p class="setup-note">

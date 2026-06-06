@@ -191,7 +191,7 @@ code {
   background-image:
     linear-gradient(90deg, rgba(2, 2, 2, 0.94) 0%, rgba(2, 2, 2, 0.82) 36%, rgba(2, 2, 2, 0.38) 68%, rgba(2, 2, 2, 0.78) 100%),
     linear-gradient(0deg, rgba(2, 2, 2, 0.96) 0%, rgba(2, 2, 2, 0.28) 42%, rgba(2, 2, 2, 0.7) 100%),
-    url("assets/vegpu-hero.png");
+    url("assets/slides/gui.webp");
   background-position: center;
   background-size: cover;
   transform: scale(1.02);
@@ -641,27 +641,40 @@ h1::after {
   background: rgba(255, 77, 94, 0.09);
 }
 
-.steps {
+.setup-lead {
+  max-width: 930px;
+}
+
+.setup-guide {
   display: grid;
-  gap: 0.8rem;
+  gap: 1rem;
   margin: 2rem 0 0;
   padding: 0;
   list-style: none;
-  counter-reset: step;
+  counter-reset: setup-step;
 }
 
-.steps li {
+.setup-guide-item {
   position: relative;
-  min-height: 4.25rem;
-  padding: 1rem 1rem 1rem 4.8rem;
+  min-height: 4.4rem;
+  padding: 1rem;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.025);
   color: #c3c9c1;
-  counter-increment: step;
+  counter-increment: setup-step;
 }
 
-.steps li::before {
+.setup-guide-item.media-step {
+  display: grid;
+  grid-template-columns: minmax(0, 0.74fr) minmax(320px, 1.26fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.setup-guide-item::before {
   position: absolute;
   left: 1rem;
   top: 1rem;
@@ -672,15 +685,102 @@ h1::after {
   border: 1px solid rgba(101, 255, 122, 0.42);
   border-radius: 7px;
   color: var(--green);
-  content: counter(step, decimal-leading-zero);
+  content: counter(setup-step, decimal-leading-zero);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 0.8rem;
   font-weight: 900;
 }
 
-.steps strong {
+.setup-copy {
+  min-width: 0;
+  padding-left: 3.8rem;
+  color: #c3c9c1;
+}
+
+.setup-copy strong {
   display: block;
   color: #fff;
+}
+
+.setup-copy em {
+  color: #fff;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.setup-command {
+  display: block;
+  margin-top: 0.7rem;
+}
+
+.setup-command code {
+  display: block;
+  width: 100%;
+  padding: 0.62rem 0.72rem;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.setup-shot-grid {
+  display: grid;
+  min-width: 0;
+  gap: 0.74rem;
+}
+
+.setup-shot-grid.single {
+  grid-template-columns: minmax(0, 20rem);
+}
+
+.setup-shot-grid.quad {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.setup-shot-grid.driver-flow,
+.setup-shot-grid.helper-flow {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.setup-shot-grid .wide {
+  grid-column: span 2;
+}
+
+.setup-shot {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: #030303;
+}
+
+.setup-shot.callout-shot {
+  border-color: rgba(255, 200, 87, 0.72);
+  box-shadow: 0 0 28px rgba(255, 200, 87, 0.08);
+}
+
+.setup-shot img {
+  width: 100%;
+  height: auto;
+  max-height: 25.5rem;
+  object-fit: contain;
+  background: #000;
+}
+
+.setup-shot-grid.single .setup-shot img,
+.setup-shot-grid.helper-flow .setup-shot img {
+  max-height: 27rem;
+}
+
+.setup-shot figcaption {
+  padding: 0.48rem 0.58rem 0.56rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  color: #abb2a9;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
 }
 
 .setup-note {
@@ -850,6 +950,10 @@ h1::after {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .setup-guide-item.media-step {
+    grid-template-columns: 1fr;
+  }
+
   .hero-content {
     padding-bottom: 4.5rem;
   }
@@ -868,7 +972,7 @@ h1::after {
   .hero-backdrop {
     background-image:
       linear-gradient(0deg, rgba(2, 2, 2, 0.96) 0%, rgba(2, 2, 2, 0.58) 42%, rgba(2, 2, 2, 0.8) 100%),
-      url("assets/vegpu-hero.png");
+      url("assets/slides/gui.webp");
     background-position: 58% center;
   }
 
@@ -900,9 +1004,20 @@ h1::after {
     padding-bottom: 4rem;
   }
 
-  .steps li {
-    padding-left: 1rem;
-    padding-top: 4.4rem;
+  .setup-copy {
+    padding-top: 3.7rem;
+    padding-left: 0;
+  }
+
+  .setup-shot-grid.single,
+  .setup-shot-grid.quad,
+  .setup-shot-grid.driver-flow,
+  .setup-shot-grid.helper-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-shot-grid .wide {
+    grid-column: auto;
   }
 
   .site-footer {
