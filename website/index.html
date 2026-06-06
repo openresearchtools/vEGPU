@@ -216,22 +216,16 @@
           </li>
           <li class="setup-guide-item has-images">
             <div class="setup-copy setup-visible">
-              <strong>Run the vEGPU installer and allow macOS to open it.</strong>
-              The package installs both vEGPU and vEGPU Machine. Because it comes from GitHub and the DriverKit side is ad hoc signed, macOS may block the first launch.
-              <span class="setup-subtitle">Unblock the downloaded package.</span>
-              If macOS says the package was not opened, go to System Settings, Privacy &amp; Security, and choose Open Anyway for the blocked vEGPU package. You can also remove the quarantine flag from the download in Terminal:
+              <strong>Unblock the downloaded package.</strong>
+              The package installs both vEGPU and vEGPU Machine. Because it comes from GitHub and the DriverKit side is ad hoc signed, macOS may block the first launch. If macOS says the package was not opened, go to System Settings, Privacy &amp; Security, and choose Open Anyway for the blocked vEGPU package. You can also remove the quarantine flag from the download in Terminal:
               <div class="setup-command-block">
                 <code>xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg</code>
                 <button class="copy-command" type="button" data-copy-value="xattr -dr com.apple.quarantine ~/Downloads/vEGPU*.pkg">Copy</button>
               </div>
-              <span class="setup-subtitle">Install the package.</span>
-              The installer password notice is the normal macOS authorization prompt for a <code>.pkg</code>. It installs the app plus the Machine components that let QEMU and the DriverKit extension talk to Thunderbolt PCIe hardware.
-              <span class="setup-subtitle">Approve the DriverKit extension.</span>
-              When vEGPU Machine asks to use a new driver extension, click <em>Open System Settings</em>, not OK. OK closes the alert without opening the approval page. In Driver Extensions, enable <code>vEGPU Machine</code>, approve the System Extensions prompt, and confirm the toggle is on.
             </div>
             <details class="setup-disclosure">
               <summary>
-                <span>Show installer and DriverKit screenshots</span>
+                <span>Show package unblock screenshots</span>
               </summary>
               <div class="setup-expanded">
                 <div class="setup-shot-grid quad" aria-label="Gatekeeper unblock flow">
@@ -252,12 +246,38 @@
                     <figcaption>Admin approval</figcaption>
                   </figure>
                 </div>
+              </div>
+            </details>
+          </li>
+          <li class="setup-guide-item has-images">
+            <div class="setup-copy setup-visible">
+              <strong>Install the package.</strong>
+              The installer password notice is the normal macOS authorization prompt for a <code>.pkg</code>. It installs the app plus the Machine components that let QEMU and the DriverKit extension talk to Thunderbolt PCIe hardware.
+            </div>
+            <details class="setup-disclosure">
+              <summary>
+                <span>Show package install screenshot</span>
+              </summary>
+              <div class="setup-expanded">
                 <div class="setup-shot-grid single" aria-label="Package installer authorization prompt">
                   <figure class="setup-shot">
                     <img src="assets/setup/pkg-install-password.webp" alt="macOS Installer password prompt for installing new software." width="744" height="836" loading="lazy" decoding="async">
                     <figcaption>Normal package authorization</figcaption>
                   </figure>
                 </div>
+              </div>
+            </details>
+          </li>
+          <li class="setup-guide-item has-images">
+            <div class="setup-copy setup-visible">
+              <strong>Approve the DriverKit extension.</strong>
+              When vEGPU Machine asks to use a new driver extension, click <em>Open System Settings</em>, not OK. OK closes the alert without opening the approval page. In Driver Extensions, enable <code>vEGPU Machine</code>, approve the System Extensions prompt, and confirm the toggle is on.
+            </div>
+            <details class="setup-disclosure">
+              <summary>
+                <span>Show DriverKit approval screenshots</span>
+              </summary>
+              <div class="setup-expanded">
                 <div class="setup-shot-grid driver-flow" aria-label="DriverKit extension approval flow">
                   <figure class="setup-shot">
                     <img src="assets/setup/driver-extension-password.webp" alt="Password prompt saying vEGPU Machine is trying to modify a System Extension." width="744" height="836" loading="lazy" decoding="async">
