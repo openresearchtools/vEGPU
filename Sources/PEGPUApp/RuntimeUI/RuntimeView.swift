@@ -64,8 +64,6 @@ private struct RuntimePaneContentView: View {
                 RuntimeTerminalView(model: model, terminal: screen.terminal)
             case .output:
                 RuntimeOutputPaneView(model: model, log: screen.log)
-            case .manifest:
-                ManifestPaneView(manifest: screen.manifest)
             }
         }
         .frame(

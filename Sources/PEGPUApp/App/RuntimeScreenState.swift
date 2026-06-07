@@ -8,7 +8,6 @@ final class RuntimeScreenState {
     let drivers = RuntimeDriverState()
     let log = RuntimeLogState()
     let terminal = RuntimeTerminalState()
-    let manifest = RuntimeManifestState()
 }
 
 @MainActor
@@ -39,9 +38,4 @@ final class RuntimeTerminalState: ObservableObject {
     @Published var terminalConnected = false
     @Published var terminalSessionID = UUID()
     @Published var terminalInput: TerminalInput?
-}
-
-@MainActor
-final class RuntimeManifestState: ObservableObject {
-    @Published var manifestSummary = "loading manifest..."
 }

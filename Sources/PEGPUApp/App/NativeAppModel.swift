@@ -30,7 +30,6 @@ final class NativeAppModel: ObservableObject {
     enum RuntimePane: String, CaseIterable, Identifiable {
         case terminal = "Terminal"
         case output = "Output"
-        case manifest = "Manifest"
 
         var id: String { rawValue }
     }
@@ -67,7 +66,6 @@ final class NativeAppModel: ObservableObject {
     var nvidiaDriver: DriverCardState { get { runtimeScreen.drivers.nvidiaDriver } set { setIfChanged(runtimeScreen.drivers, \.nvidiaDriver, newValue) } }
     var nvidiaGpus: [NvidiaGpuMetric] { get { runtimeScreen.drivers.nvidiaGpus } set { setIfChanged(runtimeScreen.drivers, \.nvidiaGpus, newValue) } }
     var nvidiaOutput: String { get { runtimeScreen.drivers.nvidiaOutput } set { setIfChanged(runtimeScreen.drivers, \.nvidiaOutput, newValue) } }
-    var manifestSummary: String { get { runtimeScreen.manifest.manifestSummary } set { setIfChanged(runtimeScreen.manifest, \.manifestSummary, newValue) } }
     var outputLines: [String] { get { runtimeScreen.log.outputLines } set { setIfChanged(runtimeScreen.log, \.outputLines, newValue) } }
     var currentProgress: ProgressEvent? { get { runtimeScreen.log.currentProgress } set { runtimeScreen.log.currentProgress = newValue } }
     var commandState: String { get { runtimeScreen.log.commandState } set { setIfChanged(runtimeScreen.log, \.commandState, newValue) } }
@@ -143,7 +141,7 @@ final class NativeAppModel: ObservableObject {
     }
 
     func refreshStatus() {
-        refreshRuntimeSnapshot(loadManifest: true)
+        refreshRuntimeSnapshot()
         webHelperStatus = goHelperSupervisor.status
         refreshHostSleepGuard()
         refreshDriverCards()
@@ -170,7 +168,7 @@ final class NativeAppModel: ObservableObject {
         pollingStarted = true
         Task {
             while !Task.isCancelled {
-                refreshRuntimeSnapshot(loadManifest: false)
+                refreshRuntimeSnapshot()
                 refreshMetrics()
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
@@ -722,19 +720,14 @@ final class NativeAppModel: ObservableObject {
         }
     }
 
-    private func refreshRuntimeSnapshot(loadManifest: Bool) {
+    private func refreshRuntimeSnapshot() {
         guard !statusRefreshInFlight else { return }
         statusRefreshInFlight = true
-        let paths = paths
         let machineService = machineService
-        Task(priority: .utility) { [paths, machineService, loadManifest] in
+        Task(priority: .utility) { [machineService] in
             let status = await machineService.statusMachine()
-            let manifest = loadManifest ? (try? ManifestStore(paths: paths).load()) : nil
             let password = machineService.linuxPassword() ?? ""
             applyRuntimeStatus(status)
-            if loadManifest {
-                manifestSummary = Self.manifestText(manifest)
-            }
             linuxPassword = password
             webHelperStatus = goHelperSupervisor.status
             refreshHostSleepGuard()
@@ -961,17 +954,6 @@ final class NativeAppModel: ObservableObject {
         if text.contains("booting") || text.contains("starting") { return "booting" }
         if text.contains("stopped") { return "stopped" }
         return "error"
-    }
-
-    private static func manifestText(_ manifest: RuntimeManifest?) -> String {
-        guard let manifest else { return "manifest unavailable" }
-        return [
-            "base image: \(manifest.debian.name)",
-            "base image manifest: \(manifest.id)",
-            "base image kernel at bootstrap: \(manifest.kernel.version)",
-            "manifest guest packages: \(manifest.guestPackages.count)",
-            "driver package source: bundled PEGPU Machine assets"
-        ].joined(separator: "\n")
     }
 
     private static func formatPercent(_ value: Any?) -> String {
