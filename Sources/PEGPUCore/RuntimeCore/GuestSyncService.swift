@@ -11,6 +11,7 @@ public final class GuestSyncService: @unchecked Sendable {
     private let paths: AppPaths
     private let ssh: SSHClient
     private let manifestStore: ManifestStore
+    private let bundledGuestPackages: BundledGuestPackages
     private let progress: ProgressCenter
 
     private var markerURL: URL { paths.machine.appendingPathComponent("guest-sync.json") }
@@ -19,14 +20,15 @@ public final class GuestSyncService: @unchecked Sendable {
         self.paths = paths
         self.ssh = ssh
         self.manifestStore = manifestStore
+        self.bundledGuestPackages = BundledGuestPackages(paths: paths)
         self.progress = progress
     }
 
     @discardableResult
     public func sync(force: Bool = false, runtimePid: Int32? = nil) async throws -> Bool {
         let manifest = try manifestStore.load()
-        let driverPackages = manifestStore.driverDKMSPackages()
-        let fingerprint = try guestSyncFingerprint(manifest: manifest, driverPackages: driverPackages)
+        let bundledDriverPackages = bundledGuestPackages.driverDKMSPackages()
+        let fingerprint = try guestSyncFingerprint(manifest: manifest, bundledDriverPackages: bundledDriverPackages)
         progress.report(ProgressEvent(stage: "guest-sync", message: "Refreshing guest scripts"))
         _ = try await ssh.ssh("mkdir -p /tmp/pegpu-sync")
         try await syncGuestScripts()
@@ -56,7 +58,7 @@ public final class GuestSyncService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "guest-sync", message: "Applying runtime manifest"))
         _ = try await ssh.agent(["ingest-manifest", "/tmp/pegpu-sync/manifest.json"])
 
-        try await syncPackages(kind: "driver DKMS", packages: driverPackages)
+        try await syncPackages(kind: "driver DKMS", packages: bundledDriverPackages)
         try await syncPackages(kind: "guest", packages: manifest.guestPackages)
         progress.report(ProgressEvent(stage: "guest-tools", message: "Installing or refreshing guest tools"))
         _ = try await ssh.agent(["update-tools"])
@@ -184,7 +186,7 @@ public final class GuestSyncService: @unchecked Sendable {
 
     private func syncPackages(kind: String, packages: [ManifestPackage]) async throws {
         for package in packages {
-            guard let local = manifestStore.resolvePackage(package) else {
+            guard let local = bundledGuestPackages.resolve(package) else {
                 throw RuntimeError.message("Missing \(kind) package: \(package.path)")
             }
             let remote = "/tmp/pegpu-sync/\(URL(fileURLWithPath: package.path).lastPathComponent)"
@@ -239,7 +241,7 @@ public final class GuestSyncService: @unchecked Sendable {
             status["driverReady"] as? String == "yes"
     }
 
-    private func guestSyncFingerprint(manifest: RuntimeManifest, driverPackages: [ManifestPackage]) throws -> String {
+    private func guestSyncFingerprint(manifest: RuntimeManifest, bundledDriverPackages: [ManifestPackage]) throws -> String {
         var hasher = SHA256()
         hasher.update(data: try JSON.encoder.encode(manifest))
         let guestDir = paths.resources.appendingPathComponent("Guest", isDirectory: true)
@@ -277,10 +279,10 @@ public final class GuestSyncService: @unchecked Sendable {
                 hasher.update(data: data)
             }
         }
-        for package in driverPackages {
+        for package in bundledDriverPackages {
             hasher.update(data: Data([0]))
             hasher.update(data: Data(package.path.utf8))
-            if let local = manifestStore.resolvePackage(package) {
+            if let local = bundledGuestPackages.resolve(package) {
                 hasher.update(data: Data([0]))
                 hasher.update(data: Data(try sha512Hex(of: URL(fileURLWithPath: local)).utf8))
             } else {
@@ -293,7 +295,7 @@ public final class GuestSyncService: @unchecked Sendable {
             hasher.update(data: Data(package.path.utf8))
             hasher.update(data: Data([0]))
             hasher.update(data: Data((package.sha512 ?? "").utf8))
-            if let local = manifestStore.resolvePackage(package),
+            if let local = bundledGuestPackages.resolve(package),
                let attrs = try? FileManager.default.attributesOfItem(atPath: local) {
                 hasher.update(data: Data([0]))
                 let fileSize = (attrs[.size] as? NSNumber)?.int64Value ?? 0

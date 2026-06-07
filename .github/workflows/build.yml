@@ -936,8 +936,8 @@ jobs:
           test -f "$APP/Contents/Resources/ThirdPartyNotices/LICENSES"
           test -f "$APP/Contents/Resources/guest-tools/manifest.json"
           test -d "$APP/Contents/Resources/guest-tools/source"
-          find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'pegpu-guest-dma-dkms_*.deb' \) -print -quit | grep -q .
-          if find "$APP/Contents/Resources/guest-tools/packages" -type f \( -name 'apple-dma-modules-*.deb' -o -name 'pegpu-guest-dma-modules-*.deb' \) -print -quit | grep -q .; then
+          find "$APP/Contents/Resources/guest-tools/packages" -type f -name 'apple-dma-dkms_*.deb' -print -quit | grep -q .
+          if find "$APP/Contents/Resources/guest-tools/packages" -type f -name 'apple-dma-modules-*.deb' -print -quit | grep -q .; then
             echo "Machine guest tools must not contain kernel-versioned DMA module packages" >&2
             exit 1
           fi

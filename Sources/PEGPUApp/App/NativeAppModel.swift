@@ -967,10 +967,10 @@ final class NativeAppModel: ObservableObject {
         guard let manifest else { return "manifest unavailable" }
         return [
             "image: \(manifest.debian.name)",
-            "manifest: \(manifest.id)",
-            "kernel: \(manifest.kernel.version)",
-            "driver: \(manifest.driver.version)",
-            "packages: \(manifest.guestPackages.count) guest, \(manifest.driver.dkmsPackages.count) DKMS driver"
+            "base manifest: \(manifest.id)",
+            "base image kernel: \(manifest.kernel.version)",
+            "driver marker: \(manifest.driver.version)",
+            "packages: \(manifest.guestPackages.count) guest, driver from bundled Machine assets"
         ].joined(separator: "\n")
     }
 

@@ -259,22 +259,46 @@ ensure_headers_for_kernel() {
   apt_get install -y "linux-headers-$kernel"
 }
 
+driver_dkms_package_files() {
+  [ -d "$PACKAGE_DIR" ] || return 0
+  find "$PACKAGE_DIR" -maxdepth 1 -type f -name 'apple-dma-dkms_*.deb' -print 2>/dev/null | sort
+}
+
+driver_dkms_package_names() {
+  local package name
+  for package in "$@"; do
+    name="$(dpkg-deb -f "$package" Package 2>/dev/null || true)"
+    [ -n "$name" ] && printf '%s\n' "$name"
+  done | sort -u
+}
+
 driver_dkms_installed() {
-  dpkg-query -W -f='${db:Status-Abbrev}\n' apple-dma-dkms pegpu-guest-dma-dkms 2>/dev/null |
-    grep -q '^ii '
+  local package status found
+  found=1
+  [ "$#" -gt 0 ] || return 1
+  for package in "$@"; do
+    status="$(dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null || true)"
+    case "$status" in
+      ii*) return 0 ;;
+    esac
+  done
+  return "$found"
 }
 
 install_driver_dkms_packages() {
-  if [ -d "$PACKAGE_DIR" ]; then
-    local packages=()
-    mapfile -t packages < <(find "$PACKAGE_DIR" -maxdepth 1 -type f \( -name 'apple-dma-dkms_*.deb' -o -name 'pegpu-guest-dma-dkms_*.deb' \) -print 2>/dev/null | sort)
-    if [ "${#packages[@]}" -gt 0 ]; then
-      repair_dpkg_state || true
-      dpkg_install "${packages[@]}" || apt_get -f install -y
-      repair_dpkg_state || true
-    fi
+  local packages=()
+  local package_names=()
+  mapfile -t packages < <(driver_dkms_package_files)
+  [ "${#packages[@]}" -gt 0 ] || return 1
+  mapfile -t package_names < <(driver_dkms_package_names "${packages[@]}")
+  if [ "${#package_names[@]}" -eq 0 ]; then
+    log "cached driver DKMS package is missing Debian Package metadata"
+    return 1
   fi
-  driver_dkms_installed
+  repair_dpkg_state || true
+  dpkg_install "${packages[@]}" || apt_get -f install -y
+  repair_dpkg_state || true
+  driver_dkms_installed "${package_names[@]}"
 }
 
 dkms_autoinstall_for_installed_kernels() {
@@ -297,7 +321,7 @@ dkms_autoinstall_for_installed_kernels() {
 }
 
 guest_dma_modules() {
-  printf '%s\n' apple_dma pegpu_guest_dma
+  printf '%s\n' apple_dma
 }
 
 module_vermagic_for_kernel() {
@@ -341,7 +365,7 @@ load_current_kernel_dma_module() {
 purge_legacy_module_packages() {
   local pkgs=()
   mapfile -t pkgs < <(dpkg-query -W -f='${Package}\t${db:Status-Abbrev}\n' \
-      'apple-dma-modules-*' 'pegpu-guest-dma-modules-*' 2>/dev/null |
+      'apple-dma-modules-*' 2>/dev/null |
     awk '$2 ~ /^ii/ {print $1}')
   [ "${#pkgs[@]}" -gt 0 ] || return 0
   log "removing legacy DMA module packages now that DKMS owns the driver: ${pkgs[*]}"
@@ -1546,10 +1570,10 @@ status_json() {
     driver_installed="yes"
     driver_kernel_match="yes"
     driver_vermagic="$(module_vermagic_for_kernel "$driver_module" "$(uname -r)")"
-  elif modinfo apple_dma >/dev/null 2>&1 || modinfo pegpu_guest_dma >/dev/null 2>&1; then
+  elif modinfo apple_dma >/dev/null 2>&1; then
     driver_installed="yes"
   fi
-  if lsmod | awk '{print $1}' | grep -qxE 'apple_dma|pegpu_guest_dma'; then module_loaded="yes"; fi
+  if lsmod | awk '{print $1}' | grep -qx apple_dma; then module_loaded="yes"; fi
   if [ -f "$STATE_DIR/driver-persistent" ] ||
      grep -qxF apple_dma /etc/modules-load.d/apple-dma-load.conf 2>/dev/null; then driver_persistent="yes"; fi
   for dev in /sys/bus/pci/devices/*; do
@@ -1560,7 +1584,7 @@ status_json() {
       break
     fi
   done
-  for dev in /sys/bus/pci/drivers/apple_dma/*:* /sys/bus/pci/drivers/pegpu_guest_dma/*:*; do
+  for dev in /sys/bus/pci/drivers/apple_dma/*:*; do
     [ -e "$dev" ] || continue
     bound_count=$((bound_count + 1))
     bound_devices="$bound_devices $(basename "$dev")"

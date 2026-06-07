@@ -6,6 +6,7 @@ public final class CloudInitService: @unchecked Sendable {
     private let ssh: SSHClient
     private let secrets: SecretsStore
     private let manifestStore: ManifestStore
+    private let bundledGuestPackages: BundledGuestPackages
     private let runner: ProcessRunner
 
     public init(paths: AppPaths, ssh: SSHClient, secrets: SecretsStore, manifestStore: ManifestStore, runner: ProcessRunner = ProcessRunner()) {
@@ -14,6 +15,7 @@ public final class CloudInitService: @unchecked Sendable {
         self.ssh = ssh
         self.secrets = secrets
         self.manifestStore = manifestStore
+        self.bundledGuestPackages = BundledGuestPackages(paths: paths)
         self.runner = runner
     }
 
@@ -209,18 +211,18 @@ public final class CloudInitService: @unchecked Sendable {
 
     private func writeSeedGuestBundle(seedDir: URL) throws {
         let manifest = try manifestStore.load()
-        let driverPackages = manifestStore.driverDKMSPackages()
+        let bundledDriverPackages = bundledGuestPackages.driverDKMSPackages()
         let bundle = seedDir.appendingPathComponent("pegpu", isDirectory: true)
         try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
         try JSON.write(manifest, to: bundle.appendingPathComponent("manifest.json"))
-        let packages = driverPackages + manifest.guestPackages
+        let packages = bundledDriverPackages + manifest.guestPackages
         for package in packages {
             try copySeedPackage(bundle: bundle, package: package)
         }
     }
 
     private func copySeedPackage(bundle: URL, package: ManifestPackage) throws {
-        guard let source = manifestStore.resolvePackage(package) else {
+        guard let source = bundledGuestPackages.resolve(package) else {
             throw RuntimeError.message("Missing guest package: \(package.path)")
         }
         let destination = bundle.appendingPathComponent(package.path).standardizedFileURL

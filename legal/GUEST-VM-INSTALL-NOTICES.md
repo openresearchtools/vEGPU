@@ -145,7 +145,6 @@ PEGPU Machine supplies the guest DMA driver package that is installed inside the
 VM. Current guest scripts look for Machine-provided packages named like:
 
 - `apple-dma-dkms_*.deb`
-- `pegpu-guest-dma-dkms_*.deb`
 
 The package builds and installs the guest DMA kernel module through DKMS for the
 VM kernel. PEGPU may install Debian DKMS/build/header packages listed above so

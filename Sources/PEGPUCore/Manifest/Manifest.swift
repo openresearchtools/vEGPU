@@ -55,7 +55,6 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
     public struct Driver: Codable, Equatable, Sendable {
         public var version: String
         public var moduleName: String
-        public var dkmsPackages: [ManifestPackage]
     }
 
     public struct Nvidia: Codable, Equatable, Sendable {
@@ -86,7 +85,7 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
             variant: "generic"
         ),
         kernel: Kernel(version: "6.12.86+deb13-arm64", debianPackageVersion: "6.12.86-1", packages: []),
-        driver: Driver(version: "0.1.0", moduleName: "apple_dma", dkmsPackages: []),
+        driver: Driver(version: "0.1.0", moduleName: "apple_dma"),
         nvidia: Nvidia(
             repository: "https://developer.download.nvidia.com/compute/cuda/repos/debian13/sbsa",
             branch: "595.71.05",
@@ -125,47 +124,6 @@ public final class ManifestStore: @unchecked Sendable {
         try JSON.write(manifest, to: paths.manifest, mode: 0o644)
     }
 
-    public func resolvePackage(_ package: ManifestPackage) -> String? {
-        guestToolRoots()
-            .map { $0.appendingPathComponent(package.path).path }
-            .first { FileManager.default.fileExists(atPath: $0) }
-    }
-
-    public func driverDKMSPackages() -> [ManifestPackage] {
-        discoveredDriverDKMSPackages()
-    }
-
-    public func guestToolRoots() -> [URL] {
-        let roots = [
-            URL(fileURLWithPath: VfioApp.resourcesPath("guest-tools")),
-            paths.guestPackages
-        ]
-        var seen = Set<String>()
-        return roots.filter { seen.insert($0.path).inserted }
-    }
-
-    private func discoveredDriverDKMSPackages() -> [ManifestPackage] {
-        var out: [ManifestPackage] = []
-        var seen = Set<String>()
-        for root in guestToolRoots() {
-            let packages = root.appendingPathComponent("packages", isDirectory: true)
-            guard let items = try? FileManager.default.contentsOfDirectory(at: packages, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else {
-                continue
-            }
-            for item in items where isDriverDKMSDeb(item.lastPathComponent) {
-                let relative = "packages/\(item.lastPathComponent)"
-                guard seen.insert(relative).inserted else { continue }
-                out.append(ManifestPackage(path: relative))
-            }
-        }
-        return out.sorted { $0.path < $1.path }
-    }
-
-    private func isDriverDKMSDeb(_ name: String) -> Bool {
-        name.hasSuffix(".deb") &&
-            (name.hasPrefix("apple-dma-dkms_") || name.hasPrefix("pegpu-guest-dma-dkms_"))
-    }
-
     private func ensureManifestFile() throws {
         if let bundled = externalGuestManifest() {
             try write(bundled)
@@ -196,7 +154,7 @@ public final class ManifestStore: @unchecked Sendable {
     }
 
     private func externalGuestManifest() -> RuntimeManifest? {
-        for root in guestToolRoots() {
+        for root in externalManifestRoots() {
             let manifest = root.appendingPathComponent("manifest.json")
             if let parsed = try? JSON.read(RuntimeManifest.self, from: manifest) {
                 return parsed
@@ -207,6 +165,15 @@ public final class ManifestStore: @unchecked Sendable {
 
     private func defaultManifest() -> RuntimeManifest {
         .defaultManifest
+    }
+
+    private func externalManifestRoots() -> [URL] {
+        let roots = [
+            URL(fileURLWithPath: VfioApp.resourcesPath("guest-tools")),
+            paths.guestPackages
+        ]
+        var seen = Set<String>()
+        return roots.filter { seen.insert($0.path).inserted }
     }
 }
 
