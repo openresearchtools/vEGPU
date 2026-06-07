@@ -2,7 +2,7 @@ import SwiftUI
 import PEGPUCore
 
 struct RuntimeToolbarView: View {
-    let model: NativeAppModel
+    @ObservedObject var model: NativeAppModel
     @Binding var config: MachineConfig
     @Environment(\.colorScheme) private var colorScheme
     @State private var cpuText = ""
@@ -11,19 +11,24 @@ struct RuntimeToolbarView: View {
 
     var body: some View {
         WrappingHStackLayout(spacing: 10, rowSpacing: 8) {
-            modePicker
-            if config.launchMode == .gui {
-                retinaToggle
+            if model.showDeveloperOptions {
+                modePicker
+                if config.launchMode == .gui {
+                    retinaToggle
+                }
             }
             configControls
             Divider()
                 .frame(width: 1, height: 24)
-            shareButton
-            saveButton
+            if model.showDeveloperOptions {
+                shareButton
+                saveButton
+            }
             startButton
             stopButton
-            doctorButton
-            refreshButton
+            if model.showDeveloperOptions {
+                doctorButton
+            }
             resetButton
         }
         .padding(.horizontal, 14)
@@ -132,14 +137,6 @@ struct RuntimeToolbarView: View {
             model.doctorRuntime()
         } label: {
             HitTargetLabel("Doctor", minWidth: 62)
-        }
-    }
-
-    private var refreshButton: some View {
-        Button {
-            model.refreshStatus()
-        } label: {
-            HitTargetLabel("Refresh", minWidth: 68)
         }
     }
 

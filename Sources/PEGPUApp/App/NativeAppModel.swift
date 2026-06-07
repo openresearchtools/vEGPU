@@ -54,6 +54,9 @@ final class NativeAppModel: ObservableObject {
     @Published var showingAddWebUI = false
     @Published var showingCreateRoutingRoute = false
     @Published var showingManageRoutingRoutes = false
+    @Published var showDeveloperOptions = UserDefaults.standard.bool(forKey: PreferencesKeys.developerOptions) {
+        didSet { UserDefaults.standard.set(showDeveloperOptions, forKey: PreferencesKeys.developerOptions) }
+    }
     var runtimeStatus: String { sidebarMonitor.runtimeStatus }
     var runtimeDetail: String { sidebarMonitor.runtimeDetail }
     var runtimeMetric: String { sidebarMonitor.runtimeMetric }
@@ -1135,6 +1138,7 @@ enum PreferencesKeys {
     static let sidebarCollapsed = "pegpu.sidebar.collapsed"
     static let webShortcuts = "pegpu.web.shortcuts"
     static let updateChannel = "pegpu.update.channel"
+    static let developerOptions = "pegpu.developer.options"
 }
 
 struct MetricGroup: Equatable {

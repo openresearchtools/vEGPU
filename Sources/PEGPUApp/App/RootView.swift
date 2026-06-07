@@ -23,6 +23,9 @@ struct RootView: View {
                     displayControlMenu: model.displayControlMenu,
                     sections: availableSections,
                     shortcuts: model.shortcuts,
+                    reloadRuntime: {
+                        model.refreshStatus()
+                    },
                     removeWebShortcut: { id in
                         model.removeWebShortcut(id: id)
                     },

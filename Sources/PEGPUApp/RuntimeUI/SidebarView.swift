@@ -7,6 +7,7 @@ struct SidebarView: View {
     @ObservedObject var displayControlMenu: DisplayControlMenuModel
     let sections: [NativeAppModel.Section]
     let shortcuts: [WebShortcut]
+    let reloadRuntime: () -> Void
     let removeWebShortcut: (UUID) -> Void
     @Binding var selectedTab: NativeAppModel.Tab
     @Binding var collapsed: Bool
@@ -30,7 +31,7 @@ struct SidebarView: View {
                                 icon: section.systemImage,
                                 selected: selectedTab == tab,
                                 collapsed: collapsed,
-                                onReload: section.isWebTab ? { reload(tab) } : nil,
+                                onReload: reloadAction(for: section, tab: tab),
                                 displayControlMenu: section == .gui ? displayControlMenu : nil,
                                 beforeDisplayMenuAction: section == .gui ? { selectedTab = .section(.gui) } : nil
                             ) {
@@ -91,6 +92,17 @@ struct SidebarView: View {
 
     private func reload(_ tab: NativeAppModel.Tab) {
         NotificationCenter.default.post(name: .pegpuReloadWebTab, object: nil, userInfo: ["tabID": tab.id])
+    }
+
+    private func reloadAction(for section: NativeAppModel.Section, tab: NativeAppModel.Tab) -> (() -> Void)? {
+        switch section {
+        case .runtime:
+            return reloadRuntime
+        case .models, .chat:
+            return { reload(tab) }
+        case .files, .gui:
+            return nil
+        }
     }
 
     private func removeShortcut(_ id: UUID) {
