@@ -121,6 +121,14 @@ if awk '/^License:/ && $0 ~ /(GPL|AGPL)/ && $0 !~ /LGPL/ {print; bad=1} END {exi
   printf 'PEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks\n' >&2
   exit 1
 fi
+if grep -E 'The following are distributed under GPL v2|gst-plugins-base-1[.]15[.]2[.]tar[.]xz|qemu-4[.]2[.]0[.]tar[.]xz' "$APP_LEGAL/LICENSES"; then
+  printf 'PEGPU.app LICENSES must not include UTM aggregate app license text; use UTM Apache license/provenance instead\n' >&2
+  exit 1
+fi
+if grep -E 'The following are distributed under GPL v2|gst-plugins-base-1[.]15[.]2[.]tar[.]xz|qemu-4[.]2[.]0[.]tar[.]xz' "$APP_LEGAL/source/"*.LICENSES; then
+  printf 'PEGPU.app source sidecar licenses must not include UTM aggregate app license text; use source-specific licenses/provenance instead\n' >&2
+  exit 1
+fi
 if find "$APP_LEGAL/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
   printf 'PEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files\n' >&2
   exit 1

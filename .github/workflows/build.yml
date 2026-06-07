@@ -767,6 +767,14 @@ jobs:
             echo "PEGPU.app runtime/distribution LICENSES must not contain GPL-only dependency blocks" >&2
             exit 1
           fi
+          if grep -E 'The following are distributed under GPL v2|gst-plugins-base-1[.]15[.]2[.]tar[.]xz|qemu-4[.]2[.]0[.]tar[.]xz' "$APP/Contents/Resources/PEGPURoot/legal/generated/LICENSES"; then
+            echo "PEGPU.app LICENSES must not include UTM aggregate app license text; use UTM Apache license/provenance instead" >&2
+            exit 1
+          fi
+          if grep -E 'The following are distributed under GPL v2|gst-plugins-base-1[.]15[.]2[.]tar[.]xz|qemu-4[.]2[.]0[.]tar[.]xz' "$APP/Contents/Resources/PEGPURoot/legal/generated/source/"*.LICENSES; then
+            echo "PEGPU.app source sidecar licenses must not include UTM aggregate app license text; use source-specific licenses/provenance instead" >&2
+            exit 1
+          fi
           if find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files" -type f | awk '{ lower=tolower($0); if ((lower ~ /agpl/ || lower ~ /gpl/) && lower !~ /lgpl/) { print; bad=1 } } END { exit bad ? 0 : 1 }'; then
             echo "PEGPU.app legal payload must not copy GPL/AGPL-only source license files into app-visible license-files" >&2
             exit 1

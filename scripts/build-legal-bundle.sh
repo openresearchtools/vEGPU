@@ -209,6 +209,10 @@ def looks_like_license_path(name: str) -> bool:
                 return True
     return False
 
+def is_aggregate_app_license_path(name: str) -> bool:
+    normalized = name.replace("\\", "/").lower()
+    return "/settings.bundle/license.plist" in normalized
+
 def safe_member_path(name: str) -> Path:
     parts = [
         safe_name(part)
@@ -347,6 +351,8 @@ def display_runtime_archive_allowed(archive_id: str) -> bool:
 
 def display_runtime_license_member_allowed(archive_id: str, member_name: str) -> bool:
     normalized = member_name.replace("\\", "/").lower()
+    if archive_id.startswith("utm-base-") and is_aggregate_app_license_path(member_name):
+        return False
     if archive_id == "WebKit-source" and "/tools/flex-bison/" in normalized:
         return False
     if archive_id == "gettext-0.22.5":
@@ -362,6 +368,8 @@ def display_runtime_license_member_allowed(archive_id: str, member_name: str) ->
     return True
 
 def app_visible_display_license_content_allowed(member_name: str, data: bytes) -> bool:
+    if is_aggregate_app_license_path(member_name):
+        return False
     return not license_text_is_gpl_or_agpl(data)
 
 def collect_display_runtime_licenses(display_source: Path | None) -> tuple[int, int]:
@@ -855,7 +863,18 @@ for meta, text in license_blocks:
     license_lines.append("----")
     license_lines.append("END LICENSE")
     license_lines.append("")
-(out / "LICENSES").write_text("\n".join(license_lines))
+app_license_text = "\n".join(license_lines)
+for forbidden in (
+    "The following are distributed under GPL v2",
+    "gst-plugins-base-1.15.2.tar.xz",
+    "qemu-4.2.0.tar.xz",
+):
+    if forbidden in app_license_text:
+        raise SystemExit(
+            "PEGPU.app LICENSES included UTM aggregate app license text; "
+            "use UTM Apache license/provenance instead."
+        )
+(out / "LICENSES").write_text(app_license_text)
 
 notice = []
 notice.extend([
@@ -1135,6 +1154,10 @@ def looks_like_license_path(name: str) -> bool:
                 return True
     return False
 
+def is_aggregate_app_license_path(name: str) -> bool:
+    normalized = name.replace("\\", "/").lower()
+    return "/settings.bundle/license.plist" in normalized
+
 def decode_text_lossy(data: bytes) -> str:
     if not data:
         return ""
@@ -1202,7 +1225,9 @@ def collect_from_tar_bytes(data: bytes, label: str, depth: int = 0, max_depth: i
                 with handle:
                     member_data = handle.read()
                 archive_path = f"{label}!/{name}" if label else name
-                if looks_like_license_path(name):
+                if is_aggregate_app_license_path(name):
+                    pass
+                elif looks_like_license_path(name):
                     text = decode_text_lossy(member_data)
                     records.append({
                         "archivePath": archive_path,
