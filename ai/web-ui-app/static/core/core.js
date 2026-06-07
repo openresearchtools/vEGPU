@@ -759,11 +759,21 @@
 			}
 			renderAll();
 			setStatus("Ready");
-			void refreshRouterModels(false).then(renderAll).catch(showError);
-			void refreshRuntime(false).then(renderAll).catch(showError);
-			void refreshRuntimeReleases(false).then(renderAll).catch(showError);
-			void refreshRuntimes(false).then(renderAll).catch(showError);
-			void refreshDevices(false).then(renderAll).catch(showError);
+			void refreshRouterModels(false)
+				.then(() => {
+					renderModelsList();
+					renderModelHeader();
+				})
+				.catch(showError);
+			void refreshRuntime(false).then(renderServer).catch(showError);
+			void refreshRuntimeReleases(false).then(renderRuntimeReleaseControls).catch(showError);
+			void refreshRuntimes(false).then(renderRuntimes).catch(showError);
+			void refreshDevices(false)
+				.then(() => {
+					renderDevices();
+					renderModelDetail();
+				})
+				.catch(showError);
 			void refreshDownloads(true, false).then(renderDownloads).catch(showError);
 			void refreshModelCopies(true, false).then(renderModelTransfers).catch(showError);
 			void apiFetch("/api/runtime/flags")
@@ -865,8 +875,8 @@
 		if (render) renderRuntimeReleaseControls();
 	}
 
-	async function refreshDevices(render = true) {
-		const data = await apiFetch("/api/devices");
+	async function refreshDevices(render = true, force = false) {
+		const data = await apiFetch(`/api/devices${force ? "?refresh=1" : ""}`);
 		state.devices = data.devices ?? [];
 		state.deviceError = data.error || "";
 		if (render) {
@@ -2204,7 +2214,7 @@
 			state.rpcExpanded = !state.rpcExpanded;
 			renderDevices();
 		});
-		el.refreshDevicesButton.addEventListener("click", () => refreshDevices().catch(showError));
+		el.refreshDevicesButton.addEventListener("click", () => refreshDevices(true, true).catch(showError));
 		el.addRPCButton.addEventListener("click", addRPCServer);
 		el.saveRPCButton.addEventListener("click", () => saveRPCServers().catch(showError));
 		el.rpcRows.addEventListener("input", (event) => {

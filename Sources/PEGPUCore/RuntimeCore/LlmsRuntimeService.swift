@@ -1037,10 +1037,10 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             let match: HardwareDevice?
             switch backend {
             case "CUDA":
-                match = hardwareMatch(for: device, candidates: nvidia, allowOrdinal: true)
+                match = hardwareMatch(for: device, candidates: nvidia)
             case "VULKAN", "VK":
-                match = hardwareMatch(for: device, candidates: vulkan, allowOrdinal: true)
-                    ?? hardwareMatch(for: device, candidates: nvidia, allowOrdinal: false)
+                match = hardwareMatch(for: device, candidates: vulkan)
+                    ?? hardwareMatch(for: device, candidates: nvidia)
             default:
                 match = nil
             }
@@ -1052,17 +1052,13 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         }
     }
 
-    private func hardwareMatch(for device: LlamaDevice, candidates: [HardwareDevice], allowOrdinal: Bool) -> HardwareDevice? {
+    private func hardwareMatch(for device: LlamaDevice, candidates: [HardwareDevice]) -> HardwareDevice? {
         let profileMatches = candidates.filter {
             normalizedDeviceName($0.name) == normalizedDeviceName(device.description) &&
             ($0.totalMiB == 0 || device.totalMiB == 0 || abs($0.totalMiB - device.totalMiB) <= 512)
         }
         if profileMatches.count == 1 {
             return profileMatches[0]
-        }
-        let ordinal = deviceOrdinal(device.name)
-        if allowOrdinal, let ordinal, let match = candidates.first(where: { $0.index == ordinal }) {
-            return match
         }
         return nil
     }

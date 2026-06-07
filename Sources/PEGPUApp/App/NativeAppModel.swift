@@ -700,7 +700,7 @@ final class NativeAppModel: ObservableObject {
             throw RuntimeError.message("\(Self.routeListenerDescription(forward)) already belongs to \(Self.routingRouteTitle(existing)). Choose a different route port.")
         }
         try portForwardService.saveHostForwards([forward])
-        try localProxySupervisor.start()
+        try await localProxySupervisor.start()
 
         let suffix = useUDP ? "/udp" : ""
         if direction == .vmToMac, machineService.currentPid() != nil {
@@ -734,7 +734,7 @@ final class NativeAppModel: ObservableObject {
     }
 
     private func ensureBackgroundServicesRunning() async throws {
-        try localProxySupervisor.start()
+        try await localProxySupervisor.start()
         try await goHelperSupervisor.start()
         webHelperStatus = goHelperSupervisor.status
         backgroundServicesStarted = true

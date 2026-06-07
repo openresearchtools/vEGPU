@@ -18,7 +18,8 @@ import (
 
 const deviceProbeTimeout = 3 * time.Second
 const bridgeDeviceProbeTimeout = 8 * time.Second
-const deviceProbeCacheTTL = 5 * time.Second
+const deviceProbeCacheTTL = 5 * time.Minute
+const deviceProbeCoalesceWindow = 2 * time.Second
 
 type RuntimeService struct {
 	appDir        string
@@ -28,6 +29,8 @@ type RuntimeService struct {
 	deviceCacheAt time.Time
 	deviceCache   []DeviceInfo
 	deviceErr     error
+	deviceCached  bool
+	deviceProbeMu sync.Mutex
 }
 
 type RuntimeStatus struct {
@@ -247,6 +250,17 @@ func (r *RuntimeService) Devices(ctx context.Context) ([]DeviceInfo, error) {
 	if devices, err, ok := r.cachedDevices(); ok {
 		return devices, err
 	}
+	return nil, nil
+}
+
+func (r *RuntimeService) RefreshDevices(ctx context.Context) ([]DeviceInfo, error) {
+	r.deviceProbeMu.Lock()
+	defer r.deviceProbeMu.Unlock()
+
+	if devices, err, ok := r.cachedDevicesYoungerThan(deviceProbeCoalesceWindow); ok {
+		return devices, err
+	}
+	previousDevices, _, hadPreviousDevices := r.cachedDevicesSnapshot()
 
 	cfg := r.store.Get()
 	path := r.LlamaServerPath(cfg)
@@ -312,24 +326,40 @@ func (r *RuntimeService) Devices(ctx context.Context) ([]DeviceInfo, error) {
 		}
 	}
 
-	devices := mergeDeviceInfo(local, rpc, bridge)
-	if len(devices) > 0 {
-		r.storeDeviceCache(devices, nil)
-		return devices, nil
+	if bridgeErr != nil && len(bridge) == 0 && hadPreviousDevices {
+		bridge = cachedVMDevices(previousDevices)
 	}
+	devices := mergeDeviceInfo(local, rpc, bridge)
 	err := combineProbeErrors(
 		probeError{"macOS devices", localErr},
 		probeError{"RPC devices", rpcErr},
 		probeError{"VM devices", bridgeErr},
 	)
+	if len(devices) > 0 {
+		r.storeDeviceCache(devices, err)
+		return devices, err
+	}
 	r.storeDeviceCache(devices, err)
 	return devices, err
 }
 
 func (r *RuntimeService) cachedDevices() ([]DeviceInfo, error, bool) {
+	return r.cachedDevicesYoungerThan(deviceProbeCacheTTL)
+}
+
+func (r *RuntimeService) cachedDevicesYoungerThan(maxAge time.Duration) ([]DeviceInfo, error, bool) {
 	r.deviceCacheMu.Lock()
 	defer r.deviceCacheMu.Unlock()
-	if r.deviceCacheAt.IsZero() || time.Since(r.deviceCacheAt) > deviceProbeCacheTTL {
+	if !r.deviceCached || r.deviceCacheAt.IsZero() || time.Since(r.deviceCacheAt) > maxAge {
+		return nil, nil, false
+	}
+	return cloneDeviceInfo(r.deviceCache), r.deviceErr, true
+}
+
+func (r *RuntimeService) cachedDevicesSnapshot() ([]DeviceInfo, error, bool) {
+	r.deviceCacheMu.Lock()
+	defer r.deviceCacheMu.Unlock()
+	if !r.deviceCached || r.deviceCacheAt.IsZero() {
 		return nil, nil, false
 	}
 	return cloneDeviceInfo(r.deviceCache), r.deviceErr, true
@@ -341,6 +371,7 @@ func (r *RuntimeService) storeDeviceCache(devices []DeviceInfo, err error) {
 	r.deviceCacheAt = time.Now()
 	r.deviceCache = cloneDeviceInfo(devices)
 	r.deviceErr = err
+	r.deviceCached = true
 }
 
 func cloneDeviceInfo(devices []DeviceInfo) []DeviceInfo {
@@ -348,6 +379,16 @@ func cloneDeviceInfo(devices []DeviceInfo) []DeviceInfo {
 		return nil
 	}
 	return append([]DeviceInfo(nil), devices...)
+}
+
+func cachedVMDevices(devices []DeviceInfo) []DeviceInfo {
+	out := make([]DeviceInfo, 0, len(devices))
+	for _, dev := range devices {
+		if strings.EqualFold(strings.TrimSpace(dev.Location), "PEGPU VM") {
+			out = append(out, dev)
+		}
+	}
+	return out
 }
 
 func (r *RuntimeService) listDevices(ctx context.Context, path string, args []string) ([]DeviceInfo, error) {

@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -47,6 +48,7 @@ type DiscoveredModel struct {
 type DiscoveryService struct {
 	appDir  string
 	runtime *RuntimeService
+	mu      sync.Mutex
 }
 
 func NewDiscoveryService(appDir string, runtimeSvc ...*RuntimeService) *DiscoveryService {
@@ -160,6 +162,9 @@ func (d *DiscoveryService) scanVMModels() ([]DiscoveredModel, bool) {
 }
 
 func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	cfg := store.Get()
 	result, err := d.scan(cfg)
 	if err != nil {
@@ -240,9 +245,8 @@ func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
 			}
 			if autoDiscoveredModel(model) {
 				if isVMModelLocation(location) {
-					if result.VMOK {
-						delete(next.Models, id)
-					}
+					model.Location = location
+					next.Models[id] = model
 					continue
 				}
 				if available, _ := modelAvailability(model); !available {

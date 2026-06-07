@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import PEGPUCore
 
 @MainActor
@@ -17,7 +18,9 @@ final class LocalProxySupervisor: ObservableObject {
         self.runtimePaths = runtimePaths
     }
 
-    func start() throws {
+    func start() async throws {
+        let portsFile = paths.machine.appendingPathComponent("ports.json")
+        try await clearStaleProxies(portsFile: portsFile, preserving: process?.processIdentifier)
         if process?.isRunning == true {
             status = "Running"
             return
@@ -28,7 +31,6 @@ final class LocalProxySupervisor: ObservableObject {
             throw RuntimeError.message("Local port proxy helper is missing: \(executable.path)")
         }
         try runtimePaths.ensureDirectories()
-        let portsFile = paths.machine.appendingPathComponent("ports.json")
         let targetHost = NetworkStateStore(paths: paths, liveDir: runtimePaths.root).read().guestHost
         stopping = false
         let log = runtimePaths.localProxyLog
@@ -73,10 +75,44 @@ final class LocalProxySupervisor: ObservableObject {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
             do {
-                try self?.start()
+                try await self?.start()
             } catch {
                 self?.status = "Error"
             }
         }
+    }
+
+    private func clearStaleProxies(portsFile: URL, preserving preservedPID: Int32?) async throws {
+        let output = try await runner.run("/bin/ps", ["-axww", "-o", "pid=", "-o", "command="], timeout: 2).stdout
+        let needle = "--ports-file \(portsFile.path)"
+        let pids = output
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line -> Int32? in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let firstSpace = trimmed.firstIndex(where: { $0 == " " || $0 == "\t" }),
+                      let pid = Int32(String(trimmed[..<firstSpace]))
+                else { return nil }
+                let command = String(trimmed[firstSpace...])
+                let isPreserved = preservedPID.map { $0 == pid } ?? false
+                guard pid > 0,
+                      pid != getpid(),
+                      !isPreserved,
+                      command.contains("pegpu-local-proxy"),
+                      command.contains(needle)
+                else { return nil }
+                return pid
+            }
+        for pid in pids {
+            await terminate(pid: pid)
+        }
+    }
+
+    private func terminate(pid: Int32) async {
+        kill(pid, SIGTERM)
+        for _ in 0..<20 {
+            if kill(pid, 0) != 0 { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        kill(pid, SIGKILL)
     }
 }

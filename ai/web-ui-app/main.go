@@ -403,81 +403,8 @@ func (a *App) handleModelsRefresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *App) sortedModelsForClient(ctx context.Context, cfg AppConfig) []ModelConfig {
-	models := sortedModels(cfg)
-	hasVM := false
-	for _, model := range models {
-		if isVMModelLocation(model.Location) {
-			hasVM = true
-			break
-		}
-	}
-	if !hasVM || a.runtime == nil {
-		return models
-	}
-	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	vmModels, err := a.runtime.BridgeModelsIfRunning(probeCtx)
-	if err != nil || len(vmModels) == 0 {
-		return filterModelsByLocation(models, modelLocationMac)
-	}
-	live := map[string]DiscoveredModel{}
-	for _, model := range vmModels {
-		live[modelComparableKey(modelLocationVM, model.ModelPath)] = model
-	}
-	out := make([]ModelConfig, 0, len(models))
-	for _, model := range models {
-		if !isVMModelLocation(model.Location) {
-			out = append(out, model)
-			continue
-		}
-		if discovered, ok := live[modelComparableKey(modelLocationVM, model.ModelPath)]; ok {
-			out = append(out, mergeLiveModelMetadata(model, discovered))
-		}
-	}
-	return out
-}
-
-func mergeLiveModelMetadata(model ModelConfig, discovered DiscoveredModel) ModelConfig {
-	model.Available = true
-	model.MissingReason = ""
-	if discovered.Name != "" && model.Name == "" {
-		model.Name = discovered.Name
-	}
-	if discovered.Provider != "" {
-		model.Provider = discovered.Provider
-	}
-	if discovered.Source != "" {
-		model.Source = discovered.Source
-	}
-	if discovered.MmprojPath != "" {
-		model.MmprojPath = discovered.MmprojPath
-	}
-	if discovered.SizeBytes > 0 {
-		model.SizeBytes = discovered.SizeBytes
-	}
-	if model.Metadata == nil {
-		model.Metadata = map[string]string{}
-	}
-	if discovered.Format != "" {
-		model.Metadata["format"] = strings.ToUpper(discovered.Format)
-	}
-	for key, value := range discovered.Metadata {
-		if strings.TrimSpace(value) != "" {
-			model.Metadata[key] = value
-		}
-	}
-	return model
-}
-
-func filterModelsByLocation(models []ModelConfig, location string) []ModelConfig {
-	out := make([]ModelConfig, 0, len(models))
-	for _, model := range models {
-		if normalizeModelLocation(model.Location, model.ModelPath) == location {
-			out = append(out, model)
-		}
-	}
-	return out
+func (a *App) sortedModelsForClient(_ context.Context, cfg AppConfig) []ModelConfig {
+	return sortedModels(cfg)
 }
 
 func (a *App) handleModelByID(w http.ResponseWriter, r *http.Request) {
@@ -959,7 +886,12 @@ func (a *App) handleDevices(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	refresh := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("refresh")), "1") ||
+		strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("refresh")), "true")
 	devices, err := a.runtime.Devices(r.Context())
+	if refresh {
+		devices, err = a.runtime.RefreshDevices(r.Context())
+	}
 	if devices == nil {
 		devices = []DeviceInfo{}
 	}

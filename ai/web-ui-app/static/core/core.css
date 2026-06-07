@@ -36,6 +36,10 @@
 	box-sizing: border-box;
 }
 
+html {
+	scrollbar-gutter: stable;
+}
+
 body {
 	margin: 0;
 	min-width: 0;
@@ -260,7 +264,7 @@ textarea:disabled {
 
 .runtime-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 10px;
 	padding: 12px 16px;
 }
@@ -280,7 +284,9 @@ textarea:disabled {
 
 .runtime-card {
 	display: grid;
+	grid-template-rows: auto 1fr auto;
 	gap: 10px;
+	min-height: 154px;
 	min-width: 0;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
@@ -302,6 +308,10 @@ textarea:disabled {
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: 10px;
+	min-width: 0;
+}
+
+.runtime-card-head > div:first-child {
 	min-width: 0;
 }
 
@@ -1201,6 +1211,10 @@ textarea.input:focus {
 	}
 
 	.runtime-selectors {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.runtime-grid {
 		grid-template-columns: minmax(0, 1fr);
 	}
 

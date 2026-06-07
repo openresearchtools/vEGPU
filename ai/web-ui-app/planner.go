@@ -422,11 +422,6 @@ func resolveOneLlamaDevice(saved DeviceSelection, fresh []DeviceInfo) (DeviceInf
 	if len(candidates) == 1 {
 		return candidates[0], nil
 	}
-	for _, dev := range fresh {
-		if strings.EqualFold(strings.TrimSpace(dev.Name), name) && !strings.HasPrefix(strings.ToUpper(name), "VM:") {
-			return dev, nil
-		}
-	}
 	if len(candidates) > 1 {
 		return DeviceInfo{}, fmt.Errorf("selected GPU profile is ambiguous for %s: %s", name, deviceCandidateList(candidates))
 	}
@@ -583,7 +578,7 @@ func runtimeMountRoots(cfg AppConfig, model ModelConfig) []string {
 	if home, err := os.UserHomeDir(); err == nil {
 		add(filepath.Join(home, ".lmstudio", "models"))
 		add(filepath.Join(home, ".cache", "huggingface", "hub"))
-			add(filepath.Join(home, "Library", "Application Support", "pegpu", "Machine", "ai", "llms", "models"))
+		add(filepath.Join(home, "Library", "Application Support", "pegpu", "Machine", "ai", "llms", "models"))
 	}
 	out := make([]string, 0, len(roots))
 	for root := range roots {

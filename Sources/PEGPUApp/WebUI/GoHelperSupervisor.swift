@@ -35,6 +35,7 @@ final class GoHelperSupervisor: ObservableObject {
         let appDir = paths.root.appendingPathComponent("ai/web-ui-app", isDirectory: true)
         let binary = appDir.appendingPathComponent("web-ui-app")
         try runtimePaths.ensureDirectories()
+        try await clearStaleHelperOnPort()
         var environment = ProcessInfo.processInfo.environment
         environment["PEGPU_APP_DATA_DIR"] = paths.appData.path
         environment["PEGPU_HOST_RUNTIME_DIR"] = runtimePaths.root.path
@@ -68,6 +69,33 @@ final class GoHelperSupervisor: ObservableObject {
             }
         }
         status = "Running"
+    }
+
+    private func clearStaleHelperOnPort() async throws {
+        let result = try? await runner.run("/usr/sbin/lsof", ["-nP", "-iTCP@127.0.0.1:\(webPort)", "-sTCP:LISTEN", "-t"], timeout: 2)
+        let pids = (result?.stdout ?? "")
+            .split(whereSeparator: \.isNewline)
+            .compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            .filter { $0 > 0 && $0 != getpid() }
+        guard !pids.isEmpty else { return }
+
+        for pid in pids {
+            let processInfo = try? await runner.run("/bin/ps", ["eww", "-p", String(pid)], timeout: 2)
+            let command = processInfo?.stdout ?? ""
+            guard command.contains("web-ui-app"),
+                  command.contains("PEGPU_WEB_UI_PORT=\(webPort)"),
+                  command.contains("PEGPU_APP_DATA_DIR=\(paths.appData.path)") else {
+                throw RuntimeError.message("Web helper port \(webPort) is already in use by another process. Stop that process before opening PEGPU Models.")
+            }
+            kill(pid, SIGTERM)
+            for _ in 0..<20 {
+                if kill(pid, 0) != 0 { break }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            if kill(pid, 0) == 0 {
+                kill(pid, SIGKILL)
+            }
+        }
     }
 
     func stop() {
