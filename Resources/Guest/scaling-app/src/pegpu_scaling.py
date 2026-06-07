@@ -130,9 +130,26 @@ def require_display(display: str | None = None) -> str:
 
 
 def display_key(display: str | None = None) -> str:
-    raw = require_display(display)
+    return display_key_for_name(require_display(display))
+
+
+def display_key_for_name(raw: str) -> str:
     key = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw).strip("_")
     return key or "default"
+
+
+def display_alias_keys(display: str | None = None) -> list[str]:
+    raw = require_display(display)
+    names = [raw]
+    if raw.endswith(".0"):
+        names.append(raw[:-2])
+    elif re.fullmatch(r":[0-9]+", raw):
+        names.append(f"{raw}.0")
+    return list(dict.fromkeys(display_key_for_name(name) for name in names))
+
+
+def default_scale(display: str | None = None) -> str:
+    return "2" if displays_equivalent(display_name(display), ":0") else "1"
 
 
 def now_iso() -> str:
@@ -406,22 +423,32 @@ def refresh_window_manager(env: dict[str, str]) -> None:
 
 def update_state(display: str | None, scale_label: str) -> None:
     data = load_state()
-    key = display_key(display)
-    data.setdefault("sessions", {})[key] = {
-        "display": display_name(display),
-        "scale": normalize_scale(scale_label),
-        "updatedAt": now_iso(),
-    }
+    sessions = data.setdefault("sessions", {})
+    scale = normalize_scale(scale_label)
+    updated_at = now_iso()
+    for key in display_alias_keys(display):
+        sessions[key] = {
+            "display": display_name(display),
+            "scale": scale,
+            "updatedAt": updated_at,
+        }
     save_state(data)
 
 
 def saved_scale(display: str | None) -> str:
     data = load_state()
-    session = data.get("sessions", {}).get(display_key(display), {})
-    try:
-        return normalize_scale(session.get("scale", "1"))
-    except ValueError:
-        return "1"
+    sessions = data.get("sessions", {})
+    candidates = [
+        session for key in display_alias_keys(display)
+        if isinstance((session := sessions.get(key)), dict)
+    ]
+    candidates.sort(key=lambda session: str(session.get("updatedAt", "")), reverse=True)
+    for session in candidates:
+        try:
+            return normalize_scale(session.get("scale", default_scale(display)))
+        except ValueError:
+            continue
+    return default_scale(display)
 
 
 def apply_scale_unlocked(scale_label: str, display: str | None = None, quiet: bool = False) -> str:
