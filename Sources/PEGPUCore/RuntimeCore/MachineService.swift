@@ -18,6 +18,7 @@ public final class MachineService: @unchecked Sendable {
     private static let defaultRuntimeDiskSize = "2T"
 
     private let paths: AppPaths
+    private let runtimePaths: MachineRuntimePaths
     private let files: MachineFiles
     private let runner: ProcessRunner
     private let progress: ProgressCenter
@@ -35,22 +36,31 @@ public final class MachineService: @unchecked Sendable {
     private let startLock = NSLock()
     private var starting = false
 
-    public init(paths: AppPaths = AppPaths(), runner: ProcessRunner = ProcessRunner(), progress: ProgressCenter = .shared) {
+    public init(paths: AppPaths = AppPaths(), runtimePaths explicitRuntimePaths: MachineRuntimePaths? = nil, runner: ProcessRunner = ProcessRunner(), progress: ProgressCenter = .shared) {
         self.paths = paths
-        self.files = MachineFiles(machineDir: paths.machine)
+        let resolvedRuntimePaths = explicitRuntimePaths ?? Self.defaultRuntimePaths(paths: paths)
+        self.runtimePaths = resolvedRuntimePaths
+        self.files = MachineFiles(machineDir: paths.machine, liveDir: resolvedRuntimePaths.root)
         self.runner = runner
         self.progress = progress
         self.configStore = MachineConfigStore(paths: paths)
         self.manifestStore = ManifestStore(paths: paths)
         self.secrets = SecretsStore(paths: paths)
-        self.networkStore = NetworkStateStore(paths: paths)
+        self.networkStore = NetworkStateStore(paths: paths, liveDir: resolvedRuntimePaths.root)
         self.ssh = SSHClient(paths: paths, networkStore: networkStore, runner: runner, progress: progress)
         self.share = NFSShareService(paths: paths, ssh: ssh, runner: runner, progress: progress)
         self.audio = AudioBridgeService(paths: paths, files: files, networkStore: networkStore, runner: runner)
         self.guestSync = GuestSyncService(paths: paths, ssh: ssh, manifestStore: manifestStore, progress: progress)
-        self.cloudInit = CloudInitService(paths: paths, ssh: ssh, secrets: secrets, manifestStore: manifestStore, runner: runner)
+        self.cloudInit = CloudInitService(paths: paths, files: files, ssh: ssh, secrets: secrets, manifestStore: manifestStore, runner: runner)
         self.download = DownloadService(progress: progress)
         self.sleepGuard = HostSleepGuardService(runner: runner, progress: progress)
+    }
+
+    private static func defaultRuntimePaths(paths: AppPaths) -> MachineRuntimePaths {
+        if let identity = try? MachineProfileMaintenance.ensureProfileIdentity(profileRoot: paths.appData, name: paths.appData.lastPathComponent) {
+            return MachineRuntimePaths(root: MachineRuntimePaths.hostRuntimeRoot(for: identity.profileID))
+        }
+        return MachineRuntimePaths(root: paths.machine)
     }
 
     public func currentPid() -> Int32? {
@@ -71,6 +81,7 @@ public final class MachineService: @unchecked Sendable {
 
     public func initMachine() async throws {
         try paths.ensureDirectories()
+        try runtimePaths.ensureDirectories()
         progress.report(ProgressEvent(stage: "init", message: "Preparing PEGPU runtime folders"))
         _ = try manifestStore.ensure()
         _ = try secrets.ensure()
@@ -115,6 +126,7 @@ public final class MachineService: @unchecked Sendable {
         guard currentPid() != nil else {
             audio.stop()
             try? await sleepGuard.stop()
+            try? FileManager.default.removeItem(at: runtimePaths.owner)
             progress.report(ProgressEvent(stage: "stop", message: "Runtime is already stopped"))
             return
         }
@@ -129,6 +141,7 @@ public final class MachineService: @unchecked Sendable {
         while Date() < deadline {
             if currentPid() == nil {
                 try? await sleepGuard.stop()
+                try? FileManager.default.removeItem(at: runtimePaths.owner)
                 progress.report(ProgressEvent(stage: "stop", message: "Runtime stopped cleanly", level: .success))
                 return
             }
@@ -138,6 +151,7 @@ public final class MachineService: @unchecked Sendable {
                 _ = await waitForPidExit(currentPid(), timeout: 20)
                 if currentPid() == nil {
                     try? await sleepGuard.stop()
+                    try? FileManager.default.removeItem(at: runtimePaths.owner)
                     progress.report(ProgressEvent(stage: "stop", message: "Runtime stopped cleanly", level: .success))
                     return
                 }
@@ -151,6 +165,7 @@ public final class MachineService: @unchecked Sendable {
         }
         progress.report(ProgressEvent(stage: "stop", message: "Runtime stopped", level: .success))
         try? await sleepGuard.stop()
+        try? FileManager.default.removeItem(at: runtimePaths.owner)
     }
 
     public func resetMachine() async throws {
@@ -167,6 +182,7 @@ public final class MachineService: @unchecked Sendable {
         audio.stop()
         guard let pid = currentPid() else {
             try? FileManager.default.removeItem(at: files.pid)
+            try? FileManager.default.removeItem(at: runtimePaths.owner)
             try? await sleepGuard.stop()
             return
         }
@@ -177,6 +193,7 @@ public final class MachineService: @unchecked Sendable {
             _ = await waitForPidExit(pid, timeout: 2)
         }
         try? FileManager.default.removeItem(at: files.pid)
+        try? FileManager.default.removeItem(at: runtimePaths.owner)
         try? await sleepGuard.stop()
     }
 
@@ -335,6 +352,7 @@ public final class MachineService: @unchecked Sendable {
 
     private func startMachineInner() async throws {
         if let existingPid = currentPid() {
+            try enforceRuntimeOwner(existingPid)
             try await sleepGuard.start(pid: existingPid)
             try networkStore.write(networkStore.read())
             do {
@@ -347,6 +365,7 @@ public final class MachineService: @unchecked Sendable {
                         throw RuntimeError.message("Powered-off QEMU runtime did not exit after QMP quit. It was left running to avoid unsafe PCIe teardown.")
                     }
                     try? FileManager.default.removeItem(at: files.pid)
+                    try? FileManager.default.removeItem(at: runtimePaths.owner)
                     try? await sleepGuard.stop()
                     return try await startMachineInner()
                 }
@@ -364,6 +383,7 @@ public final class MachineService: @unchecked Sendable {
 
         progress.report(ProgressEvent(stage: "start", message: "Starting PEGPU runtime"))
         try await initMachine()
+        try prepareHostRuntimeForStart()
         let config = configStore.effective()
         _ = try await cloudInit.createSeedIso(mode: config.launchMode, guiRetina: config.guiRetina, guiAppearance: config.guiAppearance, force: true)
         let tools = try ToolResolver().resolve()
@@ -403,6 +423,7 @@ public final class MachineService: @unchecked Sendable {
         progress.report(ProgressEvent(stage: "qemu", message: "Launching runtime through \(VfioApp.displayName)", detail: config.launchMode.label))
         try networkStore.write(network.state)
         let child = try runner.spawnDetached(network.launchCommand, args, stdout: files.stdoutLog, stderr: files.stderrLog)
+        try writeRuntimeOwner(qemuPID: child.processIdentifier)
         do {
             try await sleepGuard.start(pid: child.processIdentifier)
         } catch {
@@ -411,6 +432,7 @@ public final class MachineService: @unchecked Sendable {
             if child.isRunning {
                 kill(child.processIdentifier, SIGKILL)
             }
+            try? FileManager.default.removeItem(at: runtimePaths.owner)
             throw RuntimeError.message("Mac sleep guard could not start, so the runtime was stopped before PCIe passthrough continued: \(firstLine(String(describing: error)))")
         }
         try await waitForQmp(socket: files.qmp, timeout: 20, child: child)
@@ -584,6 +606,7 @@ public final class MachineService: @unchecked Sendable {
     private func terminateQemuForReset() async throws {
         guard let pid = currentPid() else {
             try? await sleepGuard.stop()
+            try? FileManager.default.removeItem(at: runtimePaths.owner)
             return
         }
         progress.report(ProgressEvent(stage: "reset", message: "Terminating QEMU runtime process"))
@@ -594,6 +617,7 @@ public final class MachineService: @unchecked Sendable {
             _ = await waitForPidExit(pid, timeout: 2)
         }
         try? await sleepGuard.stop()
+        try? FileManager.default.removeItem(at: runtimePaths.owner)
     }
 
     private func serialLogShowsGuestPowerOff() -> Bool {
@@ -607,7 +631,85 @@ public final class MachineService: @unchecked Sendable {
         guard let command = try? Process.runAndCapture("/bin/ps", ["-p", String(pid), "-o", "command="]).trimmingCharacters(in: .whitespacesAndNewlines) else {
             return false
         }
-        return command.range(of: #"\b(qemu-system-aarch64|qemu-vfio-apple)\b"#, options: .regularExpression) != nil
+        guard command.range(of: #"\b(qemu-system-aarch64|qemu-vfio-apple)\b"#, options: .regularExpression) != nil else {
+            return false
+        }
+        return command.contains(files.disk.path) || command.contains(files.qmp.path) || command.contains(files.spiceSocket.path)
+    }
+
+    private func prepareHostRuntimeForStart() throws {
+        try runtimePaths.ensureDirectories()
+        try auditLegacyProfileRuntimeArtifacts()
+        for url in [
+            files.qmp,
+            files.memoryFile,
+            files.serialLog,
+            files.stdoutLog,
+            files.stderrLog,
+            files.spiceSocket,
+            files.audioHostPid,
+            files.audioHostState
+        ] {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func enforceRuntimeOwner(_ qemuPID: Int32) throws {
+        guard let owner = try? JSON.read(RuntimeOwnerState.self, from: runtimePaths.owner) else {
+            return
+        }
+        if let ownerQemuPID = owner.qemuPID, ownerQemuPID != qemuPID {
+            throw RuntimeError.message("Host runtime owner does not match the running QEMU process for this VM.")
+        }
+        guard let appPID = owner.appPID, appPID != getpid(), kill(appPID, 0) == 0 else {
+            return
+        }
+        throw RuntimeError.message("This VM is already owned by another running PEGPU app instance (pid \(appPID)). Stop it there before starting here.")
+    }
+
+    private func writeRuntimeOwner(qemuPID: Int32) throws {
+        try JSON.write(RuntimeOwnerState(
+            appPID: getpid(),
+            qemuPID: qemuPID,
+            profileRoot: paths.appData.path,
+            runtimeRoot: runtimePaths.root.path,
+            updatedAt: MachineProfileRegistryStore.nowString()
+        ), to: runtimePaths.owner)
+    }
+
+    private func auditLegacyProfileRuntimeArtifacts() throws {
+        let legacy = MachineFiles(machineDir: paths.machine)
+        guard legacy.pid.path != files.pid.path else { return }
+        if let pid = readPid(legacy.pid), kill(pid, 0) == 0 {
+            let command = (try? Process.runAndCapture("/bin/ps", ["-p", String(pid), "-o", "command="])) ?? ""
+            if command.contains(legacy.disk.path) || command.contains(paths.appData.path) {
+                throw RuntimeError.message("This VM is already running from legacy profile-local runtime files. Stop that VM before starting this portable profile.")
+            }
+        }
+        for url in [
+            legacy.qmp,
+            legacy.pid,
+            legacy.spiceSocket,
+            legacy.memoryFile,
+            legacy.audioHostPid,
+            legacy.audioHostState,
+            legacy.audioHostLog,
+            legacy.audioHostErr,
+            legacy.seedIso,
+            legacy.seedIso.deletingPathExtension(),
+            legacy.serialLog,
+            legacy.stdoutLog,
+            legacy.stderrLog
+        ] {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func readPid(_ url: URL) -> Int32? {
+        guard let raw = try? String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines) else {
+            return nil
+        }
+        return Int32(raw)
     }
 
     private func beginStart() throws {
@@ -645,4 +747,12 @@ private struct DiskSource: Codable, Sendable {
     var url: String
     var sha512: String
     var downloadedAt: String = ISO8601DateFormatter().string(from: Date())
+}
+
+private struct RuntimeOwnerState: Codable, Sendable {
+    var appPID: Int32?
+    var qemuPID: Int32?
+    var profileRoot: String
+    var runtimeRoot: String
+    var updatedAt: String
 }

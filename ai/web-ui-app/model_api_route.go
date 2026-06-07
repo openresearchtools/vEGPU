@@ -60,7 +60,7 @@ func (s *ModelAPIRouteSync) Sync(cfg AppConfig) error {
 
 	machineDir := filepath.Join(s.appData, "machines", "default")
 	portsPath := filepath.Join(machineDir, "ports.json")
-	statePath := filepath.Join(machineDir, modelAPIRouteStateFile)
+	statePath := filepath.Join(hostRuntimeDir(), modelAPIRouteStateFile)
 
 	previous, _ := readModelAPIRouteState(statePath)
 	ports, err := readPortForwardState(portsPath)
@@ -95,6 +95,13 @@ func (s *ModelAPIRouteSync) Sync(cfg AppConfig) error {
 		Port:      port,
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func hostRuntimeDir() string {
+	if v := strings.TrimSpace(os.Getenv("PEGPU_HOST_RUNTIME_DIR")); v != "" {
+		return expandPath(v)
+	}
+	return filepath.Join(defaultAppDataDir(""), "machines", "default")
 }
 
 func (s *ModelAPIRouteSync) Endpoints(cfg AppConfig) map[string]string {

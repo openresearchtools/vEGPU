@@ -10,6 +10,7 @@ struct PersistentTabHost: NSViewControllerRepresentable {
     }
 
     func updateNSViewController(_ controller: Controller, context: Context) {
+        controller.syncProfileRevision(model.profileRevision)
         controller.select(selectedTab)
     }
 
@@ -17,10 +18,12 @@ struct PersistentTabHost: NSViewControllerRepresentable {
         private let model: NativeAppModel
         private var controllers: [NativeAppModel.Tab: NSViewController] = [:]
         private var selectedTab: NativeAppModel.Tab
+        private var profileRevision: UUID
 
         init(model: NativeAppModel, selectedTab: NativeAppModel.Tab) {
             self.model = model
             self.selectedTab = selectedTab
+            self.profileRevision = model.profileRevision
             super.init(nibName: nil, bundle: nil)
         }
 
@@ -46,6 +49,16 @@ struct PersistentTabHost: NSViewControllerRepresentable {
             selectedController.view.isHidden = false
         }
 
+        func syncProfileRevision(_ revision: UUID) {
+            guard revision != profileRevision else { return }
+            profileRevision = revision
+            for controller in controllers.values {
+                controller.view.removeFromSuperview()
+                controller.removeFromParent()
+            }
+            controllers.removeAll()
+        }
+
         private func controller(for tab: NativeAppModel.Tab) -> NSViewController {
             if let controller = controllers[tab] {
                 return controller
@@ -61,9 +74,9 @@ struct PersistentTabHost: NSViewControllerRepresentable {
                 case .gui:
                     controller = NSHostingController(rootView: AnyView(GUIDisplayTabView(model: model)))
                 case .models:
-                    controller = NSHostingController(rootView: AnyView(WebUITabBrowser(tabID: tab.id, title: "Models", url: URL(string: "http://127.0.0.1:9292/core")!)))
+                    controller = NSHostingController(rootView: AnyView(WebUITabBrowser(tabID: tab.id, title: "Models", url: model.webHelperBaseURL.appendingPathComponent("core"))))
                 case .chat:
-                    controller = NSHostingController(rootView: AnyView(WebUITabBrowser(tabID: tab.id, title: "Chat", url: URL(string: "http://127.0.0.1:9292/")!)))
+                    controller = NSHostingController(rootView: AnyView(WebUITabBrowser(tabID: tab.id, title: "Chat", url: model.webHelperBaseURL)))
                 }
             case let .webShortcut(id):
                 if let shortcut = model.shortcuts.first(where: { $0.id == id }) {

@@ -9,8 +9,8 @@ struct GUIDisplayTabView: View {
 
     init(model: NativeAppModel) {
         self.model = model
-        let files = MachineFiles(machineDir: model.paths.machine)
-        self._session = StateObject(wrappedValue: SpiceSessionController(socketURL: files.spiceSocket, paths: model.paths))
+        let files = model.machineFiles
+        self._session = StateObject(wrappedValue: SpiceSessionController(socketURL: files.spiceSocket, qmpSocketURL: files.qmp, paths: model.paths))
         self.displayControl = model.displayControlMenu
     }
 
@@ -29,6 +29,9 @@ struct GUIDisplayTabView: View {
             syncExternalCapture(activeSessionID)
         }
         .onReceive(NotificationCenter.default.publisher(for: .pegpuRuntimeWillStop)) { _ in
+            session.disconnect()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pegpuMachineProfileWillSwitch)) { _ in
             session.disconnect()
         }
         .onReceive(NotificationCenter.default.publisher(for: .pegpuReconnectDisplay)) { _ in

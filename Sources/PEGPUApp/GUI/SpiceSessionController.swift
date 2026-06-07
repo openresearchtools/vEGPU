@@ -68,9 +68,9 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     private var desiredDisplayPixelSize = CGSize.zero
     private var scrollAccumulator: CGFloat = 0
 
-    init(socketURL: URL, paths: AppPaths) {
+    init(socketURL: URL, qmpSocketURL: URL, paths: AppPaths) {
         self.socketURL = socketURL
-        self.qmpSocketURL = MachineFiles(machineDir: paths.machine).qmp
+        self.qmpSocketURL = qmpSocketURL
         self.guestResolution = GuestDisplayResolutionService(paths: paths)
         super.init()
     }
@@ -483,10 +483,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
         guard shouldConnect else { return }
         guard !connected, !connecting else { return }
         connection?.disconnect()
-        let currentDirectory = socketURL.deletingLastPathComponent().path
-        FileManager.default.changeCurrentDirectoryPath(currentDirectory)
-        let relativeSocket = URL(fileURLWithPath: socketURL.lastPathComponent)
-        let connection = CSConnection(unixSocketFile: relativeSocket)
+        let connection = CSConnection(unixSocketFile: socketURL.standardizedFileURL)
         connection.delegate = self
         connection.audioEnabled = true
         connection.session.shareClipboard = true

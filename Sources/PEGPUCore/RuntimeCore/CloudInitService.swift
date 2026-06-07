@@ -9,9 +9,9 @@ public final class CloudInitService: @unchecked Sendable {
     private let bundledGuestPackages: BundledGuestPackages
     private let runner: ProcessRunner
 
-    public init(paths: AppPaths, ssh: SSHClient, secrets: SecretsStore, manifestStore: ManifestStore, runner: ProcessRunner = ProcessRunner()) {
+    public init(paths: AppPaths, files: MachineFiles? = nil, ssh: SSHClient, secrets: SecretsStore, manifestStore: ManifestStore, runner: ProcessRunner = ProcessRunner()) {
         self.paths = paths
-        self.files = MachineFiles(machineDir: paths.machine)
+        self.files = files ?? MachineFiles(machineDir: paths.machine)
         self.ssh = ssh
         self.secrets = secrets
         self.manifestStore = manifestStore
@@ -24,7 +24,7 @@ public final class CloudInitService: @unchecked Sendable {
         _ = try await ssh.ensureKey()
         let machineSecrets = try secrets.ensure()
         let publicKey = try String(contentsOfFile: "\(ssh.privateKeyPath).pub", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        let seedDir = paths.machine.appendingPathComponent("seed", isDirectory: true)
+        let seedDir = files.seedIso.deletingPathExtension()
         if !force, FileManager.default.fileExists(atPath: files.seedIso.path) {
             return files.seedIso.path
         }

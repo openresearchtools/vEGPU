@@ -7,6 +7,7 @@ final class AppTrayController: NSObject {
     private weak var appDelegate: AppDelegate?
     private weak var model: NativeAppModel?
     private var globalHotkeys: DisplayGlobalHotkeyService?
+    private var profileObserver: NSObjectProtocol?
     private var statusText = "checking"
     private var timer: Timer?
 
@@ -31,6 +32,17 @@ final class AppTrayController: NSObject {
             globalHotkeys.start()
             self.globalHotkeys = globalHotkeys
         }
+        if profileObserver == nil {
+            profileObserver = NotificationCenter.default.addObserver(
+                forName: .pegpuMachineProfileDidSwitch,
+                object: model,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.rebindDisplayHotkeys()
+                }
+            }
+        }
         updateMenu()
         refreshStatus()
         timer?.invalidate()
@@ -44,6 +56,10 @@ final class AppTrayController: NSObject {
     func invalidate() {
         timer?.invalidate()
         timer = nil
+        if let profileObserver {
+            NotificationCenter.default.removeObserver(profileObserver)
+        }
+        profileObserver = nil
         globalHotkeys?.invalidate()
         globalHotkeys = nil
         model?.stopHostSleepGuardForShutdown()
@@ -75,6 +91,17 @@ final class AppTrayController: NSObject {
 
     private func updateMenu() {
         statusItem.menu = makeMenu()
+    }
+
+    private func rebindDisplayHotkeys() {
+        globalHotkeys?.invalidate()
+        if let model {
+            let globalHotkeys = DisplayGlobalHotkeyService(displayControl: model.displayControlMenu)
+            globalHotkeys.start()
+            self.globalHotkeys = globalHotkeys
+        } else {
+            globalHotkeys = nil
+        }
     }
 
     private func makeMenu() -> NSMenu {

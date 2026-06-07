@@ -18,22 +18,23 @@ public struct MachineFiles: Sendable {
     public let audioHostLog: URL
     public let audioHostErr: URL
 
-    public init(machineDir: URL) {
+    public init(machineDir: URL, liveDir explicitLiveDir: URL? = nil) {
+        let liveDir = explicitLiveDir ?? machineDir
         disk = machineDir.appendingPathComponent("disk.qcow2")
         diskSource = machineDir.appendingPathComponent("disk.source.json")
         efiVars = machineDir.appendingPathComponent("efi-vars.fd")
-        seedIso = machineDir.appendingPathComponent("seed.iso")
-        qmp = machineDir.appendingPathComponent("qmp.sock")
-        pid = machineDir.appendingPathComponent("qemu.pid")
-        serialLog = machineDir.appendingPathComponent("serial.log")
-        qemuLog = machineDir.appendingPathComponent("qemu.log")
-        memoryFile = machineDir.appendingPathComponent("memory.bin")
-        stdoutLog = machineDir.appendingPathComponent("qemu.stdout.log")
-        stderrLog = machineDir.appendingPathComponent("qemu.stderr.log")
-        spiceSocket = machineDir.appendingPathComponent("display.spice")
-        audioHostPid = machineDir.appendingPathComponent("audio-host.pid")
-        audioHostState = machineDir.appendingPathComponent("audio-host.json")
-        audioHostLog = machineDir.appendingPathComponent("audio-host.stdout.log")
-        audioHostErr = machineDir.appendingPathComponent("audio-host.stderr.log")
+        seedIso = liveDir.appendingPathComponent("seed.iso")
+        qmp = liveDir.appendingPathComponent("qmp.sock")
+        pid = liveDir.appendingPathComponent("qemu.pid")
+        serialLog = liveDir.appendingPathComponent("serial.log")
+        qemuLog = liveDir.appendingPathComponent("qemu.log")
+        memoryFile = liveDir.appendingPathComponent("memory.bin")
+        stdoutLog = liveDir.appendingPathComponent("qemu.stdout.log")
+        stderrLog = liveDir.appendingPathComponent("qemu.stderr.log")
+        spiceSocket = liveDir.appendingPathComponent("display.spice")
+        audioHostPid = liveDir.appendingPathComponent("audio-host.pid")
+        audioHostState = liveDir.appendingPathComponent("audio-host.json")
+        audioHostLog = liveDir.appendingPathComponent("audio-host.stdout.log")
+        audioHostErr = liveDir.appendingPathComponent("audio-host.stderr.log")
     }
 }

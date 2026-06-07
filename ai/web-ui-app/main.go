@@ -90,7 +90,7 @@ func main() {
 	hfSvc := NewHFService(appDir, store, discovery, runtimeSvc)
 	copySvc := NewModelCopyService(store, discovery, runtimeSvc)
 	modelAPIRoute := NewModelAPIRouteSync(appDir)
-	if err := modelAPIRoute.Sync(store.Get()); err != nil {
+	if err := modelAPIRoute.Sync(hostRuntimeConfig(store.Get())); err != nil {
 		log.Printf("model API VM route sync failed: %v", err)
 	}
 	go func() {
@@ -132,7 +132,7 @@ func main() {
 	mux := http.NewServeMux()
 	app.registerRoutes(mux)
 
-	cfg := store.Get()
+	cfg := hostRuntimeConfig(store.Get())
 	if err := validateBindSafety(cfg); err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -305,7 +305,7 @@ func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		cfg := a.store.Get()
+		cfg := hostRuntimeConfig(a.store.Get())
 		respondJSON(w, http.StatusOK, map[string]any{
 			"appDir":          a.appDir,
 			"configPath":      a.store.Path(),
@@ -329,6 +329,7 @@ func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, err)
 			return
 		}
+		incoming = portableConfigForSave(incoming, a.store.Get())
 		if err := a.store.Update(func(next *AppConfig) error {
 			if incoming.Models == nil {
 				incoming.Models = next.Models
@@ -339,7 +340,7 @@ func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, err)
 			return
 		}
-		cfg := a.store.Get()
+		cfg := hostRuntimeConfig(a.store.Get())
 		if err := a.modelAPIRoute.Sync(cfg); err != nil {
 			log.Printf("model API VM route sync failed: %v", err)
 		}
@@ -350,6 +351,36 @@ func (a *App) handleConfig(w http.ResponseWriter, r *http.Request) {
 	default:
 		methodNotAllowed(w)
 	}
+}
+
+func hostRuntimeConfig(cfg AppConfig) AppConfig {
+	if port, ok := hostRuntimePortOverride(); ok {
+		cfg.Server.Host = "127.0.0.1"
+		cfg.Server.Port = port
+	}
+	return cfg
+}
+
+func portableConfigForSave(incoming AppConfig, stored AppConfig) AppConfig {
+	if _, ok := hostRuntimePortOverride(); ok {
+		incoming.Server.Port = stored.Server.Port
+		if strings.TrimSpace(incoming.Server.Host) == "127.0.0.1" && strings.TrimSpace(stored.Server.Host) != "" {
+			incoming.Server.Host = stored.Server.Host
+		}
+	}
+	return incoming
+}
+
+func hostRuntimePortOverride() (int, bool) {
+	raw := strings.TrimSpace(os.Getenv("PEGPU_WEB_UI_PORT"))
+	if raw == "" {
+		return 0, false
+	}
+	port, err := strconv.Atoi(raw)
+	if err != nil || port <= 1024 || port >= 65536 {
+		return 0, false
+	}
+	return port, true
 }
 
 func (a *App) handleModelsRefresh(w http.ResponseWriter, r *http.Request) {
@@ -602,7 +633,7 @@ func modelCopyRoots(model ModelConfig) (string, string, error) {
 			}
 			macRoot = root
 		}
-			return macRoot, "/home/pegpu/.cache/huggingface/hub", nil
+		return macRoot, "/home/pegpu/.cache/huggingface/hub", nil
 	case "lmstudio":
 		macRoot := macLMStudioRoot()
 		if location == modelLocationMac {
@@ -612,7 +643,7 @@ func modelCopyRoots(model ModelConfig) (string, string, error) {
 			}
 			macRoot = root
 		}
-			return macRoot, "/home/pegpu/.lmstudio/models", nil
+		return macRoot, "/home/pegpu/.lmstudio/models", nil
 	default:
 		return "", "", fmt.Errorf("copy is only supported for Hugging Face and LM Studio models")
 	}

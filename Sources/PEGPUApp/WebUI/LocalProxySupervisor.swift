@@ -6,13 +6,15 @@ final class LocalProxySupervisor: ObservableObject {
     @Published private(set) var status = "Stopped"
 
     private let paths: AppPaths
+    private let runtimePaths: MachineRuntimePaths
     private let runner = ProcessRunner()
     private var process: Process?
     private var stopping = false
     private var restartTask: Task<Void, Never>?
 
-    init(paths: AppPaths) {
+    init(paths: AppPaths, runtimePaths: MachineRuntimePaths) {
         self.paths = paths
+        self.runtimePaths = runtimePaths
     }
 
     func start() throws {
@@ -25,12 +27,11 @@ final class LocalProxySupervisor: ObservableObject {
             status = "Missing"
             throw RuntimeError.message("Local port proxy helper is missing: \(executable.path)")
         }
-        StaleProcessCleaner.terminateProcesses(containing: executable.path)
-        try FileManager.default.createDirectory(at: paths.appData, withIntermediateDirectories: true)
+        try runtimePaths.ensureDirectories()
         let portsFile = paths.machine.appendingPathComponent("ports.json")
-        let targetHost = NetworkStateStore(paths: paths).read().guestHost
+        let targetHost = NetworkStateStore(paths: paths, liveDir: runtimePaths.root).read().guestHost
         stopping = false
-        let log = paths.appData.appendingPathComponent("local-proxy.log")
+        let log = runtimePaths.localProxyLog
         let child = try runner.spawnDetached(
             executable.path,
             [

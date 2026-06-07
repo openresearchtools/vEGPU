@@ -46,9 +46,7 @@ final class NativeAppModel: ObservableObject {
     }
     @Published var shortcuts: [WebShortcut] {
         didSet {
-            if let data = try? JSONEncoder().encode(shortcuts) {
-                UserDefaults.standard.set(data, forKey: PreferencesKeys.webShortcuts)
-            }
+            saveWebShortcuts(shortcuts)
         }
     }
     @Published var showingAddWebUI = false
@@ -80,7 +78,7 @@ final class NativeAppModel: ObservableObject {
     var currentProgress: ProgressEvent? { get { runtimeScreen.log.currentProgress } set { runtimeScreen.log.currentProgress = newValue } }
     var commandState: String { get { runtimeScreen.log.commandState } set { setIfChanged(runtimeScreen.log, \.commandState, newValue) } }
     var linuxPassword: String { get { runtimeScreen.terminal.linuxPassword } set { setIfChanged(runtimeScreen.terminal, \.linuxPassword, newValue) } }
-    var webHelperStatus = "Stopped"
+    @Published var webHelperStatus = "Stopped"
     @Published var hostSleepGuardStatus = "Sleep Guard: Off"
     @Published var hostSleepGuardActive = false
     var terminalConnected: Bool { get { runtimeScreen.terminal.terminalConnected } set { setIfChanged(runtimeScreen.terminal, \.terminalConnected, newValue) } }
@@ -90,6 +88,7 @@ final class NativeAppModel: ObservableObject {
 
     private let registryStore: MachineProfileRegistryStore
     private let appRoot: URL
+    private var machineContext: MachineProfileContext
     var paths: AppPaths
     let sidebarMonitor: SidebarMonitorState
     let runtimeScreen: RuntimeScreenState
@@ -126,8 +125,11 @@ final class NativeAppModel: ObservableObject {
         }
         let selectedProfile = registry.machines.first(where: { $0.id == registry.selectedID }) ?? registry.machines[0]
         let paths = AppPaths(root: requestedPaths.root, dataRoot: selectedProfile.url)
+        let context = (try? MachineProfileMaintenance.profileContext(profile: selectedProfile)) ??
+            MachineProfileContext(profileRoot: selectedProfile.url, profileID: selectedProfile.id, name: selectedProfile.name)
         self.registryStore = registryStore
         self.appRoot = requestedPaths.root
+        self.machineContext = context
         self.paths = paths
         self.machineProfiles = registry.machines
         self.selectedMachineID = selectedProfile.id
@@ -136,7 +138,7 @@ final class NativeAppModel: ObservableObject {
         self.runtimeScreen = RuntimeScreenState()
         let progress = ProgressCenter()
         self.progress = progress
-        let services = Self.makeServices(paths: paths, progress: progress)
+        let services = Self.makeServices(paths: paths, context: context, progress: progress)
         self.configStore = services.configStore
         let loadedConfig = services.configStore.load()
         self.runtimeLaunchMode = loadedConfig.launchMode
@@ -152,12 +154,7 @@ final class NativeAppModel: ObservableObject {
         self.vfioService = VfioService()
         self.updates = AppUpdateService()
         self.sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
-        if let data = UserDefaults.standard.data(forKey: PreferencesKeys.webShortcuts),
-           let parsed = try? JSONDecoder().decode([WebShortcut].self, from: data) {
-            self.shortcuts = parsed
-        } else {
-            self.shortcuts = []
-        }
+        self.shortcuts = Self.loadWebShortcuts(paths: paths)
         progress.observe { [weak self] (event: ProgressEvent) in
             Task { @MainActor in
                 guard let self else { return }
@@ -167,7 +164,7 @@ final class NativeAppModel: ObservableObject {
         }
     }
 
-    private static func makeServices(paths: AppPaths, progress: ProgressCenter) -> (
+    private static func makeServices(paths: AppPaths, context: MachineProfileContext, progress: ProgressCenter) -> (
         configStore: MachineConfigStore,
         machineService: MachineService,
         llmsRuntime: LlmsRuntimeService,
@@ -178,14 +175,15 @@ final class NativeAppModel: ObservableObject {
         metricsService: MetricsService,
         displayControlMenu: DisplayControlMenuModel
     ) {
+        let runtimePaths = MachineRuntimePaths(root: context.hostRuntimeRoot)
         let configStore = MachineConfigStore(paths: paths)
-        let machine = MachineService(paths: paths, progress: progress)
+        let machine = MachineService(paths: paths, runtimePaths: runtimePaths, progress: progress)
         let llmsRuntime = LlmsRuntimeService(paths: paths, machine: machine)
         let nativeBridge = NativeBridgeService(runtime: llmsRuntime)
-        let goHelperSupervisor = GoHelperSupervisor(paths: paths, bridge: nativeBridge)
-        let localProxySupervisor = LocalProxySupervisor(paths: paths)
+        let goHelperSupervisor = GoHelperSupervisor(paths: paths, runtimePaths: runtimePaths, profileID: context.profileID, bridge: nativeBridge)
+        let localProxySupervisor = LocalProxySupervisor(paths: paths, runtimePaths: runtimePaths)
         let hostSetupService = HostSetupService(paths: paths, progress: progress)
-        let networkStore = NetworkStateStore(paths: paths)
+        let networkStore = NetworkStateStore(paths: paths, liveDir: runtimePaths.root)
         let ssh = SSHClient(paths: paths, networkStore: networkStore, progress: progress)
         let metricsService = MetricsService(ssh: ssh, machinePid: { machine.currentPid() })
         let displayControlMenu = DisplayControlMenuModel(paths: paths, machine: machine)
@@ -200,6 +198,14 @@ final class NativeAppModel: ObservableObject {
             metricsService: metricsService,
             displayControlMenu: displayControlMenu
         )
+    }
+
+    var webHelperBaseURL: URL {
+        goHelperSupervisor.baseURL
+    }
+
+    var machineFiles: MachineFiles {
+        MachineFiles(machineDir: paths.machine, liveDir: machineContext.hostRuntimeRoot)
     }
 
     var machineProfileLocked: Bool {
@@ -273,11 +279,25 @@ final class NativeAppModel: ObservableObject {
                 return
             }
             try validateProfileCandidate(standardized, allowEmpty: false)
+            let name = standardized.lastPathComponent.isEmpty ? "Machine" : standardized.lastPathComponent
             MachineProfileMaintenance.deleteRouterConfig(profileRoot: standardized)
             MachineProfileMaintenance.cleanTransientFiles(profileRoot: standardized)
-            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: standardized)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: standardized, name: name, preserveIdentity: true)
+            let identity = try MachineProfileMaintenance.ensureProfileIdentity(profileRoot: standardized, name: name, preserveExisting: true)
             var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
-            let profile = MachineProfile(name: standardized.lastPathComponent.isEmpty ? "Machine" : standardized.lastPathComponent, path: standardized.path)
+            if let index = registry.machines.firstIndex(where: { $0.id == identity.profileID }) {
+                registry.machines[index].path = standardized.path
+                registry.machines[index].name = name
+                registry.selectedID = identity.profileID
+                try registryStore.save(registry)
+                machineProfiles = registry.machines
+                selectedMachineID = registry.selectedID
+                pendingMachineID = identity.profileID
+                rebindServices(to: registry.machines[index])
+                appendOutput("[success] VM reattached: \(name)")
+                return
+            }
+            let profile = MachineProfile(id: identity.profileID, name: name, path: standardized.path)
             registry.machines.append(profile)
             registry.selectedID = profile.id
             try registryStore.save(registry)
@@ -300,11 +320,11 @@ final class NativeAppModel: ObservableObject {
         guard let destination = chooseSaveFolder(defaultName: "\(source.name) Copy", message: "Choose where to copy this PEGPU VM.") else { return }
         do {
             try validateCopyMoveDestination(destination, source: source.url)
-            try MachineProfileMaintenance.copyProfile(from: source.url, to: destination)
-            MachineProfileMaintenance.cleanTransientFiles(profileRoot: destination)
-            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: destination)
             var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             let profile = MachineProfile(name: destination.lastPathComponent.isEmpty ? "\(source.name) Copy" : destination.lastPathComponent, path: destination.path)
+            try MachineProfileMaintenance.copyProfile(from: source.url, to: destination)
+            MachineProfileMaintenance.cleanTransientFiles(profileRoot: destination)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: destination, name: profile.name, preferredID: profile.id, preserveIdentity: false)
             registry.machines.append(profile)
             registry.selectedID = profile.id
             try registryStore.save(registry)
@@ -331,7 +351,7 @@ final class NativeAppModel: ObservableObject {
             MachineProfileMaintenance.cleanTransientFiles(profileRoot: source.url)
             try FileManager.default.moveItem(at: source.url, to: destination)
             MachineProfileMaintenance.cleanTransientFiles(profileRoot: destination)
-            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: destination)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: destination, name: destination.lastPathComponent.isEmpty ? source.name : destination.lastPathComponent, preferredID: source.id, preserveIdentity: true)
             var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             guard let registryIndex = registry.machines.firstIndex(where: { $0.id == source.id }) else {
                 throw RuntimeError.message("Machine profile is not registered.")
@@ -390,9 +410,9 @@ final class NativeAppModel: ObservableObject {
         do {
             let target = url.standardizedFileURL
             try validateCreateDestination(target)
-            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: target)
-            var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             let profile = MachineProfile(name: name.isEmpty ? target.lastPathComponent : name, path: target.path)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: target, name: profile.name, preferredID: profile.id, preserveIdentity: false)
+            var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             registry.machines.append(profile)
             registry.selectedID = profile.id
             try registryStore.save(registry)
@@ -408,6 +428,12 @@ final class NativeAppModel: ObservableObject {
 
     private func commitPendingMachineSelection() throws {
         guard !pendingMachineID.isEmpty else { return }
+        guard let profile = machineProfiles.first(where: { $0.id == pendingMachineID }) else {
+            throw RuntimeError.message("Machine profile is not registered.")
+        }
+        if paths.appData.standardizedFileURL.path != profile.url.standardizedFileURL.path {
+            rebindServices(to: profile)
+        }
         guard pendingMachineID != selectedMachineID else { return }
         let registry = try registryStore.select(pendingMachineID)
         machineProfiles = registry.machines
@@ -415,12 +441,16 @@ final class NativeAppModel: ObservableObject {
     }
 
     private func rebindServices(to profile: MachineProfile) {
+        NotificationCenter.default.post(name: .pegpuMachineProfileWillSwitch, object: self)
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()
         terminalConnected = false
         let newPaths = AppPaths(root: appRoot, dataRoot: profile.url)
-        let services = Self.makeServices(paths: newPaths, progress: progress)
+        let context = (try? MachineProfileMaintenance.profileContext(profile: profile)) ??
+            MachineProfileContext(profileRoot: profile.url, profileID: profile.id, name: profile.name)
+        let services = Self.makeServices(paths: newPaths, context: context, progress: progress)
+        machineContext = context
         paths = newPaths
         configStore = services.configStore
         machineService = services.machineService
@@ -435,13 +465,14 @@ final class NativeAppModel: ObservableObject {
         runtimeLaunchMode = loaded.launchMode
         guiRetina = loaded.guiRetina
         linuxPassword = services.machineService.linuxPassword() ?? ""
+        shortcuts = Self.loadWebShortcuts(paths: newPaths)
         profileRevision = UUID()
         if backgroundServicesStarted {
             backgroundServicesStarted = false
-            startBackgroundServices()
         }
         refreshStatus()
         displayControlMenu.refresh()
+        NotificationCenter.default.post(name: .pegpuMachineProfileDidSwitch, object: self)
     }
 
     private func validateProfileCandidate(_ url: URL, allowEmpty: Bool) throws {
@@ -693,14 +724,20 @@ final class NativeAppModel: ObservableObject {
         backgroundServicesStarted = true
         Task {
             do {
-                try localProxySupervisor.start()
-                try await goHelperSupervisor.start()
-                webHelperStatus = goHelperSupervisor.status
+                try await ensureBackgroundServicesRunning()
                 await hostSetupService.ensureFirstRunHostSetup()
             } catch {
+                backgroundServicesStarted = false
                 appendOutput("[error] Background helper failed: \(error)")
             }
         }
+    }
+
+    private func ensureBackgroundServicesRunning() async throws {
+        try localProxySupervisor.start()
+        try await goHelperSupervisor.start()
+        webHelperStatus = goHelperSupervisor.status
+        backgroundServicesStarted = true
     }
 
     func startRuntime(config: MachineConfig) {
@@ -708,6 +745,7 @@ final class NativeAppModel: ObservableObject {
         Task {
             await runAction("start") {
                 try self.commitPendingMachineSelection()
+                try await self.ensureBackgroundServicesRunning()
                 let saved = try await self.machineService.saveConfig(config)
                 await MainActor.run {
                     self.runtimeLaunchMode = saved.launchMode
@@ -1130,9 +1168,14 @@ final class NativeAppModel: ObservableObject {
         guard !statusRefreshInFlight else { return }
         statusRefreshInFlight = true
         let machineService = machineService
-        Task(priority: .utility) { [machineService] in
+        let revision = profileRevision
+        Task(priority: .utility) { [machineService, revision] in
             let status = await machineService.statusMachine()
             let password = machineService.linuxPassword() ?? ""
+            guard revision == profileRevision else {
+                statusRefreshInFlight = false
+                return
+            }
             applyRuntimeStatus(status)
             linuxPassword = password
             webHelperStatus = goHelperSupervisor.status
@@ -1205,6 +1248,28 @@ final class NativeAppModel: ObservableObject {
         } else {
             shortcuts.append(WebShortcut(title: cleanTitle, url: url))
         }
+    }
+
+    private static func webShortcutsURL(paths: AppPaths) -> URL {
+        paths.appData.appendingPathComponent(".pegpu", isDirectory: true).appendingPathComponent("web-shortcuts.json")
+    }
+
+    private static func loadWebShortcuts(paths: AppPaths) -> [WebShortcut] {
+        let url = webShortcutsURL(paths: paths)
+        if let data = try? Data(contentsOf: url),
+           let parsed = try? JSONDecoder().decode([WebShortcut].self, from: data) {
+            return parsed
+        }
+        if let data = UserDefaults.standard.data(forKey: PreferencesKeys.webShortcuts),
+           let parsed = try? JSONDecoder().decode([WebShortcut].self, from: data) {
+            try? JSON.write(parsed, to: url)
+            return parsed
+        }
+        return []
+    }
+
+    private func saveWebShortcuts(_ shortcuts: [WebShortcut]) {
+        try? JSON.write(shortcuts, to: Self.webShortcutsURL(paths: paths))
     }
 
     private func setIfChanged<Root: AnyObject, Value: Equatable>(_ root: Root, _ keyPath: ReferenceWritableKeyPath<Root, Value>, _ value: Value) {

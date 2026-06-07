@@ -957,6 +957,9 @@ func (m *RuntimeManager) selectRuntimePairLocal(mac, linux ManagedRuntime) error
 }
 
 func guestRuntimeExecutable(runtimeInfo ManagedRuntime, rel string, fallback string) string {
+	if runtimeInfo.VMInstalled && strings.HasPrefix(sanitizeID(runtimeInfo.ID), "managed-llama-") {
+		return fallback
+	}
 	rel = strings.TrimSpace(filepath.ToSlash(rel))
 	if rel == "" || rel == "." || rel == ".." || strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, "../") {
 		return fallback

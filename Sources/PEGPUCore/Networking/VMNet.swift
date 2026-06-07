@@ -29,11 +29,10 @@ public enum VMNet {
 }
 
 public final class NetworkStateStore: @unchecked Sendable {
-    private let paths: AppPaths
-    private var stateURL: URL { paths.machine.appendingPathComponent("network.json") }
+    private let stateURL: URL
 
-    public init(paths: AppPaths) {
-        self.paths = paths
+    public init(paths: AppPaths, liveDir: URL? = nil) {
+        self.stateURL = (liveDir ?? paths.machine).appendingPathComponent("network.json")
     }
 
     public func read() -> NetworkState {

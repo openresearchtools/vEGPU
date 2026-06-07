@@ -543,6 +543,14 @@ func normalizeRuntimeResidency(residency *RuntimeResidencyConfig) {
 
 func rewriteDeprecatedVMRuntimeCommand(value string) string {
 	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, vmRuntimeHomeRoot+"/managed-llama-") {
+		switch filepath.Base(value) {
+		case "llama-server":
+			return "/usr/local/bin/llama-server"
+		case "rpc-server":
+			return "/usr/local/bin/rpc-server"
+		}
+	}
 	oldRoot := filepath.Join(string(filepath.Separator), "opt", "pegpu", "custom-llama-runtimes")
 	if value == oldRoot {
 		return vmRuntimeHomeRoot

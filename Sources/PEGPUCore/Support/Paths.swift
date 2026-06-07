@@ -75,6 +75,10 @@ public struct AppPaths: Sendable {
         globalDataRoot.appendingPathComponent("Machines", isDirectory: true)
     }
 
+    public static var hostRuntimeRoot: URL {
+        globalDataRoot.appendingPathComponent("HostRuntime", isDirectory: true)
+    }
+
     public static var machineRegistry: URL {
         globalDataRoot.appendingPathComponent("machines.json")
     }
