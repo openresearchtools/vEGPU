@@ -11,6 +11,9 @@ struct RuntimeToolbarView: View {
 
     var body: some View {
         WrappingHStackLayout(spacing: 10, rowSpacing: 8) {
+            machineControls
+            Divider()
+                .frame(width: 1, height: 24)
             if model.showDeveloperOptions {
                 modePicker
                 if config.launchMode == .gui {
@@ -42,6 +45,10 @@ struct RuntimeToolbarView: View {
         .onChange(of: config.guiRetina) { _, enabled in
             model.guiRetina = enabled
         }
+        .onChange(of: model.pendingMachineID) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            model.switchMachineProfile(id: newValue)
+        }
         .confirmationDialog(
             "Reset this VM?",
             isPresented: $showResetConfirm,
@@ -55,6 +62,35 @@ struct RuntimeToolbarView: View {
         } message: {
             Text("This terminates QEMU, deletes the VM disk and state, then prepares a clean runtime disk.")
         }
+    }
+
+    private var machineControls: some View {
+        HStack(spacing: 10) {
+            Picker("VM", selection: $model.pendingMachineID) {
+                ForEach(model.machineProfiles) { profile in
+                    Text(profile.name).tag(profile.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 156)
+            .disabled(model.machineProfileLocked)
+            .help(model.machineProfileLocked ? "VM is running. Stop VM first." : "Choose the machine profile for this runtime.")
+
+            Button {
+                model.showManageMachines()
+            } label: {
+                HitTargetLabel("Manage VMs", minWidth: 92)
+            }
+            .disabled(model.machineProfileLocked)
+            .help(model.machineProfileLocked ? "VM is running. Stop VM first." : "Create, add, copy, or move machine profiles.")
+
+            if model.machineProfileLocked {
+                Text("VM is running. Stop VM first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var configControls: some View {

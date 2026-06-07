@@ -20,6 +20,11 @@ import (
 
 var ggufSplitFileRE = regexp.MustCompile(`(?i)^(.+)-([0-9]{5})-of-([0-9]{5})\.gguf$`)
 
+const (
+	modelMetadataDiscovered      = "pegpu.discovered"
+	modelMetadataDiscoverySource = "pegpu.discoverySource"
+)
+
 type ggufSplitFile struct {
 	Prefix string
 	Index  int
@@ -92,6 +97,16 @@ func (d *DiscoveryService) KnownRoots(cfg AppConfig) []string {
 }
 
 func (d *DiscoveryService) Scan(cfg AppConfig) ([]DiscoveredModel, error) {
+	result, err := d.scan(cfg)
+	return result.Models, err
+}
+
+type discoveryScanResult struct {
+	Models []DiscoveredModel
+	VMOK   bool
+}
+
+func (d *DiscoveryService) scan(cfg AppConfig) (discoveryScanResult, error) {
 	roots := d.KnownRoots(cfg)
 	seenReal := map[string]bool{}
 	var models []DiscoveredModel
@@ -117,35 +132,36 @@ func (d *DiscoveryService) Scan(cfg AppConfig) ([]DiscoveredModel, error) {
 			models = append(models, model)
 		}
 	}
-	models = append(models, d.scanVMModels()...)
+	vmModels, vmOK := d.scanVMModels()
+	models = append(models, vmModels...)
 	sort.Slice(models, func(i, j int) bool {
 		if models[i].Provider == models[j].Provider {
 			return strings.ToLower(models[i].Name) < strings.ToLower(models[j].Name)
 		}
 		return models[i].Provider < models[j].Provider
 	})
-	return models, nil
+	return discoveryScanResult{Models: models, VMOK: vmOK}, nil
 }
 
-func (d *DiscoveryService) scanVMModels() []DiscoveredModel {
+func (d *DiscoveryService) scanVMModels() ([]DiscoveredModel, bool) {
 	if d.runtime == nil {
-		return nil
+		return nil, false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	models, err := d.runtime.BridgeModelsIfRunning(ctx)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	for i := range models {
 		models[i].Location = modelLocationVM
 	}
-	return models
+	return models, true
 }
 
 func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
 	cfg := store.Get()
-	models, err := d.Scan(cfg)
+	result, err := d.scan(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -158,15 +174,28 @@ func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
 		for id, m := range next.Models {
 			existingByPath[modelComparableKey(m.Location, m.ModelPath)] = id
 		}
-		for _, dm := range models {
+		discoveredNow := map[string]DiscoveredModel{}
+		for _, dm := range result.Models {
 			location := normalizeModelLocation(dm.Location, dm.ModelPath)
+			comparable := modelComparableKey(location, dm.ModelPath)
+			discoveredNow[comparable] = dm
 			if existingID, ok := existingByPath[modelComparableKey(location, dm.ModelPath)]; ok {
 				existing := next.Models[existingID]
 				existing.Location = normalizeModelLocation(existing.Location, existing.ModelPath)
+				if dm.Name != "" {
+					existing.Name = dm.Name
+				}
+				existing.Provider = firstNonEmpty(dm.Provider, existing.Provider)
+				existing.Source = firstNonEmpty(dm.Source, existing.Source)
+				existing.SizeBytes = dm.SizeBytes
+				existing.MmprojPath = dm.MmprojPath
+				existing.DiscoveredAt = firstNonEmpty(existing.DiscoveredAt, nowRFC3339())
 				existing.Available, existing.MissingReason = modelAvailability(existing)
 				if existing.Metadata == nil {
 					existing.Metadata = map[string]string{}
 				}
+				existing.Metadata[modelMetadataDiscovered] = "true"
+				existing.Metadata[modelMetadataDiscoverySource] = firstNonEmpty(dm.Provider, dm.Source, existing.Provider, existing.Source)
 				for key, value := range dm.Metadata {
 					if strings.TrimSpace(value) != "" {
 						existing.Metadata[key] = value
@@ -177,7 +206,9 @@ func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
 			}
 			id := ensureUniqueModelID(dm.ID, next.Models)
 			metadata := map[string]string{
-				"format": strings.ToUpper(firstNonEmpty(dm.Format, "gguf")),
+				"format":                     strings.ToUpper(firstNonEmpty(dm.Format, "gguf")),
+				modelMetadataDiscovered:      "true",
+				modelMetadataDiscoverySource: firstNonEmpty(dm.Provider, dm.Source, location),
 			}
 			for key, value := range dm.Metadata {
 				if strings.TrimSpace(value) != "" {
@@ -197,9 +228,31 @@ func (d *DiscoveryService) MergeNew(store *ConfigStore) ([]string, error) {
 				DiscoveredAt: nowRFC3339(),
 				Metadata:     metadata,
 			}
-			comparable := modelComparableKey(location, dm.ModelPath)
+			comparable = modelComparableKey(location, dm.ModelPath)
 			addedPaths = append(addedPaths, comparable)
 			existingByPath[comparable] = id
+		}
+		for id, model := range next.Models {
+			location := normalizeModelLocation(model.Location, model.ModelPath)
+			comparable := modelComparableKey(location, model.ModelPath)
+			if _, ok := discoveredNow[comparable]; ok {
+				continue
+			}
+			if autoDiscoveredModel(model) {
+				if isVMModelLocation(location) {
+					if result.VMOK {
+						delete(next.Models, id)
+					}
+					continue
+				}
+				if available, _ := modelAvailability(model); !available {
+					delete(next.Models, id)
+				}
+				continue
+			}
+			model.Location = location
+			model.Available, model.MissingReason = modelAvailability(model)
+			next.Models[id] = model
 		}
 		next.Discovery.LastScan = nowRFC3339()
 		return nil
@@ -672,7 +725,15 @@ func ensureUniqueModelID(base string, models map[string]ModelConfig) string {
 	}
 }
 
+func autoDiscoveredModel(model ModelConfig) bool {
+	if model.Metadata != nil && strings.EqualFold(strings.TrimSpace(model.Metadata[modelMetadataDiscovered]), "true") {
+		return true
+	}
+	return strings.TrimSpace(model.DiscoveredAt) != ""
+}
+
 func cleanComparablePath(path string) string {
+	path = expandPath(path)
 	path = filepath.Clean(path)
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		return resolved

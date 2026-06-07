@@ -72,10 +72,21 @@ func (r *RuntimeService) LlamaServerPath(cfg AppConfig) string {
 	if path == "" {
 		path = "./llama-server"
 	}
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(r.appDir, path)
+	return r.resolveRuntimeConfigPath(path)
+}
+
+func (r *RuntimeService) resolveRuntimeConfigPath(path string) string {
+	path = strings.TrimSpace(path)
+	if filepath.IsAbs(path) {
+		return filepath.Clean(expandPath(path))
 	}
-	return filepath.Clean(path)
+	if strings.HasPrefix(path, "./") || path == "." || strings.HasPrefix(path, "../") || path == ".." {
+		return filepath.Clean(filepath.Join(r.WorkDir(), path))
+	}
+	if root := r.ProfileRoot(); root != "" {
+		return filepath.Clean(filepath.Join(root, path))
+	}
+	return filepath.Clean(filepath.Join(r.appDir, path))
 }
 
 func (r *RuntimeService) WorkDir() string {
@@ -85,6 +96,10 @@ func (r *RuntimeService) WorkDir() string {
 		}
 	}
 	return r.appDir
+}
+
+func (r *RuntimeService) ProfileRoot() string {
+	return profileRootFromWorkDir(r.WorkDir())
 }
 
 func (r *RuntimeService) command(ctx context.Context, path string, args ...string) *exec.Cmd {

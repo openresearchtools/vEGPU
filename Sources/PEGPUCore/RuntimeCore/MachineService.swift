@@ -256,7 +256,7 @@ public final class MachineService: @unchecked Sendable {
             saved.linuxHomeMountPath != before.linuxHomeMountPath
         if shareChanged, currentPid() != nil {
             progress.report(ProgressEvent(stage: "share", message: "Applying share settings", detail: saved.shareRoot))
-            try await repairRuntimeDependencies(shareRoot: saved.shareRoot, reason: "share settings changed")
+            try await repairRuntimeDependencies(shareRoot: normalizeShareRoot(saved.shareRoot), reason: "share settings changed")
         }
         return saved
     }

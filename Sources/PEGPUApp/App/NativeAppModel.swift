@@ -54,6 +54,13 @@ final class NativeAppModel: ObservableObject {
     @Published var showingAddWebUI = false
     @Published var showingCreateRoutingRoute = false
     @Published var showingManageRoutingRoutes = false
+    @Published var showingManageMachines = false
+    @Published private(set) var machineProfiles: [MachineProfile] = []
+    @Published var pendingMachineID = ""
+    @Published private(set) var selectedMachineID = ""
+    @Published var machineProfileMessage: String?
+    @Published private(set) var profileRevision = UUID()
+    @Published private(set) var machineProfileLockedState = false
     @Published var showDeveloperOptions = UserDefaults.standard.bool(forKey: PreferencesKeys.developerOptions) {
         didSet { UserDefaults.standard.set(showDeveloperOptions, forKey: PreferencesKeys.developerOptions) }
     }
@@ -81,20 +88,22 @@ final class NativeAppModel: ObservableObject {
     var terminalInput: TerminalInput? { get { runtimeScreen.terminal.terminalInput } set { runtimeScreen.terminal.terminalInput = newValue } }
     var showingNvidiaInstallConfirm: Bool { get { runtimeScreen.drivers.showingNvidiaInstallConfirm } set { setIfChanged(runtimeScreen.drivers, \.showingNvidiaInstallConfirm, newValue) } }
 
-    let paths: AppPaths
+    private let registryStore: MachineProfileRegistryStore
+    private let appRoot: URL
+    var paths: AppPaths
     let sidebarMonitor: SidebarMonitorState
     let runtimeScreen: RuntimeScreenState
-    let configStore: MachineConfigStore
+    var configStore: MachineConfigStore
     let progress: ProgressCenter
-    let machineService: MachineService
-    let llmsRuntime: LlmsRuntimeService
-    let nativeBridge: NativeBridgeService
-    let goHelperSupervisor: GoHelperSupervisor
-    let localProxySupervisor: LocalProxySupervisor
-    let hostSetupService: HostSetupService
-    let metricsService: MetricsService
+    var machineService: MachineService
+    var llmsRuntime: LlmsRuntimeService
+    var nativeBridge: NativeBridgeService
+    var goHelperSupervisor: GoHelperSupervisor
+    var localProxySupervisor: LocalProxySupervisor
+    var hostSetupService: HostSetupService
+    var metricsService: MetricsService
     let vfioService: VfioService
-    let displayControlMenu: DisplayControlMenuModel
+    var displayControlMenu: DisplayControlMenuModel
     let updates: AppUpdateService
     private var pollingStarted = false
     private var backgroundServicesStarted = false
@@ -104,27 +113,42 @@ final class NativeAppModel: ObservableObject {
     private var activeSection: Section = .runtime
     private var outputTextRemainder = ""
 
-    init(paths: AppPaths = AppPaths()) {
+    init(paths requestedPaths: AppPaths = AppPaths()) {
+        let registryStore = MachineProfileRegistryStore()
+        var registry = (try? registryStore.loadOrCreate(preferredProfileRoot: requestedPaths.appData)) ?? {
+            let profile = MachineProfile(name: "Default", path: requestedPaths.appData.path)
+            return MachineProfileRegistry(selectedID: profile.id, machines: [profile])
+        }()
+        if registry.machines.isEmpty {
+            let profile = MachineProfile(name: "Default", path: requestedPaths.appData.path)
+            registry = MachineProfileRegistry(selectedID: profile.id, machines: [profile])
+            try? registryStore.save(registry)
+        }
+        let selectedProfile = registry.machines.first(where: { $0.id == registry.selectedID }) ?? registry.machines[0]
+        let paths = AppPaths(root: requestedPaths.root, dataRoot: selectedProfile.url)
+        self.registryStore = registryStore
+        self.appRoot = requestedPaths.root
         self.paths = paths
+        self.machineProfiles = registry.machines
+        self.selectedMachineID = selectedProfile.id
+        self.pendingMachineID = selectedProfile.id
         self.sidebarMonitor = SidebarMonitorState(logoURL: paths.resources.appendingPathComponent("Assets/PEGPU-logo-transparent.png"))
         self.runtimeScreen = RuntimeScreenState()
         let progress = ProgressCenter()
         self.progress = progress
-        self.configStore = MachineConfigStore(paths: paths)
-        let loadedConfig = self.configStore.load()
+        let services = Self.makeServices(paths: paths, progress: progress)
+        self.configStore = services.configStore
+        let loadedConfig = services.configStore.load()
         self.runtimeLaunchMode = loadedConfig.launchMode
         self.guiRetina = loadedConfig.guiRetina
-        let machine = MachineService(paths: paths, progress: progress)
-        self.machineService = machine
-        self.displayControlMenu = DisplayControlMenuModel(paths: paths, machine: machine)
-        self.llmsRuntime = LlmsRuntimeService(paths: paths, machine: machine)
-        self.nativeBridge = NativeBridgeService(runtime: llmsRuntime)
-        self.goHelperSupervisor = GoHelperSupervisor(paths: paths, bridge: nativeBridge)
-        self.localProxySupervisor = LocalProxySupervisor(paths: paths)
-        self.hostSetupService = HostSetupService(paths: paths, progress: progress)
-        let networkStore = NetworkStateStore(paths: paths)
-        let ssh = SSHClient(paths: paths, networkStore: networkStore, progress: progress)
-        self.metricsService = MetricsService(ssh: ssh, machinePid: { machine.currentPid() })
+        self.machineService = services.machineService
+        self.displayControlMenu = services.displayControlMenu
+        self.llmsRuntime = services.llmsRuntime
+        self.nativeBridge = services.nativeBridge
+        self.goHelperSupervisor = services.goHelperSupervisor
+        self.localProxySupervisor = services.localProxySupervisor
+        self.hostSetupService = services.hostSetupService
+        self.metricsService = services.metricsService
         self.vfioService = VfioService()
         self.updates = AppUpdateService()
         self.sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
@@ -141,6 +165,379 @@ final class NativeAppModel: ObservableObject {
                 self.appendOutput(Self.progressLine(event))
             }
         }
+    }
+
+    private static func makeServices(paths: AppPaths, progress: ProgressCenter) -> (
+        configStore: MachineConfigStore,
+        machineService: MachineService,
+        llmsRuntime: LlmsRuntimeService,
+        nativeBridge: NativeBridgeService,
+        goHelperSupervisor: GoHelperSupervisor,
+        localProxySupervisor: LocalProxySupervisor,
+        hostSetupService: HostSetupService,
+        metricsService: MetricsService,
+        displayControlMenu: DisplayControlMenuModel
+    ) {
+        let configStore = MachineConfigStore(paths: paths)
+        let machine = MachineService(paths: paths, progress: progress)
+        let llmsRuntime = LlmsRuntimeService(paths: paths, machine: machine)
+        let nativeBridge = NativeBridgeService(runtime: llmsRuntime)
+        let goHelperSupervisor = GoHelperSupervisor(paths: paths, bridge: nativeBridge)
+        let localProxySupervisor = LocalProxySupervisor(paths: paths)
+        let hostSetupService = HostSetupService(paths: paths, progress: progress)
+        let networkStore = NetworkStateStore(paths: paths)
+        let ssh = SSHClient(paths: paths, networkStore: networkStore, progress: progress)
+        let metricsService = MetricsService(ssh: ssh, machinePid: { machine.currentPid() })
+        let displayControlMenu = DisplayControlMenuModel(paths: paths, machine: machine)
+        return (
+            configStore: configStore,
+            machineService: machine,
+            llmsRuntime: llmsRuntime,
+            nativeBridge: nativeBridge,
+            goHelperSupervisor: goHelperSupervisor,
+            localProxySupervisor: localProxySupervisor,
+            hostSetupService: hostSetupService,
+            metricsService: metricsService,
+            displayControlMenu: displayControlMenu
+        )
+    }
+
+    var machineProfileLocked: Bool {
+        machineProfileLockedState || machineService.currentPid() != nil
+    }
+
+    func showManageMachines() {
+        guard !machineProfileLocked else {
+            machineProfileMessage = "VM is running. Stop VM first."
+            return
+        }
+        showingManageMachines = true
+    }
+
+    func refreshMachineProfiles() {
+        do {
+            let registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
+            machineProfiles = registry.machines
+            selectedMachineID = registry.selectedID
+            if pendingMachineID.isEmpty || !registry.machines.contains(where: { $0.id == pendingMachineID }) {
+                pendingMachineID = registry.selectedID
+            }
+        } catch {
+            machineProfileMessage = "Could not load VMs: \(firstLine(String(describing: error)))"
+        }
+    }
+
+    func switchMachineProfile(id: String, persist: Bool = false) {
+        guard !machineProfileLocked else {
+            machineProfileMessage = "VM is running. Stop VM first."
+            pendingMachineID = selectedMachineID
+            return
+        }
+        guard let profile = machineProfiles.first(where: { $0.id == id }) else { return }
+        do {
+            if persist {
+                let registry = try registryStore.select(profile.id)
+                machineProfiles = registry.machines
+                selectedMachineID = registry.selectedID
+            }
+            pendingMachineID = profile.id
+            rebindServices(to: profile)
+            machineProfileMessage = nil
+            appendOutput("[info] VM selected: \(profile.name)")
+        } catch {
+            machineProfileMessage = "Could not switch VM: \(firstLine(String(describing: error)))"
+            pendingMachineID = selectedMachineID
+        }
+    }
+
+    func createDefaultMachineProfile() {
+        let base = uniqueDefaultProfileURL(name: "Machine")
+        createMachineProfile(name: base.lastPathComponent, url: base)
+    }
+
+    func createCustomMachineProfile() {
+        guard let url = chooseDirectory(title: "Create Machine Profile", message: "Choose an empty folder for the new PEGPU VM.") else { return }
+        createMachineProfile(name: url.lastPathComponent.isEmpty ? "Machine" : url.lastPathComponent, url: url)
+    }
+
+    func addExistingMachineProfile() {
+        guard let url = chooseDirectory(title: "Add Machine Profile", message: "Choose a PEGPU machine profile folder.") else { return }
+        guard !machineProfileLocked else {
+            machineProfileMessage = "VM is running. Stop VM first."
+            return
+        }
+        do {
+            let standardized = url.standardizedFileURL
+            if let existing = machineProfiles.first(where: { $0.url.standardizedFileURL.path == standardized.path }) {
+                switchMachineProfile(id: existing.id, persist: true)
+                return
+            }
+            try validateProfileCandidate(standardized, allowEmpty: true)
+            MachineProfileMaintenance.deleteRouterConfig(profileRoot: standardized)
+            MachineProfileMaintenance.cleanTransientFiles(profileRoot: standardized)
+            var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
+            let profile = MachineProfile(name: standardized.lastPathComponent.isEmpty ? "Machine" : standardized.lastPathComponent, path: standardized.path)
+            registry.machines.append(profile)
+            registry.selectedID = profile.id
+            try registryStore.save(registry)
+            machineProfiles = registry.machines
+            selectedMachineID = registry.selectedID
+            pendingMachineID = profile.id
+            rebindServices(to: profile)
+            appendOutput("[success] VM added: \(profile.name)")
+        } catch {
+            machineProfileMessage = "Could not add VM: \(firstLine(String(describing: error)))"
+        }
+    }
+
+    func copySelectedMachineProfile() {
+        guard !machineProfileLocked else {
+            machineProfileMessage = "VM is running. Stop VM first."
+            return
+        }
+        guard let source = machineProfiles.first(where: { $0.id == pendingMachineID }) else { return }
+        guard let destination = chooseSaveFolder(defaultName: "\(source.name) Copy", message: "Choose where to copy this PEGPU VM.") else { return }
+        do {
+            try validateCopyMoveDestination(destination, source: source.url)
+            try FileManager.default.copyItem(at: source.url, to: destination)
+            MachineProfileMaintenance.cleanTransientFiles(profileRoot: destination)
+            var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
+            let profile = MachineProfile(name: destination.lastPathComponent.isEmpty ? "\(source.name) Copy" : destination.lastPathComponent, path: destination.path)
+            registry.machines.append(profile)
+            registry.selectedID = profile.id
+            try registryStore.save(registry)
+            machineProfiles = registry.machines
+            selectedMachineID = registry.selectedID
+            pendingMachineID = profile.id
+            rebindServices(to: profile)
+            appendOutput("[success] VM copied: \(profile.name)")
+        } catch {
+            machineProfileMessage = "Could not copy VM: \(firstLine(String(describing: error)))"
+        }
+    }
+
+    func moveSelectedMachineProfile() {
+        guard !machineProfileLocked else {
+            machineProfileMessage = "VM is running. Stop VM first."
+            return
+        }
+        guard let index = machineProfiles.firstIndex(where: { $0.id == pendingMachineID }) else { return }
+        let source = machineProfiles[index]
+        guard let destination = chooseSaveFolder(defaultName: source.name, message: "Choose where to move this PEGPU VM.") else { return }
+        do {
+            try validateCopyMoveDestination(destination, source: source.url)
+            try FileManager.default.moveItem(at: source.url, to: destination)
+            MachineProfileMaintenance.cleanTransientFiles(profileRoot: destination)
+            var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
+            guard let registryIndex = registry.machines.firstIndex(where: { $0.id == source.id }) else {
+                throw RuntimeError.message("Machine profile is not registered.")
+            }
+            registry.machines[registryIndex].path = destination.standardizedFileURL.path
+            registry.machines[registryIndex].name = destination.lastPathComponent.isEmpty ? registry.machines[registryIndex].name : destination.lastPathComponent
+            registry.selectedID = source.id
+            try registryStore.save(registry)
+            machineProfiles = registry.machines
+            selectedMachineID = registry.selectedID
+            pendingMachineID = source.id
+            rebindServices(to: registry.machines[registryIndex])
+            appendOutput("[success] VM moved: \(registry.machines[registryIndex].name)")
+        } catch {
+            machineProfileMessage = "Could not move VM: \(firstLine(String(describing: error)))"
+        }
+    }
+
+    func revealMachineProfile(_ profile: MachineProfile) {
+        NSWorkspace.shared.activateFileViewerSelecting([profile.url])
+    }
+
+    func removeMachineProfileFromList(_ profile: MachineProfile) {
+        do {
+            if machineProfileLocked, profile.id == pendingMachineID {
+                throw RuntimeError.message("VM is running. Stop VM first.")
+            }
+            var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
+            guard registry.machines.count > 1 else {
+                throw RuntimeError.message("At least one VM must stay registered.")
+            }
+            registry.machines.removeAll { $0.id == profile.id }
+            if registry.selectedID == profile.id {
+                registry.selectedID = registry.machines[0].id
+            }
+            try registryStore.save(registry)
+            machineProfiles = registry.machines
+            if pendingMachineID == profile.id || selectedMachineID == profile.id {
+                selectedMachineID = registry.selectedID
+                pendingMachineID = registry.selectedID
+                if let next = registry.machines.first(where: { $0.id == registry.selectedID }), !machineProfileLocked {
+                    rebindServices(to: next)
+                }
+            }
+            appendOutput("[info] VM removed from list: \(profile.name)")
+        } catch {
+            machineProfileMessage = "Could not remove VM: \(firstLine(String(describing: error)))"
+        }
+    }
+
+    private func createMachineProfile(name: String, url: URL) {
+        guard !machineProfileLocked else {
+            machineProfileMessage = "VM is running. Stop VM first."
+            return
+        }
+        do {
+            let target = url.standardizedFileURL
+            try validateCreateDestination(target)
+            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+            var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
+            let profile = MachineProfile(name: name.isEmpty ? target.lastPathComponent : name, path: target.path)
+            registry.machines.append(profile)
+            registry.selectedID = profile.id
+            try registryStore.save(registry)
+            machineProfiles = registry.machines
+            selectedMachineID = registry.selectedID
+            pendingMachineID = profile.id
+            rebindServices(to: profile)
+            appendOutput("[success] VM created: \(profile.name)")
+        } catch {
+            machineProfileMessage = "Could not create VM: \(firstLine(String(describing: error)))"
+        }
+    }
+
+    private func commitPendingMachineSelection() throws {
+        guard !pendingMachineID.isEmpty else { return }
+        guard pendingMachineID != selectedMachineID else { return }
+        let registry = try registryStore.select(pendingMachineID)
+        machineProfiles = registry.machines
+        selectedMachineID = registry.selectedID
+    }
+
+    private func rebindServices(to profile: MachineProfile) {
+        localProxySupervisor.stop()
+        goHelperSupervisor.stop()
+        nativeBridge.stop()
+        terminalConnected = false
+        let newPaths = AppPaths(root: appRoot, dataRoot: profile.url)
+        let services = Self.makeServices(paths: newPaths, progress: progress)
+        paths = newPaths
+        configStore = services.configStore
+        machineService = services.machineService
+        llmsRuntime = services.llmsRuntime
+        nativeBridge = services.nativeBridge
+        goHelperSupervisor = services.goHelperSupervisor
+        localProxySupervisor = services.localProxySupervisor
+        hostSetupService = services.hostSetupService
+        metricsService = services.metricsService
+        displayControlMenu = services.displayControlMenu
+        let loaded = services.configStore.load()
+        runtimeLaunchMode = loaded.launchMode
+        guiRetina = loaded.guiRetina
+        linuxPassword = services.machineService.linuxPassword() ?? ""
+        profileRevision = UUID()
+        if backgroundServicesStarted {
+            backgroundServicesStarted = false
+            startBackgroundServices()
+        }
+        refreshStatus()
+        displayControlMenu.refresh()
+    }
+
+    private func validateProfileCandidate(_ url: URL, allowEmpty: Bool) throws {
+        let target = url.standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw RuntimeError.message("Machine folder does not exist.")
+        }
+        for profile in machineProfiles {
+            let profileURL = profile.url.standardizedFileURL
+            if target.path == profileURL.path {
+                throw RuntimeError.message("Machine folder is already registered.")
+            }
+            if MachineProfileValidation.path(target, isInside: profileURL) || MachineProfileValidation.path(profileURL, isInside: target) {
+                throw RuntimeError.message("Machine folders cannot be nested inside another registered VM.")
+            }
+        }
+        if allowEmpty, (try? FileManager.default.contentsOfDirectory(atPath: target.path).isEmpty) == true {
+            return
+        }
+        guard MachineProfileValidation.isProfileFolder(target) else {
+            throw RuntimeError.message("Selected folder does not look like a PEGPU machine profile.")
+        }
+    }
+
+    private func validateCreateDestination(_ url: URL) throws {
+        let target = url.standardizedFileURL
+        for profile in machineProfiles {
+            let profileURL = profile.url.standardizedFileURL
+            if MachineProfileValidation.path(target, isInside: profileURL) || MachineProfileValidation.path(profileURL, isInside: target) {
+                throw RuntimeError.message("Machine folders cannot be nested inside another registered VM.")
+            }
+        }
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory) {
+            guard isDirectory.boolValue else {
+                throw RuntimeError.message("Destination is not a folder.")
+            }
+            let items = try FileManager.default.contentsOfDirectory(atPath: target.path)
+            guard items.isEmpty else {
+                throw RuntimeError.message("Create destination must be empty.")
+            }
+        }
+    }
+
+    private func validateCopyMoveDestination(_ destination: URL, source: URL) throws {
+        let target = destination.standardizedFileURL
+        let source = source.standardizedFileURL
+        if MachineProfileValidation.path(target, isInside: source) || target.path == source.path {
+            throw RuntimeError.message("Destination cannot be inside the current VM folder.")
+        }
+        try validateCreateDestination(target)
+        if FileManager.default.fileExists(atPath: target.path) {
+            let items = try FileManager.default.contentsOfDirectory(atPath: target.path)
+            guard items.isEmpty else {
+                throw RuntimeError.message("Destination folder must be empty.")
+            }
+            try FileManager.default.removeItem(at: target)
+        }
+    }
+
+    private func uniqueDefaultProfileURL(name: String) -> URL {
+        let safe = safeProfileFolderName(name)
+        let root = AppPaths.defaultProfilesRoot
+        var candidate = root.appendingPathComponent(safe, isDirectory: true)
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) || machineProfiles.contains(where: { $0.url.standardizedFileURL.path == candidate.standardizedFileURL.path }) {
+            candidate = root.appendingPathComponent("\(safe)-\(index)", isDirectory: true)
+            index += 1
+        }
+        return candidate
+    }
+
+    private func safeProfileFolderName(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = trimmed.isEmpty ? "Machine" : trimmed
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ "))
+        let filtered = raw.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let result = String(filtered).trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? "Machine" : result
+    }
+
+    private func chooseDirectory(title: String, message: String) -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = title
+        panel.message = message
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
+    }
+
+    private func chooseSaveFolder(defaultName: String, message: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.title = "Choose VM Folder"
+        panel.message = message
+        panel.nameFieldStringValue = safeProfileFolderName(defaultName)
+        panel.canCreateDirectories = true
+        return panel.runModal() == .OK ? panel.url?.standardizedFileURL : nil
     }
 
     func refreshStatus() {
@@ -306,6 +703,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         Task {
             await runAction("start") {
+                try self.commitPendingMachineSelection()
                 let saved = try await self.machineService.saveConfig(config)
                 await MainActor.run {
                     self.runtimeLaunchMode = saved.launchMode
@@ -326,6 +724,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         Task {
             await runAction("save-config") {
+                try self.commitPendingMachineSelection()
                 let saved = try await self.machineService.saveConfig(config)
                 await MainActor.run {
                     self.runtimeLaunchMode = saved.launchMode
@@ -834,6 +1233,7 @@ final class NativeAppModel: ObservableObject {
             nextDetail = status.detail ?? status.state
         }
         sidebarMonitor.updateRuntime(status: nextStatus, detail: nextDetail, metric: nextMetric, state: normalized)
+        machineProfileLockedState = normalized != "stopped"
     }
 
     private func applyHostSleepGuardStatus(_ status: HostSleepGuardStatus) {

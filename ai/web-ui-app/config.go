@@ -180,7 +180,7 @@ func (s *ConfigStore) Update(fn func(*AppConfig) error) error {
 	if err := fn(&next); err != nil {
 		return err
 	}
-	normalizeConfig(&next, s.appDir)
+	normalizeConfig(&next, s.appDir, s.path)
 	if err := writeYAMLAtomic(s.path, next); err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (s *ConfigStore) loadOrCreate() error {
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	normalizeConfig(&cfg, s.appDir)
+	normalizeConfig(&cfg, s.appDir, s.path)
 	if err := writeYAMLAtomic(s.path, cfg); err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func defaultConfig(appDir string) AppConfig {
 	}
 }
 
-func normalizeConfig(cfg *AppConfig, appDir string) {
+func normalizeConfig(cfg *AppConfig, appDir string, configPath ...string) {
 	if cfg.Server.Host == "" {
 		cfg.Server.Host = "127.0.0.1"
 	}
@@ -251,6 +251,11 @@ func normalizeConfig(cfg *AppConfig, appDir string) {
 	}
 	if cfg.Runtime.RPCServerPath == "" {
 		cfg.Runtime.RPCServerPath = "./rpc-server"
+	}
+	if len(configPath) > 0 {
+		root := profileRootFromConfigPath(configPath[0])
+		cfg.Runtime.LlamaServerPath = portableProfilePath(cfg.Runtime.LlamaServerPath, root)
+		cfg.Runtime.RPCServerPath = portableProfilePath(cfg.Runtime.RPCServerPath, root)
 	}
 	if cfg.Runtime.UpdateChannel == "" {
 		cfg.Runtime.UpdateChannel = "custom"
@@ -631,7 +636,7 @@ func modelAvailability(model ModelConfig) (bool, string) {
 		}
 		return false, "VM model path is outside supported model roots"
 	}
-	if _, err := os.Stat(model.ModelPath); err != nil {
+	if _, err := os.Stat(expandPath(model.ModelPath)); err != nil {
 		return false, err.Error()
 	}
 	return true, ""
@@ -687,6 +692,52 @@ func vmModelRoots() []string {
 
 func nowRFC3339() string {
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+func profileRootFromConfigPath(configPath string) string {
+	path := filepath.Clean(expandPath(strings.TrimSpace(configPath)))
+	if strings.TrimSpace(path) == "" {
+		return profileRootFromEnv()
+	}
+	dir := filepath.Dir(path)
+	if filepath.Base(dir) == "llms" && filepath.Base(filepath.Dir(dir)) == "ai" {
+		return filepath.Dir(filepath.Dir(dir))
+	}
+	return profileRootFromEnv()
+}
+
+func profileRootFromWorkDir(workDir string) string {
+	path := filepath.Clean(expandPath(strings.TrimSpace(workDir)))
+	if strings.TrimSpace(path) == "" {
+		return profileRootFromEnv()
+	}
+	if filepath.Base(path) == "llms" && filepath.Base(filepath.Dir(path)) == "ai" {
+		return filepath.Dir(filepath.Dir(path))
+	}
+	return profileRootFromEnv()
+}
+
+func profileRootFromEnv() string {
+	if v := strings.TrimSpace(os.Getenv("PEGPU_APP_DATA_DIR")); v != "" {
+		return filepath.Clean(expandPath(v))
+	}
+	return ""
+}
+
+func portableProfilePath(value, profileRoot string) string {
+	raw := strings.TrimSpace(value)
+	if raw == "" || strings.HasPrefix(raw, "./") || raw == "." || strings.HasPrefix(raw, "../") || raw == ".." {
+		return raw
+	}
+	expanded := filepath.Clean(expandPath(raw))
+	if profileRoot == "" || !filepath.IsAbs(expanded) || !pathInside(profileRoot, expanded) {
+		return raw
+	}
+	rel, err := filepath.Rel(profileRoot, expanded)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return raw
+	}
+	return filepath.ToSlash(rel)
 }
 
 func firstNonEmpty(values ...string) string {

@@ -102,10 +102,7 @@ func (r *RuntimeService) RPCServerPath(cfg AppConfig) string {
 	if path == "" {
 		path = "./rpc-server"
 	}
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(r.appDir, path)
-	}
-	return filepath.Clean(path)
+	return r.resolveRuntimeConfigPath(path)
 }
 
 func (r *RuntimeService) StartBridgeServer(ctx context.Context, spec BridgeRuntimeSpec) (BridgeRuntimeResult, error) {

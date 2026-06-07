@@ -36,13 +36,16 @@ type ManagedRuntime struct {
 	Platform        string `json:"platform"`
 	Name            string `json:"name"`
 	ArchiveName     string `json:"archiveName"`
-	InstallDir      string `json:"installDir"`
-	RootDir         string `json:"rootDir"`
-	ServerPath      string `json:"serverPath"`
+	InstallDir      string `json:"installDir,omitempty"`
+	RootDir         string `json:"rootDir,omitempty"`
+	ServerPath      string `json:"serverPath,omitempty"`
 	RPCPath         string `json:"rpcPath,omitempty"`
+	InstallDirRel   string `json:"installDirRel,omitempty"`
+	RootDirRel      string `json:"rootDirRel,omitempty"`
 	ServerRel       string `json:"serverRel"`
 	RPCRel          string `json:"rpcRel,omitempty"`
 	LicensePath     string `json:"licensePath,omitempty"`
+	LicensePathRel  string `json:"licensePathRel,omitempty"`
 	InstalledAt     string `json:"installedAt"`
 	Version         string `json:"version,omitempty"`
 	Active          bool   `json:"active"`
@@ -57,6 +60,40 @@ type ManagedRuntime struct {
 	DownloadURL     string `json:"downloadUrl,omitempty"`
 	SHA256          string `json:"sha256,omitempty"`
 	VMDeletePending bool   `json:"vmDeletePending,omitempty"`
+}
+
+type runtimeMetadataDisk struct {
+	Version         int    `json:"version"`
+	ID              string `json:"id"`
+	Platform        string `json:"platform"`
+	Name            string `json:"name,omitempty"`
+	ArchiveName     string `json:"archiveName,omitempty"`
+	InstallDirRel   string `json:"installDirRel"`
+	RootDirRel      string `json:"rootDirRel"`
+	ServerRel       string `json:"serverRel"`
+	RPCRel          string `json:"rpcRel,omitempty"`
+	LicensePathRel  string `json:"licensePathRel,omitempty"`
+	RuntimeVersion  string `json:"runtimeVersion,omitempty"`
+	InstalledAt     string `json:"installedAt,omitempty"`
+	Active          bool   `json:"active,omitempty"`
+	VMInstalled     bool   `json:"vmInstalled,omitempty"`
+	InstallError    string `json:"installError,omitempty"`
+	Family          string `json:"family,omitempty"`
+	ReleaseTag      string `json:"releaseTag,omitempty"`
+	SourceRef       string `json:"sourceRef,omitempty"`
+	LinuxBackend    string `json:"linuxBackend,omitempty"`
+	PairID          string `json:"pairId,omitempty"`
+	AssetName       string `json:"assetName,omitempty"`
+	DownloadURL     string `json:"downloadUrl,omitempty"`
+	SHA256          string `json:"sha256,omitempty"`
+	VMDeletePending bool   `json:"vmDeletePending,omitempty"`
+
+	// Legacy absolute fields are accepted on read only.
+	InstallDir  string `json:"installDir,omitempty"`
+	RootDir     string `json:"rootDir,omitempty"`
+	ServerPath  string `json:"serverPath,omitempty"`
+	RPCPath     string `json:"rpcPath,omitempty"`
+	LicensePath string `json:"licensePath,omitempty"`
 }
 
 type RuntimeListPayload struct {
@@ -533,9 +570,9 @@ func (m *RuntimeManager) activateMacRuntime(runtimeInfo *ManagedRuntime) error {
 		} else {
 			next.Runtime.ActiveRuntimePair = ""
 		}
-		next.Runtime.LlamaServerPath = runtimeInfo.ServerPath
+		next.Runtime.LlamaServerPath = m.configRuntimePath(runtimeInfo.ServerPath)
 		if runtimeInfo.RPCPath != "" {
-			next.Runtime.RPCServerPath = runtimeInfo.RPCPath
+			next.Runtime.RPCServerPath = m.configRuntimePath(runtimeInfo.RPCPath)
 		}
 		next.Runtime.ReleaseRepo = runtimeInfo.DownloadURL
 		if next.Runtime.ReleaseRepo == "" {
@@ -812,6 +849,7 @@ func (m *RuntimeManager) loadRuntime(id string) (ManagedRuntime, error) {
 		path := filepath.Join(m.platformDir(platform), id, runtimeMetadataFile)
 		runtimeInfo, err := readRuntimeMetadata(path)
 		if err == nil {
+			rewriteRuntimeMetadataIfPortable(runtimeInfo)
 			return runtimeInfo, nil
 		}
 	}
@@ -824,7 +862,11 @@ func (m *RuntimeManager) loadRuntimeDirect(platform, id string) (ManagedRuntime,
 	if platform == "" || id == "" {
 		return ManagedRuntime{}, os.ErrNotExist
 	}
-	return readRuntimeMetadata(filepath.Join(m.platformDir(platform), id, runtimeMetadataFile))
+	runtimeInfo, err := readRuntimeMetadata(filepath.Join(m.platformDir(platform), id, runtimeMetadataFile))
+	if err == nil {
+		rewriteRuntimeMetadataIfPortable(runtimeInfo)
+	}
+	return runtimeInfo, err
 }
 
 func (m *RuntimeManager) listPlatform(platform string) ([]ManagedRuntime, error) {
@@ -843,6 +885,7 @@ func (m *RuntimeManager) listPlatform(platform string) ([]ManagedRuntime, error)
 		}
 		runtimeInfo, err := readRuntimeMetadata(filepath.Join(root, entry.Name(), runtimeMetadataFile))
 		if err == nil {
+			rewriteRuntimeMetadataIfPortable(runtimeInfo)
 			items = append(items, runtimeInfo)
 		}
 	}
@@ -889,9 +932,9 @@ func (m *RuntimeManager) selectRuntimePairLocal(mac, linux ManagedRuntime) error
 		return nil
 	}
 	if err := m.store.Update(func(next *AppConfig) error {
-		next.Runtime.LlamaServerPath = mac.ServerPath
+		next.Runtime.LlamaServerPath = m.configRuntimePath(mac.ServerPath)
 		if mac.RPCPath != "" {
-			next.Runtime.RPCServerPath = mac.RPCPath
+			next.Runtime.RPCServerPath = m.configRuntimePath(mac.RPCPath)
 		}
 		next.Runtime.ReleaseRepo = firstNonEmpty(mac.DownloadURL, linux.DownloadURL, "custom")
 		next.Runtime.ActiveVersion = pairID
@@ -925,6 +968,56 @@ func (m *RuntimeManager) platformDir(platform string) string {
 	return filepath.Join(m.runtime.WorkDir(), "runtimes", platform)
 }
 
+func (m *RuntimeManager) profileRoot() string {
+	if m.runtime != nil {
+		return m.runtime.ProfileRoot()
+	}
+	return profileRootFromWorkDir(filepath.Join(m.appDir, "ai", "llms"))
+}
+
+func (m *RuntimeManager) configRuntimePath(value string) string {
+	if rel, ok := profileRelativePath(m.profileRoot(), value); ok {
+		return rel
+	}
+	return value
+}
+
+func profileRootFromRuntimePath(value string) string {
+	clean := filepath.Clean(expandPath(strings.TrimSpace(value)))
+	if clean == "" || clean == "." {
+		return ""
+	}
+	sep := string(filepath.Separator)
+	marker := sep + filepath.Join("ai", "llms", "runtimes") + sep
+	if idx := strings.Index(clean, marker); idx >= 0 {
+		root := clean[:idx]
+		if root == "" {
+			return sep
+		}
+		return root
+	}
+	if strings.HasSuffix(clean, sep+filepath.Join("ai", "llms", "runtimes")) {
+		return strings.TrimSuffix(clean, sep+filepath.Join("ai", "llms", "runtimes"))
+	}
+	if strings.HasSuffix(clean, sep+filepath.Join("ai", "llms")) {
+		return strings.TrimSuffix(clean, sep+filepath.Join("ai", "llms"))
+	}
+	return profileRootFromEnv()
+}
+
+func profileRelativePath(profileRoot, value string) (string, bool) {
+	profileRoot = filepath.Clean(expandPath(strings.TrimSpace(profileRoot)))
+	value = filepath.Clean(expandPath(strings.TrimSpace(value)))
+	if profileRoot == "" || value == "" || !filepath.IsAbs(value) || !pathInside(profileRoot, value) {
+		return "", false
+	}
+	rel, err := filepath.Rel(profileRoot, value)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
+}
+
 func normalizeRuntimePlatform(platform string) string {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case "mac", "darwin", "macos":
@@ -937,13 +1030,180 @@ func normalizeRuntimePlatform(platform string) string {
 }
 
 func writeRuntimeMetadata(runtimeInfo ManagedRuntime) error {
-	return writeJSONAtomic(filepath.Join(runtimeInfo.InstallDir, runtimeMetadataFile), runtimeInfo)
+	profileRoot := profileRootFromRuntimePath(runtimeInfo.InstallDir)
+	if profileRoot == "" {
+		return fmt.Errorf("runtime install directory is outside the machine profile: %s", runtimeInfo.InstallDir)
+	}
+	installDirRel, ok := profileRelativePath(profileRoot, runtimeInfo.InstallDir)
+	if !ok {
+		return fmt.Errorf("runtime install directory is outside the machine profile: %s", runtimeInfo.InstallDir)
+	}
+	rootDirRel, ok := profileRelativePath(profileRoot, runtimeInfo.RootDir)
+	if !ok {
+		return fmt.Errorf("runtime root directory is outside the machine profile: %s", runtimeInfo.RootDir)
+	}
+	licensePathRel := ""
+	if strings.TrimSpace(runtimeInfo.LicensePath) != "" {
+		if rel, ok := profileRelativePath(profileRoot, runtimeInfo.LicensePath); ok {
+			licensePathRel = rel
+		}
+	}
+	disk := runtimeMetadataDisk{
+		Version:         2,
+		ID:              runtimeInfo.ID,
+		Platform:        runtimeInfo.Platform,
+		Name:            runtimeInfo.Name,
+		ArchiveName:     runtimeInfo.ArchiveName,
+		InstallDirRel:   installDirRel,
+		RootDirRel:      rootDirRel,
+		ServerRel:       filepath.ToSlash(runtimeInfo.ServerRel),
+		RPCRel:          filepath.ToSlash(runtimeInfo.RPCRel),
+		LicensePathRel:  licensePathRel,
+		RuntimeVersion:  runtimeInfo.Version,
+		InstalledAt:     runtimeInfo.InstalledAt,
+		Active:          runtimeInfo.Active,
+		VMInstalled:     runtimeInfo.VMInstalled,
+		InstallError:    runtimeInfo.InstallError,
+		Family:          runtimeInfo.Family,
+		ReleaseTag:      runtimeInfo.ReleaseTag,
+		SourceRef:       runtimeInfo.SourceRef,
+		LinuxBackend:    runtimeInfo.LinuxBackend,
+		PairID:          runtimeInfo.PairID,
+		AssetName:       runtimeInfo.AssetName,
+		DownloadURL:     runtimeInfo.DownloadURL,
+		SHA256:          runtimeInfo.SHA256,
+		VMDeletePending: runtimeInfo.VMDeletePending,
+	}
+	return writeJSONAtomic(filepath.Join(runtimeInfo.InstallDir, runtimeMetadataFile), disk)
+}
+
+func rewriteRuntimeMetadataIfPortable(runtimeInfo ManagedRuntime) {
+	if strings.TrimSpace(runtimeInfo.InstallError) != "" ||
+		strings.TrimSpace(runtimeInfo.InstallDir) == "" ||
+		strings.TrimSpace(runtimeInfo.RootDir) == "" ||
+		strings.TrimSpace(runtimeInfo.ServerPath) == "" {
+		return
+	}
+	_ = writeRuntimeMetadata(runtimeInfo)
 }
 
 func readRuntimeMetadata(path string) (ManagedRuntime, error) {
-	var runtimeInfo ManagedRuntime
-	err := readJSONFile(path, &runtimeInfo)
-	return runtimeInfo, err
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ManagedRuntime{}, err
+	}
+	var disk runtimeMetadataDisk
+	if err := json.Unmarshal(raw, &disk); err != nil {
+		return ManagedRuntime{}, err
+	}
+	if disk.RuntimeVersion == "" {
+		var legacy struct {
+			Version string `json:"version"`
+		}
+		if err := json.Unmarshal(raw, &legacy); err == nil && strings.TrimSpace(legacy.Version) != "" {
+			disk.RuntimeVersion = legacy.Version
+		}
+	}
+	profileRoot := profileRootFromRuntimePath(path)
+	runtimeInfo := ManagedRuntime{
+		ID:              disk.ID,
+		Platform:        normalizeRuntimePlatform(disk.Platform),
+		Name:            disk.Name,
+		ArchiveName:     disk.ArchiveName,
+		InstallDirRel:   filepath.ToSlash(disk.InstallDirRel),
+		RootDirRel:      filepath.ToSlash(disk.RootDirRel),
+		ServerRel:       filepath.ToSlash(disk.ServerRel),
+		RPCRel:          filepath.ToSlash(disk.RPCRel),
+		LicensePathRel:  filepath.ToSlash(disk.LicensePathRel),
+		InstalledAt:     disk.InstalledAt,
+		Version:         disk.RuntimeVersion,
+		Active:          disk.Active,
+		VMInstalled:     disk.VMInstalled,
+		InstallError:    disk.InstallError,
+		Family:          disk.Family,
+		ReleaseTag:      disk.ReleaseTag,
+		SourceRef:       disk.SourceRef,
+		LinuxBackend:    disk.LinuxBackend,
+		PairID:          disk.PairID,
+		AssetName:       disk.AssetName,
+		DownloadURL:     disk.DownloadURL,
+		SHA256:          disk.SHA256,
+		VMDeletePending: disk.VMDeletePending,
+	}
+	if runtimeInfo.Platform == "" {
+		runtimeInfo.Platform = normalizeRuntimePlatform(filepath.Base(filepath.Dir(filepath.Dir(path))))
+	}
+	resolve := func(rel, legacyAbs, label string) (string, string) {
+		if strings.TrimSpace(rel) != "" {
+			if profileRoot == "" {
+				return "", fmt.Sprintf("%s cannot resolve without a machine profile root", label)
+			}
+			return filepath.Clean(filepath.Join(profileRoot, filepath.FromSlash(rel))), ""
+		}
+		legacyAbs = filepath.Clean(expandPath(strings.TrimSpace(legacyAbs)))
+		if legacyAbs == "." || legacyAbs == "" {
+			return "", ""
+		}
+		if !filepath.IsAbs(legacyAbs) {
+			return filepath.Clean(filepath.Join(filepath.Dir(path), legacyAbs)), ""
+		}
+		if profileRoot != "" && pathInside(profileRoot, legacyAbs) {
+			if rel, ok := profileRelativePath(profileRoot, legacyAbs); ok {
+				switch label {
+				case "installDir":
+					runtimeInfo.InstallDirRel = rel
+				case "rootDir":
+					runtimeInfo.RootDirRel = rel
+				case "licensePath":
+					runtimeInfo.LicensePathRel = rel
+				}
+			}
+			return legacyAbs, ""
+		}
+		return "", fmt.Sprintf("%s points outside this machine profile: %s", label, legacyAbs)
+	}
+	var invalid []string
+	var detail string
+	if runtimeInfo.InstallDir, detail = resolve(disk.InstallDirRel, disk.InstallDir, "installDir"); detail != "" {
+		invalid = append(invalid, detail)
+	}
+	if runtimeInfo.RootDir, detail = resolve(disk.RootDirRel, disk.RootDir, "rootDir"); detail != "" {
+		invalid = append(invalid, detail)
+	}
+	if strings.TrimSpace(disk.ServerRel) != "" && runtimeInfo.RootDir != "" {
+		runtimeInfo.ServerPath = filepath.Clean(filepath.Join(runtimeInfo.RootDir, filepath.FromSlash(disk.ServerRel)))
+	} else if strings.TrimSpace(disk.ServerPath) != "" {
+		if profileRoot != "" && pathInside(profileRoot, filepath.Clean(expandPath(disk.ServerPath))) {
+			runtimeInfo.ServerPath = filepath.Clean(expandPath(disk.ServerPath))
+			if rel, relErr := filepath.Rel(runtimeInfo.RootDir, runtimeInfo.ServerPath); relErr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+				runtimeInfo.ServerRel = filepath.ToSlash(rel)
+			}
+		} else {
+			invalid = append(invalid, "serverPath points outside this machine profile")
+		}
+	}
+	if strings.TrimSpace(disk.RPCRel) != "" && runtimeInfo.RootDir != "" {
+		runtimeInfo.RPCPath = filepath.Clean(filepath.Join(runtimeInfo.RootDir, filepath.FromSlash(disk.RPCRel)))
+	} else if strings.TrimSpace(disk.RPCPath) != "" {
+		if profileRoot != "" && pathInside(profileRoot, filepath.Clean(expandPath(disk.RPCPath))) {
+			runtimeInfo.RPCPath = filepath.Clean(expandPath(disk.RPCPath))
+			if rel, relErr := filepath.Rel(runtimeInfo.RootDir, runtimeInfo.RPCPath); relErr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+				runtimeInfo.RPCRel = filepath.ToSlash(rel)
+			}
+		} else {
+			invalid = append(invalid, "rpcPath points outside this machine profile")
+		}
+	}
+	if runtimeInfo.LicensePath, detail = resolve(disk.LicensePathRel, disk.LicensePath, "licensePath"); detail != "" {
+		invalid = append(invalid, detail)
+	}
+	if runtimeInfo.InstallDir == "" {
+		runtimeInfo.InstallDir = filepath.Dir(path)
+	}
+	if len(invalid) > 0 && runtimeInfo.InstallError == "" {
+		runtimeInfo.InstallError = strings.Join(invalid, "; ")
+	}
+	return runtimeInfo, nil
 }
 
 func writeJSONAtomic(path string, value any) error {

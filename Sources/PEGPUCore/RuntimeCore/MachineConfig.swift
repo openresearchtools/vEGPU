@@ -72,7 +72,7 @@ public struct MachineConfig: Codable, Equatable, Sendable {
         case macShareGuestPath
     }
 
-    public init(cpuMode: CpuMode = .auto, cpuCount: Int = 8, memoryMiB: Int = 8192, startRuntimeAtLogin: Bool = false, shareRoot: String = NSHomeDirectory(), launchMode: RuntimeLaunchMode = MachineConfig.defaultLaunchMode, guiRetina: Bool = MachineConfig.defaultGuiRetina, guiResolutionMode: GUIResolutionMode = .nativeFit, guiDensity: GUIDensity = .comfort, guiAppearance: GUIAppearance = .dark, linuxHomeShareEnabled: Bool = true, linuxHomeMountPath: String = defaultLinuxHomeMountPath, macShareGuestPath: String = guestShareRoot) {
+    public init(cpuMode: CpuMode = .auto, cpuCount: Int = 8, memoryMiB: Int = 8192, startRuntimeAtLogin: Bool = false, shareRoot: String = "~", launchMode: RuntimeLaunchMode = MachineConfig.defaultLaunchMode, guiRetina: Bool = MachineConfig.defaultGuiRetina, guiResolutionMode: GUIResolutionMode = .nativeFit, guiDensity: GUIDensity = .comfort, guiAppearance: GUIAppearance = .dark, linuxHomeShareEnabled: Bool = true, linuxHomeMountPath: String = defaultLinuxHomeMountPath, macShareGuestPath: String = guestShareRoot) {
         self.cpuMode = cpuMode
         self.cpuCount = cpuCount
         self.memoryMiB = memoryMiB
@@ -94,7 +94,7 @@ public struct MachineConfig: Codable, Equatable, Sendable {
         self.cpuCount = try container.decodeIfPresent(Int.self, forKey: .cpuCount) ?? 8
         self.memoryMiB = try container.decodeIfPresent(Int.self, forKey: .memoryMiB) ?? 8192
         self.startRuntimeAtLogin = try container.decodeIfPresent(Bool.self, forKey: .startRuntimeAtLogin) ?? false
-        self.shareRoot = try container.decodeIfPresent(String.self, forKey: .shareRoot) ?? NSHomeDirectory()
+        self.shareRoot = try container.decodeIfPresent(String.self, forKey: .shareRoot) ?? "~"
         self.launchMode = try container.decodeIfPresent(RuntimeLaunchMode.self, forKey: .launchMode) ?? Self.defaultLaunchMode
         self.guiRetina = try container.decodeIfPresent(Bool.self, forKey: .guiRetina) ?? Self.defaultGuiRetina
         self.guiResolutionMode = try container.decodeIfPresent(GUIResolutionMode.self, forKey: .guiResolutionMode) ?? .nativeFit
@@ -153,7 +153,7 @@ public final class MachineConfigStore: @unchecked Sendable {
             cpuCount: config.cpuCount,
             memoryMiB: config.memoryMiB,
             startRuntimeAtLogin: config.startRuntimeAtLogin,
-            shareRoot: config.shareRoot,
+            shareRoot: normalizeShareRoot(config.shareRoot),
             effectiveCpuCount: config.cpuMode == .auto ? autoCpuCount : config.cpuCount,
             launchMode: config.launchMode,
             guiRetina: config.guiRetina,
@@ -170,7 +170,7 @@ public final class MachineConfigStore: @unchecked Sendable {
         let maxCPU = max(1, ProcessInfo.processInfo.processorCount)
         let cpuCount = min(max(config.cpuCount, 1), maxCPU)
         let memoryMiB = min(max(config.memoryMiB, 1024), 262_144)
-        let shareRoot = normalizeShareRoot(config.shareRoot)
+        let shareRoot = portableShareRoot(config.shareRoot)
         return MachineConfig(
             cpuMode: config.cpuMode,
             cpuCount: cpuCount,
@@ -202,6 +202,18 @@ public func normalizeShareRoot(_ value: String?) -> String {
         expanded = raw
     }
     return URL(fileURLWithPath: expanded).standardizedFileURL.path
+}
+
+public func portableShareRoot(_ value: String?) -> String {
+    let expanded = normalizeShareRoot(value)
+    let home = URL(fileURLWithPath: NSHomeDirectory()).standardizedFileURL.path
+    if expanded == home {
+        return "~"
+    }
+    if expanded.hasPrefix(home + "/") {
+        return "~/" + String(expanded.dropFirst(home.count + 1))
+    }
+    return expanded
 }
 
 public func normalizeAbsolutePath(_ value: String?, fallback: String) -> String {

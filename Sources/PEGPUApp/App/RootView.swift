@@ -3,14 +3,12 @@ import SwiftUI
 
 struct RootView: View {
     @ObservedObject var model: NativeAppModel
-    @ObservedObject private var displayControl: DisplayControlMenuModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: NativeAppModel.Tab
     @State private var sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
 
     init(model: NativeAppModel) {
         self.model = model
-        self.displayControl = model.displayControlMenu
         _selectedTab = State(initialValue: .section(.runtime))
     }
 
@@ -60,6 +58,9 @@ struct RootView: View {
         .sheet(isPresented: $model.showingManageRoutingRoutes) {
             ManageRoutingRoutesView(model: model)
         }
+        .sheet(isPresented: $model.showingManageMachines) {
+            ManageMachinesView(model: model)
+        }
         .task {
             model.setActiveTab(selectedTab)
             model.refreshStatus()
@@ -87,7 +88,7 @@ struct RootView: View {
     }
 
     private var windowTitle: String {
-        guard selectedTab == .section(.gui), displayControl.activeSessionID != nil else { return "PEGPU" }
+        guard selectedTab == .section(.gui), model.displayControlMenu.activeSessionID != nil else { return "PEGPU" }
         return "PEGPU - External Display"
     }
 }
