@@ -46,9 +46,6 @@ public enum MachineProfileValidation {
         if fm.fileExists(atPath: root.appendingPathComponent("machines/default/disk.qcow2").path) {
             return true
         }
-        if let items = try? fm.contentsOfDirectory(atPath: root.path), items.isEmpty {
-            return true
-        }
         return false
     }
 
@@ -175,21 +172,71 @@ public final class MachineProfileRegistryStore: @unchecked Sendable {
 }
 
 public enum MachineProfileMaintenance {
+    private static let transientRelativePaths = [
+        "machines/default/qemu.pid",
+        "machines/default/qmp.sock",
+        "machines/default/display.spice",
+        "machines/default/memory.bin",
+        "machines/default/audio-host.pid",
+        "machines/default/audio-host.json",
+        "machines/default/network.json",
+        "machines/default/model-api-route.json"
+    ]
+
+    public static func ensureProfileScaffold(profileRoot: URL) throws {
+        let root = profileRoot.standardizedFileURL
+        let dirs = [
+            root,
+            root.appendingPathComponent("setup", isDirectory: true),
+            root.appendingPathComponent("ssh", isDirectory: true),
+            root.appendingPathComponent("logs", isDirectory: true),
+            root.appendingPathComponent("machines/default", isDirectory: true),
+            root.appendingPathComponent("machines/default/seed", isDirectory: true),
+            root.appendingPathComponent("ai/llms", isDirectory: true),
+            root.appendingPathComponent("ai/llms/.runtime", isDirectory: true),
+            root.appendingPathComponent("ai/llms/runtimes", isDirectory: true),
+            root.appendingPathComponent("shares/nfs", isDirectory: true)
+        ]
+        for dir in dirs {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+    }
+
+    public static func copyProfile(from sourceRoot: URL, to destinationRoot: URL) throws {
+        let fm = FileManager.default
+        let source = sourceRoot.standardizedFileURL
+        let destination = destinationRoot.standardizedFileURL
+        let skipped = Set(transientRelativePaths)
+
+        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+        guard let enumerator = fm.enumerator(at: source, includingPropertiesForKeys: [.isDirectoryKey], options: []) else {
+            throw RuntimeError.message("Could not read VM folder.")
+        }
+
+        for case let rawSourceItem as URL in enumerator {
+            let sourceItem = rawSourceItem.standardizedFileURL
+            guard sourceItem.path.hasPrefix(source.path + "/") else {
+                continue
+            }
+            let relative = String(sourceItem.path.dropFirst(source.path.count + 1))
+            if skipped.contains(relative) {
+                continue
+            }
+            let destinationItem = destination.appendingPathComponent(relative)
+            let values = try sourceItem.resourceValues(forKeys: [.isDirectoryKey])
+            if values.isDirectory == true {
+                try fm.createDirectory(at: destinationItem, withIntermediateDirectories: true)
+            } else {
+                try fm.createDirectory(at: destinationItem.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try fm.copyItem(at: sourceItem, to: destinationItem)
+            }
+        }
+    }
+
     public static func cleanTransientFiles(profileRoot: URL) {
         let root = profileRoot.standardizedFileURL
-        let machine = root.appendingPathComponent("machines/default", isDirectory: true)
-        let paths = [
-            machine.appendingPathComponent("qemu.pid"),
-            machine.appendingPathComponent("qmp.sock"),
-            machine.appendingPathComponent("display.spice"),
-            machine.appendingPathComponent("memory.bin"),
-            machine.appendingPathComponent("audio-host.pid"),
-            machine.appendingPathComponent("audio-host.json"),
-            machine.appendingPathComponent("network.json"),
-            machine.appendingPathComponent("model-api-route.json")
-        ]
-        for path in paths {
-            try? FileManager.default.removeItem(at: path)
+        for path in transientRelativePaths {
+            try? FileManager.default.removeItem(at: root.appendingPathComponent(path))
         }
     }
 

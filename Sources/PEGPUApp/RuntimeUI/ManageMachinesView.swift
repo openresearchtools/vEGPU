@@ -58,28 +58,33 @@ struct ManageMachinesView: View {
 
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
-                    Button("Create Default") {
+                    Button("New in App Support") {
                         model.createDefaultMachineProfile()
                         selectedID = model.pendingMachineID
                     }
-                    Button("Create Custom") {
+                    .help("Create a fresh VM profile under ~/Library/Application Support/PEGPU/Machines.")
+                    Button("New at Folder") {
                         model.createCustomMachineProfile()
                         selectedID = model.pendingMachineID
                     }
+                    .help("Create a fresh VM profile in an empty folder you choose.")
                     Button("Add Existing") {
                         model.addExistingMachineProfile()
                         selectedID = model.pendingMachineID
                     }
+                    .help("Register an existing PEGPU VM profile folder.")
                     Button("Copy") {
                         model.copySelectedMachineProfile()
                         selectedID = model.pendingMachineID
                     }
                     .disabled(selectedID == nil)
+                    .help("Copy the selected VM profile folder and register the copy.")
                     Button("Move") {
                         model.moveSelectedMachineProfile()
                         selectedID = model.pendingMachineID
                     }
                     .disabled(selectedID == nil)
+                    .help("Move the selected VM profile folder and update its registered path.")
                 }
                 .disabled(model.machineProfileLocked)
                 Spacer()
@@ -89,6 +94,7 @@ struct ManageMachinesView: View {
                     }
                 }
                 .disabled(selectedProfile == nil)
+                .help("Show the selected VM profile folder in Finder.")
                 Button("Remove") {
                     if let profile = selectedProfile {
                         model.removeMachineProfileFromList(profile)
@@ -96,6 +102,7 @@ struct ManageMachinesView: View {
                     }
                 }
                 .disabled(selectedProfile == nil)
+                .help("Remove the VM from the list without deleting its files.")
             }
         }
         .padding(20)

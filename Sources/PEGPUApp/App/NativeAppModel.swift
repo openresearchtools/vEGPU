@@ -272,9 +272,10 @@ final class NativeAppModel: ObservableObject {
                 switchMachineProfile(id: existing.id, persist: true)
                 return
             }
-            try validateProfileCandidate(standardized, allowEmpty: true)
+            try validateProfileCandidate(standardized, allowEmpty: false)
             MachineProfileMaintenance.deleteRouterConfig(profileRoot: standardized)
             MachineProfileMaintenance.cleanTransientFiles(profileRoot: standardized)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: standardized)
             var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             let profile = MachineProfile(name: standardized.lastPathComponent.isEmpty ? "Machine" : standardized.lastPathComponent, path: standardized.path)
             registry.machines.append(profile)
@@ -299,8 +300,9 @@ final class NativeAppModel: ObservableObject {
         guard let destination = chooseSaveFolder(defaultName: "\(source.name) Copy", message: "Choose where to copy this PEGPU VM.") else { return }
         do {
             try validateCopyMoveDestination(destination, source: source.url)
-            try FileManager.default.copyItem(at: source.url, to: destination)
+            try MachineProfileMaintenance.copyProfile(from: source.url, to: destination)
             MachineProfileMaintenance.cleanTransientFiles(profileRoot: destination)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: destination)
             var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             let profile = MachineProfile(name: destination.lastPathComponent.isEmpty ? "\(source.name) Copy" : destination.lastPathComponent, path: destination.path)
             registry.machines.append(profile)
@@ -326,8 +328,10 @@ final class NativeAppModel: ObservableObject {
         guard let destination = chooseSaveFolder(defaultName: source.name, message: "Choose where to move this PEGPU VM.") else { return }
         do {
             try validateCopyMoveDestination(destination, source: source.url)
+            MachineProfileMaintenance.cleanTransientFiles(profileRoot: source.url)
             try FileManager.default.moveItem(at: source.url, to: destination)
             MachineProfileMaintenance.cleanTransientFiles(profileRoot: destination)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: destination)
             var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             guard let registryIndex = registry.machines.firstIndex(where: { $0.id == source.id }) else {
                 throw RuntimeError.message("Machine profile is not registered.")
@@ -386,7 +390,7 @@ final class NativeAppModel: ObservableObject {
         do {
             let target = url.standardizedFileURL
             try validateCreateDestination(target)
-            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+            try MachineProfileMaintenance.ensureProfileScaffold(profileRoot: target)
             var registry = try registryStore.loadOrCreate(preferredProfileRoot: paths.appData)
             let profile = MachineProfile(name: name.isEmpty ? target.lastPathComponent : name, path: target.path)
             registry.machines.append(profile)

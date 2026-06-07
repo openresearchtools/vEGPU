@@ -262,13 +262,13 @@ public final class NFSShareService: @unchecked Sendable {
     }
 
     private func exportsHasManagedLine(_ exportLine: String) -> Bool {
-        guard let text = try? String(contentsOfFile: "/etc/exports") else { return false }
+        guard let text = try? String(contentsOfFile: "/etc/exports", encoding: .utf8) else { return false }
         guard let begin = text.range(of: exportBegin), let end = text.range(of: exportEnd), begin.lowerBound < end.lowerBound else { return false }
         return text[begin.lowerBound..<end.upperBound].contains(exportLine)
     }
 
     private func nfsConfHasManagedBlock() -> Bool {
-        guard let text = try? String(contentsOfFile: "/etc/nfs.conf") else { return false }
+        guard let text = try? String(contentsOfFile: "/etc/nfs.conf", encoding: .utf8) else { return false }
         guard let begin = text.range(of: configBegin), let end = text.range(of: configEnd), begin.lowerBound < end.lowerBound else { return false }
         return text[begin.lowerBound..<end.upperBound].contains("nfs.server.mount.require_resv_port = 0")
     }
@@ -485,8 +485,8 @@ public final class NFSShareService: @unchecked Sendable {
         guard FileManager.default.fileExists(atPath: root) else {
             return false
         }
-        guard let master = try? String(contentsOfFile: "/etc/auto_master"),
-              let map = try? String(contentsOfFile: "/etc/auto_pegpu") else {
+        guard let master = try? String(contentsOfFile: "/etc/auto_master", encoding: .utf8),
+              let map = try? String(contentsOfFile: "/etc/auto_pegpu", encoding: .utf8) else {
             return false
         }
         return master.contains(autoMasterBegin) &&
