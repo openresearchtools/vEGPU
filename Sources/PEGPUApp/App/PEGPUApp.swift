@@ -34,6 +34,12 @@ struct PEGPUApp: App {
                     appDelegate.model.showManageRoutingRoutes()
                 }
             }
+            CommandGroup(after: .toolbar) {
+                Toggle("Developer Options", isOn: Binding(
+                    get: { appDelegate.model.showDeveloperOptions },
+                    set: { appDelegate.model.showDeveloperOptions = $0 }
+                ))
+            }
         }
     }
 }

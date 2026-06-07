@@ -3,8 +3,6 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    private static let developerOptionsMenuItemTag = 0x5045_4744
-
     let model = NativeAppModel()
     private var tray: AppTrayController?
     private var batterySafetyMonitor: BatteryRuntimeSafetyMonitor?
@@ -23,10 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         configure(model: model)
         configureHelpMenu()
-        configureViewMenu()
         DispatchQueue.main.async { [weak self] in
             self?.configureHelpMenu()
-            self?.configureViewMenu()
         }
         startLaunchServicesIfNeeded()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -39,7 +35,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationWillBecomeActive(_ notification: Notification) {
         configureHelpMenu()
-        configureViewMenu()
     }
 
     func configure(model: NativeAppModel) {
@@ -215,11 +210,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    @objc private func toggleDeveloperOptions(_ sender: NSMenuItem) {
-        model.showDeveloperOptions.toggle()
-        sender.state = developerOptionsMenuState()
-    }
-
     private func startLaunchServicesIfNeeded() {
         guard !launchStartupHandled else { return }
         launchStartupHandled = true
@@ -260,28 +250,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let controller = LegalNoticesWindowController()
         legalNoticesWindowController = controller
         return controller
-    }
-
-    private func configureViewMenu() {
-        guard let viewMenu = NSApplication.shared.mainMenu?.items.first(where: { $0.title == "View" })?.submenu else {
-            return
-        }
-        for item in viewMenu.items where item.tag == Self.developerOptionsMenuItemTag || item.action == #selector(toggleDeveloperOptions(_:)) {
-            viewMenu.removeItem(item)
-        }
-
-        let item = NSMenuItem(title: "Developer Options", action: #selector(toggleDeveloperOptions(_:)), keyEquivalent: "")
-        item.target = self
-        item.tag = Self.developerOptionsMenuItemTag
-        item.isEnabled = true
-        item.state = developerOptionsMenuState()
-
-        let insertionIndex = viewMenu.items.firstIndex { $0.title == "Enter Full Screen" } ?? viewMenu.numberOfItems
-        viewMenu.insertItem(item, at: insertionIndex)
-    }
-
-    private func developerOptionsMenuState() -> NSControl.StateValue {
-        model.showDeveloperOptions ? .on : .off
     }
 
     private func configureHelpMenu() {
