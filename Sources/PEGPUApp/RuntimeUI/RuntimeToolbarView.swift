@@ -83,12 +83,6 @@ struct RuntimeToolbarView: View {
             }
             .disabled(model.machineProfileLocked)
             .help(model.machineProfileLocked ? "VM is running. Stop VM first." : "Create, add, copy, or move machine profiles.")
-
-            if model.machineProfileLocked {
-                Text("VM is running. Stop VM first.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .fixedSize(horizontal: true, vertical: false)
     }

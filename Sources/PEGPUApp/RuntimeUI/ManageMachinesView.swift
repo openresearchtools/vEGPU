@@ -18,11 +18,8 @@ struct ManageMachinesView: View {
                 .keyboardShortcut(.cancelAction)
             }
 
-            if model.machineProfileLocked {
-                Text("VM is running. Stop VM first.")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            } else if let message = model.machineProfileMessage {
+            if let message = model.machineProfileMessage,
+               message != "VM is running. Stop VM first." {
                 Text(message)
                     .font(.callout)
                     .foregroundStyle(.secondary)
