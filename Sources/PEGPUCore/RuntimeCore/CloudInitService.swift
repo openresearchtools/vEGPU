@@ -18,7 +18,7 @@ public final class CloudInitService: @unchecked Sendable {
     }
 
     @discardableResult
-    public func createSeedIso(mode: RuntimeLaunchMode = .headless, guiRetina: Bool = MachineConfig.defaultGuiRetina, guiAppearance: GUIAppearance = .dark, force: Bool = false) async throws -> String {
+    public func createSeedIso(mode: RuntimeLaunchMode = MachineConfig.defaultLaunchMode, guiRetina: Bool = MachineConfig.defaultGuiRetina, guiAppearance: GUIAppearance = .dark, force: Bool = false) async throws -> String {
         _ = try await ssh.ensureKey()
         let machineSecrets = try secrets.ensure()
         let publicKey = try String(contentsOfFile: "\(ssh.privateKeyPath).pub", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)

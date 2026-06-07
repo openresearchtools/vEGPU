@@ -36,7 +36,7 @@ final class NativeAppModel: ObservableObject {
     }
 
     var selectedSection: Section = .runtime
-    @Published var runtimeLaunchMode: RuntimeLaunchMode = .headless
+    @Published var runtimeLaunchMode: RuntimeLaunchMode = MachineConfig.defaultLaunchMode
     @Published var guiRetina = true
     var runtimePane: RuntimePane {
         get { runtimeScreen.navigation.runtimePane }
