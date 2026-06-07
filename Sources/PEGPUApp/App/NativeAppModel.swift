@@ -966,11 +966,11 @@ final class NativeAppModel: ObservableObject {
     private static func manifestText(_ manifest: RuntimeManifest?) -> String {
         guard let manifest else { return "manifest unavailable" }
         return [
-            "image: \(manifest.debian.name)",
-            "base manifest: \(manifest.id)",
-            "base image kernel: \(manifest.kernel.version)",
-            "driver marker: \(manifest.driver.version)",
-            "packages: \(manifest.guestPackages.count) guest, driver from bundled Machine assets"
+            "base image: \(manifest.debian.name)",
+            "base image manifest: \(manifest.id)",
+            "base image kernel at bootstrap: \(manifest.kernel.version)",
+            "manifest guest packages: \(manifest.guestPackages.count)",
+            "driver package source: bundled PEGPU Machine assets"
         ].joined(separator: "\n")
     }
 
