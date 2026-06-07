@@ -37,6 +37,17 @@ struct NvidiaInstallConfirmView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text(NvidiaInstallCopy.licenseLinksTitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 14) {
+                    Link(NvidiaInstallCopy.nvidiaDriverLicenseTitle, destination: NvidiaInstallCopy.nvidiaDriverLicenseURL)
+                    Link(NvidiaInstallCopy.cudaToolkitEULATitle, destination: NvidiaInstallCopy.cudaToolkitEULAURL)
+                }
+                .font(.callout)
+            }
+
             Text("Debian command preview")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)

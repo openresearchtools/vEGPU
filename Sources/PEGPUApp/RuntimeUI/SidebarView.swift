@@ -166,13 +166,8 @@ private struct SidebarBrand: View {
         } else {
             HStack(spacing: 12) {
                 BrandMark(logoImage: logoImage)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("PEGPU")
-                        .font(.system(size: 22, weight: .bold))
-                    Text("VM AI runtime")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("PEGPU")
+                    .font(.system(size: 22, weight: .bold))
                 Spacer(minLength: 8)
                 Button(action: toggle) {
                     Image(systemName: "chevron.left")

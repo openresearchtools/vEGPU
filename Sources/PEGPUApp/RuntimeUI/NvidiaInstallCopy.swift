@@ -1,3 +1,5 @@
+import Foundation
+
 enum NvidiaInstallCopy {
     static let cardNotice = "PEGPU uses a standard Debian image and does not ship, endorse, or modify GPU vendor drivers. NVIDIA packages are installed from NVIDIA repositories inside the Linux VM."
 
@@ -8,6 +10,12 @@ enum NvidiaInstallCopy {
     static let ownershipNotice = "PEGPU does not include or distribute GPU vendor drivers. GPU drivers are installed inside the Linux VM from vendor or distribution repositories. NVIDIA, CUDA, AMD, ROCm, and other names belong to their owners."
 
     static let installNotice = "This installer configures NVIDIA repositories in Debian, then runs the package install below inside the VM. PEGPU is not affiliated with NVIDIA and does not ship NVIDIA drivers."
+
+    static let licenseLinksTitle = "License agreements"
+    static let nvidiaDriverLicenseTitle = "NVIDIA Linux driver license"
+    static let cudaToolkitEULATitle = "CUDA Toolkit EULA"
+    static let nvidiaDriverLicenseURL = URL(string: "https://www.nvidia.com/en-us/drivers/nvidia-license/linux/")!
+    static let cudaToolkitEULAURL = URL(string: "https://docs.nvidia.com/cuda/eula/index.html")!
 
     static let acknowledgement = "I want to install the NVIDIA Linux driver packages inside this Debian VM."
 
