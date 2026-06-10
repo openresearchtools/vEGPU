@@ -51,8 +51,9 @@ final class AppTrayController: NSObject {
                 object: nil,
                 queue: .main
             ) { [weak self] notification in
+                let active = notification.object as? Bool == true
                 Task { @MainActor [weak self] in
-                    self?.externalInputCaptureActive = notification.object as? Bool == true
+                    self?.externalInputCaptureActive = active
                     self?.updateStatusItemPresentation()
                 }
             }
