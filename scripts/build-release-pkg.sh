@@ -473,9 +473,10 @@ cat > "$RESOURCES/WELCOME.html" <<'HTML'
   <p>The embedded display side is partially based on UTM app work. The Machine side builds on Scott J. Goldman's scottjg/qemu-vfio-apple as the main Apple VFIO/DriverKit/QEMU base, with additional QEMU-side visual-runtime work adapted from UTM QEMU and UTM virglrenderer.</p>
 
   <h2>Installation Behavior</h2>
-  <p>The Installation Type screen shows separate choices for PEGPU.app and PEGPU Machine.app. DriverKit extension refresh/activation is bundled under the Machine choice.</p>
+  <p>The Installation Type screen shows install choices for PEGPU.app and PEGPU Machine.app. DriverKit extension refresh/activation is bundled under the Machine choice.</p>
   <p>For combined releases, PEGPU Machine.app is selected by default when it is missing or older than the installer payload. DriverKit refresh/activation follows the Machine.app choice and is not run when the Machine.app choice is not selected.</p>
-  <p>If the installed PEGPU Machine app is the same or newer version, the Machine and DriverKit choices remain visible but are not selected by default.</p>
+  <p>If the installed PEGPU Machine app is the same or newer version and the DriverKit extension is already present, the Machine choice remains visible but is not selected by default.</p>
+  <p>PEGPU Machine.app and its DriverKit refresh require SIP to be disabled. The installer checks SIP before installation and stops on SIP-enabled Macs.</p>
   <p>When DriverKit refresh/activation is selected, the installer attempts to ask the existing PEGPU Machine app to deactivate the old DriverKit extension when possible. Forced removal is used only when an old extension is still listed and graceful deactivation is unavailable or did not complete.</p>
   <p>The installer then asks the installed PEGPU Machine.app to submit a fresh DriverKit activation request and writes driver-install diagnostics to <span class="code">/var/log/pegpu-driver-install.log</span>.</p>
   <p>macOS may still require approval in System Settings and/or a restart before the driver becomes active. This installer does not bypass Apple's system-extension approval flow.</p>
@@ -885,16 +886,8 @@ function driverState() {
   return cachedDriverState;
 }
 
-function driverInstalled() {
-  return driverState() === "installed";
-}
-
 function driverStatusKnownMissing() {
   return driverState() === "missing";
-}
-
-function driverStatusUnknown() {
-  return driverState() === "unknown";
 }
 
 function machineNeedsInstall() {
@@ -922,25 +915,13 @@ function driverNeedsRefresh() {
   <license file="LICENSE.txt" mime-type="text/plain"/>
   <conclusion file="CONCLUSION.txt" mime-type="text/plain"/>
   <choices-outline>
-    <line choice="com.pegpu.status.sip"/>
-    <line choice="com.pegpu.status.machine.current"/>
-    <line choice="com.pegpu.status.machine.needs"/>
-    <line choice="com.pegpu.status.driver.installed"/>
-    <line choice="com.pegpu.status.driver.missing"/>
-    <line choice="com.pegpu.status.driver.unknown"/>
     <line choice="com.pegpu.install.app"/>
     <line choice="com.pegpu.install.machine"/>
   </choices-outline>
-  <choice id="com.pegpu.status.sip" title="SIP disabled" description="System Integrity Protection is disabled, so the DriverKit passthrough installer can continue. If SIP were enabled, this installer would stop before installation and show the Recovery instructions." start_selected="true" start_enabled="false" start_visible="true"/>
-  <choice id="com.pegpu.status.machine.current" title="PEGPU Machine.app already installed/current" description="The installed PEGPU Machine.app is the same version or newer than this package, so the Machine app file payload is not selected by default." start_selected="true" start_enabled="false" start_visible="!machineNeedsInstall()"/>
-  <choice id="com.pegpu.status.machine.needs" title="PEGPU Machine.app missing or older" description="PEGPU Machine.app is missing or older than this package, so the Machine app file payload is selected by default." start_selected="false" start_enabled="false" start_visible="machineNeedsInstall()"/>
-  <choice id="com.pegpu.status.driver.installed" title="DriverKit extension installed" description="Installer detected com.pegpu.machine.VFIOUserPCIDriver from systemextensionsctl or the registered /Library/SystemExtensions DriverKit bundle. DriverKit refresh runs only when the PEGPU Machine.app choice is selected." start_selected="true" start_enabled="false" start_visible="driverInstalled()"/>
-  <choice id="com.pegpu.status.driver.missing" title="DriverKit extension not installed" description="Installer read the current DriverKit extension list and did not find com.pegpu.machine.VFIOUserPCIDriver. PEGPU Machine.app is selected so the installer can install or activate the DriverKit extension." start_selected="false" start_enabled="false" start_visible="driverStatusKnownMissing()"/>
-  <choice id="com.pegpu.status.driver.unknown" title="DriverKit extension status unavailable" description="Installer could not read DriverKit state on this screen. Leave PEGPU Machine.app unselected to keep the current driver state, or select it to force DriverKit refresh/activation. The install scripts log direct systemextensionsctl status during installation." start_selected="false" start_enabled="false" start_visible="driverStatusUnknown()"/>
   <choice id="com.pegpu.install.app" title="PEGPU.app" description="Required main application installed in /Applications. Includes the launcher, GUI, app-side display client, AI/runtime controls, notices, and app-side source archives." start_selected="true" start_enabled="false" start_visible="true">
     <pkg-ref id="com.pegpu.pkg.app"/>
   </choice>
-  <choice id="com.pegpu.install.machine" title="PEGPU Machine.app + DriverKit refresh/activation" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications. DriverKit refresh/activation is bundled with this choice and does not run when this choice is not selected." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
+  <choice id="com.pegpu.install.machine" title="PEGPU Machine.app + DriverKit refresh/activation" description="Install or refresh the separate VM/QEMU/VFIO/DriverKit runtime app in /Applications. SIP must be disabled before this can be installed. DriverKit refresh/activation is bundled with this choice and does not run when this choice is not selected." start_selected="driverNeedsRefresh()" start_enabled="true" start_visible="true">
     <pkg-ref id="com.pegpu.pkg.machine"/>
     <pkg-ref id="com.pegpu.pkg.driver"/>
   </choice>

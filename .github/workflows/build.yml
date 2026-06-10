@@ -1114,8 +1114,18 @@ jobs:
           grep -R -F 'The installed license texts are the controlling terms' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
           grep -R -F '/Library/SystemExtensions' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
           grep -R -F 'driverStatusKnownMissing()' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
-          grep -R -F 'driverStatusUnknown()' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
           grep -R -F 'start_selected="driverNeedsRefresh()"' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -R -F '<line choice="com.pegpu.install.app"/>' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -R -F '<line choice="com.pegpu.install.machine"/>' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -R -F 'SIP must be disabled before this can be installed' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          if grep -R -F 'com.pegpu.status.' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"; then
+            echo "installer customization screen must not expose cosmetic status choices" >&2
+            exit 1
+          fi
+          if grep -R -E 'SIP disabled|PEGPU Machine[.]app missing or older|DriverKit extension status unavailable' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"; then
+            echo "installer customization screen must not expose SIP/Machine/DriverKit status rows" >&2
+            exit 1
+          fi
         env:
           BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
           PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}
