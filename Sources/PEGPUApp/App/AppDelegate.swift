@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
     let model = NativeAppModel()
     private var tray: AppTrayController?
     private var batterySafetyMonitor: BatteryRuntimeSafetyMonitor?
@@ -194,14 +194,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func checkForUpdates() {
+        configureHelpMenu()
         Task {
             await model.updates.checkForUpdates(silent: false)
+            configureHelpMenu()
             await showUpdateStatusAlert()
         }
     }
 
     @objc func togglePrereleaseUpdates() {
         model.togglePrereleaseUpdates()
+        configureHelpMenu()
     }
 
     @objc func installAvailableUpdate() {
@@ -255,13 +258,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func configureHelpMenu() {
         let helpMenu = NSMenu(title: "Help")
         helpMenu.autoenablesItems = false
-        helpMenu.addItem(helpMenuItem(title: "PEGPU Help", action: #selector(openPEGPUHelp)))
-        helpMenu.addItem(.separator())
-        helpMenu.addItem(helpMenuItem(title: "Notices", action: #selector(showLegalNotices)))
-        helpMenu.addItem(helpMenuItem(title: "Licenses", action: #selector(showLegalLicenses)))
-        helpMenu.addItem(helpMenuItem(title: "VM Install Notices", action: #selector(showGuestVMInstallNotices)))
-        helpMenu.addItem(externalHelpMenuItem(title: "PEGPU Machine Notices", action: #selector(showMachineLegalNotices)))
-        helpMenu.addItem(externalHelpMenuItem(title: "PEGPU Machine Licenses", action: #selector(showMachineLegalLicenses)))
+        helpMenu.delegate = self
+        populateHelpMenu(helpMenu)
 
         guard let mainMenu = NSApplication.shared.mainMenu else {
             NSApplication.shared.helpMenu = helpMenu
@@ -280,10 +278,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApplication.shared.helpMenu = helpMenu
     }
 
+    func menuWillOpen(_ menu: NSMenu) {
+        guard menu === NSApplication.shared.helpMenu else { return }
+        populateHelpMenu(menu)
+    }
+
+    private func populateHelpMenu(_ helpMenu: NSMenu) {
+        helpMenu.removeAllItems()
+        helpMenu.addItem(helpMenuItem(title: "PEGPU Help", action: #selector(openPEGPUHelp)))
+        helpMenu.addItem(.separator())
+        helpMenu.addItem(disabledHelpMenuItem(title: model.updates.statusText))
+        let prerelease = helpMenuItem(title: "Use Pre-release Updates", action: #selector(togglePrereleaseUpdates))
+        prerelease.state = model.updates.channel == .prerelease ? .on : .off
+        prerelease.isEnabled = !model.updates.isChecking && !model.updates.isDownloading
+        helpMenu.addItem(prerelease)
+        let checkUpdates = helpMenuItem(title: "Check for Updates", action: #selector(checkForUpdates))
+        checkUpdates.isEnabled = !model.updates.isChecking && !model.updates.isDownloading
+        helpMenu.addItem(checkUpdates)
+        if let update = model.updates.availableUpdate {
+            let installUpdate = helpMenuItem(title: "Update to v\(update.version)...", action: #selector(installAvailableUpdate))
+            installUpdate.isEnabled = !model.updates.isDownloading
+            helpMenu.addItem(installUpdate)
+        }
+        helpMenu.addItem(.separator())
+        helpMenu.addItem(helpMenuItem(title: "Notices", action: #selector(showLegalNotices)))
+        helpMenu.addItem(helpMenuItem(title: "Licenses", action: #selector(showLegalLicenses)))
+        helpMenu.addItem(helpMenuItem(title: "VM Install Notices", action: #selector(showGuestVMInstallNotices)))
+        helpMenu.addItem(externalHelpMenuItem(title: "PEGPU Machine Notices", action: #selector(showMachineLegalNotices)))
+        helpMenu.addItem(externalHelpMenuItem(title: "PEGPU Machine Licenses", action: #selector(showMachineLegalLicenses)))
+    }
+
     private func helpMenuItem(title: String, action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         item.isEnabled = true
+        return item
+    }
+
+    private func disabledHelpMenuItem(title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
         return item
     }
 
