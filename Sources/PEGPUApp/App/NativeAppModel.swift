@@ -780,6 +780,7 @@ final class NativeAppModel: ObservableObject {
     func stopRuntime() {
         runtimePane = .output
         terminalConnected = false
+        displayControlMenu.clearRuntimeState()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("stop") {
@@ -791,6 +792,7 @@ final class NativeAppModel: ObservableObject {
     func shutdownRuntimeForLowBattery() async throws -> String {
         runtimePane = .output
         terminalConnected = false
+        displayControlMenu.clearRuntimeState()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         appendOutput("[warning] Battery below 15%; PEGPU is shutting down the VM to prevent battery drain and PCIe sleep risk")
 
@@ -827,6 +829,7 @@ final class NativeAppModel: ObservableObject {
     func resetRuntime(config: MachineConfig? = nil) {
         runtimePane = .output
         terminalConnected = false
+        displayControlMenu.clearRuntimeState()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("reset") {
@@ -1110,6 +1113,7 @@ final class NativeAppModel: ObservableObject {
     func quitAndStopRuntime() async throws {
         if machineService.currentPid() != nil {
             await MainActor.run {
+                displayControlMenu.clearRuntimeState()
                 NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
             }
             try await machineService.stopMachine(timeout: 90)
@@ -1296,6 +1300,7 @@ final class NativeAppModel: ObservableObject {
             nextStatus = "Stopped"
             nextMetric = "Stopped"
             nextDetail = "Backend VM is not running"
+            displayControlMenu.clearRuntimeState()
         default:
             nextStatus = "Needs attention"
             nextMetric = "Check logs"

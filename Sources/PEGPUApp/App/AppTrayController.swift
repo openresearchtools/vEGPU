@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import PEGPUCore
 
 @MainActor
@@ -9,6 +10,8 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     private var globalHotkeys: DisplayGlobalHotkeyService?
     private var profileObserver: NSObjectProtocol?
     private var captureObserver: NSObjectProtocol?
+    private var displayControlObserver: AnyCancellable?
+    private var menuUpdateScheduled = false
     private var statusText = "checking"
     private var externalInputCaptureActive = false
     private var timer: Timer?
@@ -34,6 +37,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
             globalHotkeys.start()
             self.globalHotkeys = globalHotkeys
         }
+        bindDisplayControlMenu(model.displayControlMenu)
         if profileObserver == nil {
             profileObserver = NotificationCenter.default.addObserver(
                 forName: .pegpuMachineProfileDidSwitch,
@@ -81,6 +85,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
             NotificationCenter.default.removeObserver(captureObserver)
         }
         captureObserver = nil
+        displayControlObserver = nil
         globalHotkeys?.invalidate()
         globalHotkeys = nil
         model?.stopHostSleepGuardForShutdown()
@@ -138,6 +143,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     private func rebindDisplayHotkeys() {
         globalHotkeys?.invalidate()
         if let model {
+            bindDisplayControlMenu(model.displayControlMenu)
             let globalHotkeys = DisplayGlobalHotkeyService(displayControl: model.displayControlMenu)
             globalHotkeys.start()
             self.globalHotkeys = globalHotkeys
@@ -183,8 +189,10 @@ final class AppTrayController: NSObject, NSMenuDelegate {
         startAtLogin.state = model?.configStore.load().startRuntimeAtLogin == true ? .on : .off
         menu.addItem(startAtLogin)
 
-        menu.addItem(.separator())
-        addDisplaySessionItems(to: menu)
+        if model?.machineService.currentPid() != nil {
+            menu.addItem(.separator())
+            addDisplaySessionItems(to: menu)
+        }
 
         menu.addItem(item("Quit and Stop Runtime...", #selector(quitAndStopRuntime)))
         return menu
@@ -194,7 +202,27 @@ final class AppTrayController: NSObject, NSMenuDelegate {
         model?.displayControlMenu.refresh()
     }
 
+    private func bindDisplayControlMenu(_ displayControl: DisplayControlMenuModel) {
+        displayControlObserver = displayControl.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scheduleMenuUpdate()
+            }
+        }
+    }
+
+    private func scheduleMenuUpdate() {
+        guard !menuUpdateScheduled else { return }
+        menuUpdateScheduled = true
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            self.menuUpdateScheduled = false
+            self.updateMenu()
+        }
+    }
+
     private func addDisplaySessionItems(to menu: NSMenu) {
+        guard model?.machineService.currentPid() != nil else { return }
         guard let displayControl = model?.displayControlMenu else {
             menu.addItem(disabled("External Displays: unavailable"))
             return

@@ -363,12 +363,26 @@ final class DisplayControlMenuModel: ObservableObject {
 
     func refresh() {
         guard !busy, !embeddedBusy else { return }
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         refreshGeneration += 1
         let generation = refreshGeneration
         refreshTask?.cancel()
         refreshTask = Task { @MainActor in
             await refreshNow(refreshGeneration: generation)
         }
+    }
+
+    func clearRuntimeState(message: String? = nil) {
+        cancelRefresh()
+        gpus = []
+        sessions = []
+        activeSessionID = nil
+        selectedGPU = nil
+        mode = .spice
+        self.message = message
     }
 
     func switchToSpice() {
@@ -386,12 +400,20 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     func startSession(_ session: DisplaySession) {
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         perform(postReconnect: false) {
             try await self.service.startSession(session)
         }
     }
 
     func enterSession(_ session: DisplaySession) {
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         perform(postReconnect: false) {
             try await self.service.enterSession(session)
         }
@@ -399,6 +421,10 @@ final class DisplayControlMenuModel: ObservableObject {
 
     func releaseSession() {
         guard !busy else { return }
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         cancelRefresh()
         busy = true
         message = nil
@@ -415,18 +441,30 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     func stopSession(_ session: DisplaySession) {
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         perform(postReconnect: false) {
             try await self.service.stopSession(session)
         }
     }
 
     func refreshOutputs(_ session: DisplaySession) {
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         perform(postReconnect: false) {
             try await self.service.refreshOutputs(session)
         }
     }
 
     func reloadSession(_ session: DisplaySession) {
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         perform(postReconnect: false) {
             try await self.service.reloadSession(session)
         }
@@ -452,6 +490,10 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     func reload() {
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         performEmbedded {
             try await self.service.reload()
         }
@@ -535,6 +577,10 @@ final class DisplayControlMenuModel: ObservableObject {
 
     private func activateOrderedSessionFromShortcut(number: Int) {
         guard number > 0, !busy else { return }
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         cancelRefresh()
         busy = true
         message = nil
@@ -560,6 +606,10 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     private func refreshSessionsOnly() async {
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
         do {
             let sessionsPayload = try await service.sessions()
             sessions = sessionsPayload.sessions.filter(\.valid)
@@ -572,6 +622,11 @@ final class DisplayControlMenuModel: ObservableObject {
     }
 
     private func refreshNow(refreshGeneration expectedGeneration: Int? = nil) async {
+        guard machine.currentPid() != nil else {
+            guard expectedGeneration == nil || expectedGeneration == refreshGeneration else { return }
+            clearRuntimeState()
+            return
+        }
         do {
             let status = try await service.status()
             let sessionsPayload = try await service.sessions()
@@ -583,6 +638,11 @@ final class DisplayControlMenuModel: ObservableObject {
             gpus = sessions.map(\.gpu)
             message = nil
         } catch {
+            guard machine.currentPid() != nil else {
+                guard expectedGeneration == nil || expectedGeneration == refreshGeneration else { return }
+                clearRuntimeState()
+                return
+            }
             do {
                 let gpuList = try await service.listGPUs()
                 guard expectedGeneration == nil || expectedGeneration == refreshGeneration else { return }
