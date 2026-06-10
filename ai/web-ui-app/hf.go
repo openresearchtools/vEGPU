@@ -106,7 +106,7 @@ func (e downloadRetry) Error() string { return e.err.Error() }
 func (e downloadRetry) Unwrap() error { return e.err }
 
 func NewHFService(appDir string, store *ConfigStore, discovery *DiscoveryService, runtimeSvc *RuntimeService) *HFService {
-	taskDir := filepath.Join(appDir, "hf-downloads")
+	taskDir := filepath.Join(defaultAppDataDir(appDir), "ai", "llms", "hf-downloads")
 	h := &HFService{
 		appDir:      appDir,
 		store:       store,

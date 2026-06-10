@@ -168,6 +168,8 @@ func TestHFCompleteFileIsSkipped(t *testing.T) {
 
 func TestHFInterruptedTaskLoadsPaused(t *testing.T) {
 	appDir := t.TempDir()
+	profileRoot := t.TempDir()
+	t.Setenv("PEGPU_APP_DATA_DIR", profileRoot)
 	h := NewHFService(appDir, nil, nil, nil)
 	h.seedTask(DownloadTask{
 		ID:        "dl-old",
@@ -188,6 +190,22 @@ func TestHFInterruptedTaskLoadsPaused(t *testing.T) {
 	}
 	if task.Status != downloadStatusPaused || !task.CanResume {
 		t.Fatalf("reloaded status=%s canResume=%v, want paused resumable", task.Status, task.CanResume)
+	}
+}
+
+func TestHFTaskStoreUsesPortableProfileRoot(t *testing.T) {
+	appDir := t.TempDir()
+	profileRoot := t.TempDir()
+	t.Setenv("PEGPU_APP_DATA_DIR", profileRoot)
+
+	h := NewHFService(appDir, nil, nil, nil)
+
+	want := filepath.Join(profileRoot, "ai", "llms", "hf-downloads", "tasks.json")
+	if h.taskPath != want {
+		t.Fatalf("task path = %q, want %q", h.taskPath, want)
+	}
+	if strings.HasPrefix(h.taskPath, appDir) {
+		t.Fatalf("task path should not live under appDir: %q", h.taskPath)
 	}
 }
 
@@ -218,7 +236,9 @@ func TestHFIdleDownloadReconnectsAndResumes(t *testing.T) {
 func newTestHFService(t *testing.T, endpoint string) (*HFService, string) {
 	t.Helper()
 	appDir := t.TempDir()
+	profileRoot := t.TempDir()
 	cache := t.TempDir()
+	t.Setenv("PEGPU_APP_DATA_DIR", profileRoot)
 	t.Setenv("HF_HUB_CACHE", cache)
 	h := NewHFService(appDir, nil, nil, nil)
 	h.endpoint = endpoint

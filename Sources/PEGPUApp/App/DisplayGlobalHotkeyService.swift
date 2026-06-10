@@ -3,7 +3,7 @@ import Carbon.HIToolbox
 
 @MainActor
 final class DisplayGlobalHotkeyService {
-    private weak var displayControl: DisplayControlMenuModel?
+    private let displayControl: DisplayControlMenuModel
     private var handlerRef: EventHandlerRef?
     private var shortcutObserver: NSObjectProtocol?
     private var shortcutEventTap: CFMachPort?
@@ -161,7 +161,7 @@ final class DisplayGlobalHotkeyService {
         if digit == 1 {
             NotificationCenter.default.post(name: .pegpuReleaseExternalInputCapture, object: nil)
         }
-        displayControl?.handleExternalSessionShortcut(digit: digit)
+        displayControl.handleExternalSessionShortcut(digit: digit)
     }
 
     private func shouldHandleShortcut(_ digit: Int) -> Bool {

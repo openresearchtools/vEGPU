@@ -447,7 +447,7 @@ final class DisplayControlMenuModel: ObservableObject {
         if digit == 1 {
             releaseSession()
         } else {
-            enterOrderedSession(number: digit - 1)
+            activateOrderedSessionFromShortcut(number: digit - 1)
         }
     }
 
@@ -531,6 +531,32 @@ final class DisplayControlMenuModel: ObservableObject {
         refreshGeneration += 1
         refreshTask?.cancel()
         refreshTask = nil
+    }
+
+    private func activateOrderedSessionFromShortcut(number: Int) {
+        guard number > 0, !busy else { return }
+        cancelRefresh()
+        busy = true
+        message = nil
+        Task { @MainActor in
+            defer { busy = false }
+            do {
+                let sessionsPayload = try await service.sessions()
+                sessions = sessionsPayload.sessions.filter(\.valid)
+                activeSessionID = sessionsPayload.active == "macos" ? nil : sessionsPayload.active
+                gpus = sessions.map(\.gpu)
+                guard sessions.indices.contains(number - 1) else { return }
+                let session = sessions[number - 1]
+                if session.running {
+                    try await service.enterSession(session)
+                } else {
+                    try await service.startSession(session)
+                }
+                await refreshSessionsOnly()
+            } catch {
+                message = String(describing: error)
+            }
+        }
     }
 
     private func refreshSessionsOnly() async {

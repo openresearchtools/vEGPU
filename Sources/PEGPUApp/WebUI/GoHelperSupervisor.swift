@@ -83,8 +83,12 @@ final class GoHelperSupervisor: ObservableObject {
             let processInfo = try? await runner.run("/bin/ps", ["eww", "-p", String(pid)], timeout: 2)
             let command = processInfo?.stdout ?? ""
             guard command.contains("web-ui-app"),
-                  command.contains("PEGPU_WEB_UI_PORT=\(webPort)"),
-                  command.contains("PEGPU_APP_DATA_DIR=\(paths.appData.path)") else {
+                  command.contains("PEGPU_WEB_UI_PORT=\(webPort)") else {
+                throw RuntimeError.message("Web helper port \(webPort) is already in use by another process. Stop that process before opening PEGPU Models.")
+            }
+            let matchesAppData = command.contains("PEGPU_APP_DATA_DIR=\(paths.appData.path)")
+            let matchesRuntime = command.contains("PEGPU_HOST_RUNTIME_DIR=\(runtimePaths.root.path)")
+            guard matchesAppData || matchesRuntime else {
                 throw RuntimeError.message("Web helper port \(webPort) is already in use by another process. Stop that process before opening PEGPU Models.")
             }
             kill(pid, SIGTERM)

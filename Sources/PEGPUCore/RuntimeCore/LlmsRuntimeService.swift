@@ -431,11 +431,17 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             if spec.restart == true {
                 scriptLines.append("sudo -n -u pegpu rm -f \(shellQuote(temp)) \(shellQuote(target))")
             }
+            scriptLines.append("""
+            if [ -f \(shellQuote(target)) ]; then
+              existing_size="$(stat -c %s \(shellQuote(target)) 2>/dev/null || echo 0)"
+              if [ "$existing_size" -gt 0 ]; then
+                if [ \(knownSize) -le 0 ] || [ "$existing_size" = \(knownSize) ]; then exit 0; fi
+                if [ "$(head -c 4 \(shellQuote(target)) 2>/dev/null || true)" = "GGUF" ]; then exit 0; fi
+              fi
+            fi
+            """)
             if knownSize > 0 {
-                scriptLines.append("if [ -f \(shellQuote(target)) ] && [ \"$(stat -c %s \(shellQuote(target)) 2>/dev/null || echo 0)\" = \(knownSize) ]; then exit 0; fi")
                 scriptLines.append("if [ -f \(shellQuote(temp)) ] && [ \"$(stat -c %s \(shellQuote(temp)) 2>/dev/null || echo 0)\" -gt \(knownSize) ]; then sudo -n -u pegpu rm -f \(shellQuote(temp)); fi")
-            } else {
-                scriptLines.append("if [ -f \(shellQuote(target)) ]; then exit 0; fi")
             }
             scriptLines.append("sudo -n -u pegpu sh -lc \(shellQuote("curl -L --fail --connect-timeout 30 --retry 999999 --retry-delay 2 --retry-all-errors --speed-limit 1024 --speed-time 90 -C - \(headerArgs)-o \(shellQuote(temp)) \(shellQuote(url))"))")
             scriptLines.append("sudo -n -u pegpu mv \(shellQuote(temp)) \(shellQuote(target))")
@@ -450,13 +456,13 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             do {
                 _ = try await runGuestScript(script)
             } catch {
-                poller?.cancel()
+                await cancelProgressTask(poller)
                 throw error
             }
-            poller?.cancel()
+            await cancelProgressTask(poller)
             let expectedSize = sizes[remotePath] ?? 0
             let actualSize = (try? await guestFileSizes([target]))?[target] ?? 0
-            downloadedBytes += expectedSize > 0 ? expectedSize : actualSize
+            downloadedBytes += actualSize > 0 ? actualSize : expectedSize
             writeModelCopyProgress(spec.progressPath, status: "running", current: remotePath, copiedBytes: downloadedBytes, totalBytes: totalBytes)
         }
         writeModelCopyProgress(spec.progressPath, status: "complete", current: nil, copiedBytes: downloadedBytes, totalBytes: totalBytes)
@@ -531,10 +537,10 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             do {
                 try await ssh.scpToGuest(localPath: file, remotePath: remoteTemp)
             } catch {
-                poller?.cancel()
+                await cancelProgressTask(poller)
                 throw error
             }
-            poller?.cancel()
+            await cancelProgressTask(poller)
             let script = """
             set -eu
             sudo -n install -d -o pegpu -g pegpu -m 0755 \(shellQuote(URL(fileURLWithPath: destination).deletingLastPathComponent().path))
@@ -583,10 +589,10 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             do {
                 try await ssh.scpFromGuest(remotePath: remoteTemp, localPath: localTemp.path)
             } catch {
-                poller?.cancel()
+                await cancelProgressTask(poller)
                 throw error
             }
-            poller?.cancel()
+            await cancelProgressTask(poller)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: destination.path) {
                 try FileManager.default.removeItem(at: destination)
@@ -615,11 +621,18 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         return sizes
     }
 
+    private func cancelProgressTask(_ task: Task<Void, Never>?) async {
+        guard let task else { return }
+        task.cancel()
+        await task.value
+    }
+
     private func startRemoteSizeProgress(remotePath: String, baseBytes: Int64, totalBytes: Int64, current: String, progressPath: String?) -> Task<Void, Never>? {
         guard let progressPath, !progressPath.isEmpty else { return nil }
         return Task { [weak self] in
             while !Task.isCancelled {
                 let out = try? await self?.runGuestScript("stat -c %s \(shellQuote(remotePath)) 2>/dev/null || echo 0", timeout: 5)
+                guard !Task.isCancelled else { break }
                 let size = Int64(out?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
                 self?.writeModelCopyProgress(progressPath, status: "running", current: current, copiedBytes: baseBytes + size, totalBytes: totalBytes)
                 try? await Task.sleep(nanoseconds: 750_000_000)
@@ -632,6 +645,7 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         return Task { [weak self] in
             while !Task.isCancelled {
                 let size = self?.localFileSize(localPath) ?? 0
+                guard !Task.isCancelled else { break }
                 self?.writeModelCopyProgress(progressPath, status: "running", current: current, copiedBytes: baseBytes + size, totalBytes: totalBytes)
                 try? await Task.sleep(nanoseconds: 750_000_000)
             }

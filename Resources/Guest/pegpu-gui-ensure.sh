@@ -693,6 +693,7 @@ Section "Device"
     Driver "nvidia"
     BusID "$nvidia_busid"
     Option "AllowEmptyInitialConfiguration" "true"
+    Option "ProbeAllGpus" "false"
     Option "PrimaryGPU" "true"
 EndSection
 
@@ -926,6 +927,7 @@ Section "Device"
     Driver "nvidia"
     BusID "$busid"
     Option "AllowEmptyInitialConfiguration" "true"
+    Option "ProbeAllGpus" "false"
     Option "PrimaryGPU" "true"
 EndSection
 
@@ -1792,6 +1794,7 @@ Section "Device"
     Driver "nvidia"
     BusID "$nvidia_busid"
     Option "AllowEmptyInitialConfiguration" "true"
+    Option "ProbeAllGpus" "false"
     Option "PrimaryGPU" "true"
 EndSection
 
