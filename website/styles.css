@@ -178,9 +178,9 @@ code {
 
 .hero {
   position: relative;
-  min-height: 78svh;
+  min-height: clamp(500px, 58svh, 620px);
   display: grid;
-  align-items: end;
+  align-items: start;
   overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
@@ -212,7 +212,7 @@ code {
   position: relative;
   width: min(960px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 8.4rem 0 5rem;
+  padding: clamp(6.75rem, 10vh, 8rem) 0 clamp(3rem, 6vh, 4rem);
 }
 
 .eyebrow,

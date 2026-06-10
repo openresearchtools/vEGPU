@@ -13,7 +13,7 @@
     <meta property="og:description" content="A very unofficial passthrough runtime for NVIDIA Thunderbolt eGPUs on Apple Silicon Macs.">
     <meta property="og:image" content="assets/slides/gui.webp">
     <link rel="icon" href="assets/pegpu-logo.png">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260610">
   </head>
   <body>
     <canvas id="signal-canvas" aria-hidden="true"></canvas>
@@ -37,7 +37,7 @@
         <div class="hero-backdrop" aria-hidden="true"></div>
         <div class="hero-noise" aria-hidden="true"></div>
         <div class="hero-content">
-          <p class="eyebrow">Apple Silicon<span class="mark">*</span> + Thunderbolt<span class="mark">*</span> + NVIDIA<span class="mark">*</span> + macOS<span class="mark">*</span> + Linux VM<span class="mark">*</span></p>
+          <p class="eyebrow">NVIDIA eGPU passthrough / Linux VM runtime</p>
           <h1 id="hero-title">PEGPU</h1>
           <p class="hero-copy">
             A very unofficial, very experimental passthrough runtime for getting NVIDIA Thunderbolt eGPUs doing useful work on macOS through Linux virtualization.
@@ -48,7 +48,7 @@
             <a class="button quiet" href="#story">Read the story</a>
           </div>
           <p class="hero-footnote">
-            * Compatibility/purpose labels only. PEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, macOS, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, or any other named company, protocol, project, or maintainer.
+            Compatibility/purpose labels only. PEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, macOS, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, or any other named company, protocol, project, or maintainer.
           </p>
         </div>
       </section>
@@ -102,7 +102,7 @@
             <div class="screenshot-stage">
               <img class="carousel-slide is-active" data-slide="0" src="assets/slides/gui.webp" alt="PEGPU GUI display view with Linux desktop, host metrics, VM metrics, and NVIDIA GPU status." width="3394" height="2336" fetchpriority="high" decoding="async">
               <img class="carousel-slide" data-slide="1" src="assets/slides/external-display.webp" alt="PEGPU GUI tab context menu showing external display session shortcuts for NVIDIA eGPUs." width="3170" height="2192" loading="eager" decoding="async">
-              <img class="carousel-slide" data-slide="2" src="assets/slides/runtime.webp" alt="PEGPU Runtime view showing server controls and runtime status." width="3394" height="2336" loading="lazy" decoding="async">
+              <img class="carousel-slide" data-slide="2" src="assets/slides/runtime.webp?v=20260610" alt="PEGPU Runtime view showing server controls and runtime status." width="3196" height="2196" loading="lazy" decoding="async">
               <img class="carousel-slide" data-slide="3" src="assets/slides/models.webp" alt="PEGPU Models view for local model and runtime management." width="3394" height="2336" loading="lazy" decoding="async">
               <img class="carousel-slide" data-slide="4" src="assets/slides/chat.webp" alt="PEGPU Chat view for local AI runtime interaction." width="3194" height="2204" loading="lazy" decoding="async">
               <img class="carousel-slide" data-slide="5" src="assets/slides/files.webp" alt="PEGPU Files view for browsing shared Mac and Linux files." width="3194" height="2204" loading="lazy" decoding="async">
@@ -348,7 +348,7 @@
                     <figcaption>Run Installer</figcaption>
                   </figure>
                   <figure class="setup-shot">
-                    <img src="assets/setup/nvidia-driver-install-confirm.webp" alt="PEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button." width="1122" height="814" loading="lazy" decoding="async">
+                    <img src="assets/setup/nvidia-driver-install-confirm.webp?v=20260610" alt="PEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button." width="1130" height="918" loading="lazy" decoding="async">
                     <figcaption>Install Driver confirmation</figcaption>
                   </figure>
                 </div>
