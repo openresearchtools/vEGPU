@@ -325,6 +325,8 @@
             <div class="setup-copy setup-visible">
               <strong>Start PEGPU with no eGPU plugged in.</strong>
               Let it fetch the official Debian cloud image, expand the disk, run cloud-init, install base packages, and load the Linux DMA guest driver.
+              <span class="setup-subtitle">Do not plug in eGPUs for this step.</span>
+              Booting the VM with external GPUs attached before the Linux guest driver and NVIDIA stack are installed is very likely to kernel panic macOS.
               <span class="setup-subtitle">Allow the first-run helpers.</span>
               Local Network access is required for the private Mac-to-VM connection: SSH control, web UI tabs, proxy routes, runtime RPC, file sharing, and guest setup all depend on it. The Linux share password prompt mounts the VM home folder over the private vmnet NFS link. The sleep guard helper prevents macOS sleep while PCIe passthrough is active, because sleep can wedge or panic the machine.
             </div>
@@ -353,7 +355,7 @@
           <li class="setup-guide-item">
             <div class="setup-copy setup-visible">
               <strong>Install NVIDIA support inside the VM.</strong>
-              The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. PEGPU does not ship those packages. If you use NVIDIA cards, run the helper inside PEGPU after the first Debian boot finishes. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal.
+              The helper configures NVIDIA's Debian repository and installs driver/CUDA packages via apt. PEGPU does not ship those packages. If you use NVIDIA cards, run the helper inside PEGPU after the first Debian boot finishes and before launching the VM with eGPUs attached. You can also ignore the helper and install drivers yourself through the GUI, SSH, or the embedded terminal.
             </div>
             <details class="setup-disclosure">
               <summary>
