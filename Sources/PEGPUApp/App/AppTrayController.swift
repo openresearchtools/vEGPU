@@ -87,6 +87,15 @@ final class AppTrayController: NSObject, NSMenuDelegate {
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 
+    func restartDisplayHotkeys() {
+        globalHotkeys?.restart()
+        if globalHotkeys == nil, let model {
+            let globalHotkeys = DisplayGlobalHotkeyService(displayControl: model.displayControlMenu)
+            globalHotkeys.start()
+            self.globalHotkeys = globalHotkeys
+        }
+    }
+
     private func configureIcon() {
         statusItem.button?.toolTip = "PEGPU"
         let root = AppPaths.discoverRoot()

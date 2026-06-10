@@ -6,6 +6,8 @@ final class DisplayGlobalHotkeyService {
     private let displayControl: DisplayControlMenuModel
     private var handlerRef: EventHandlerRef?
     private var shortcutObserver: NSObjectProtocol?
+    private var localMonitor: Any?
+    private var globalMonitor: Any?
     private var shortcutEventTap: CFMachPort?
     private var shortcutEventTapSource: CFRunLoopSource?
     private var hotKeyRefs: [EventHotKeyRef] = []
@@ -20,6 +22,7 @@ final class DisplayGlobalHotkeyService {
 
     func start() {
         installShortcutObserver()
+        installNSEventMonitors()
         installShortcutEventTap()
         guard handlerRef == nil else { return }
 
@@ -27,7 +30,7 @@ final class DisplayGlobalHotkeyService {
             eventClass: OSType(kEventClassKeyboard),
             eventKind: OSType(kEventHotKeyPressed)
         )
-        let target = GetEventDispatcherTarget()
+        let target = GetApplicationEventTarget()
         let status = InstallEventHandler(
             target,
             displayGlobalHotkeyHandler,
@@ -46,6 +49,7 @@ final class DisplayGlobalHotkeyService {
     }
 
     func invalidate() {
+        removeNSEventMonitors()
         removeShortcutEventTap()
 
         for ref in hotKeyRefs {
@@ -64,16 +68,21 @@ final class DisplayGlobalHotkeyService {
         shortcutObserver = nil
     }
 
+    func restart() {
+        invalidate()
+        start()
+    }
+
     private func installShortcutEventTap() {
         guard shortcutEventTap == nil else { return }
         let mask = CGEventMask(1) << CGEventMask(CGEventType.keyDown.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .defaultTap,
+            options: .listenOnly,
             eventsOfInterest: mask,
             callback: displayShortcutEventTapHandler,
-            userInfo: nil
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             NSLog("PEGPU display hotkey event tap could not install; relying on registered hotkeys")
             return
@@ -97,6 +106,14 @@ final class DisplayGlobalHotkeyService {
         shortcutEventTapSource = nil
     }
 
+    private func reenableShortcutEventTap() {
+        if let shortcutEventTap {
+            CGEvent.tapEnable(tap: shortcutEventTap, enable: true)
+        } else {
+            installShortcutEventTap()
+        }
+    }
+
     private func installShortcutObserver() {
         guard shortcutObserver == nil else { return }
         shortcutObserver = NotificationCenter.default.addObserver(
@@ -109,6 +126,38 @@ final class DisplayGlobalHotkeyService {
                 self?.handleShortcut(digit: digit)
             }
         }
+    }
+
+    private func installNSEventMonitors() {
+        if localMonitor == nil {
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if let digit = displayShortcutDigit(for: event) {
+                    Task { @MainActor [weak self] in
+                        self?.handleShortcut(digit: digit)
+                    }
+                }
+                return event
+            }
+        }
+        if globalMonitor == nil {
+            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let digit = displayShortcutDigit(for: event) else { return }
+                Task { @MainActor [weak self] in
+                    self?.handleShortcut(digit: digit)
+                }
+            }
+        }
+    }
+
+    private func removeNSEventMonitors() {
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+        }
+        localMonitor = nil
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
+        }
+        globalMonitor = nil
     }
 
     private func registerDigits(target: EventTargetRef?) {
@@ -155,7 +204,7 @@ final class DisplayGlobalHotkeyService {
         handleShortcut(digit: digit)
     }
 
-    private func handleShortcut(digit: Int) {
+    fileprivate func handleShortcut(digit: Int) {
         guard (1...9).contains(digit) else { return }
         guard shouldHandleShortcut(digit) else { return }
         if digit == 1 {
@@ -199,22 +248,33 @@ private let displayGlobalHotkeyHandler: EventHandlerUPP = { _, eventRef, userDat
     let service = Unmanaged<DisplayGlobalHotkeyService>
         .fromOpaque(userData)
         .takeUnretainedValue()
-    MainActor.assumeIsolated {
+    Task { @MainActor in
         service.handleHotkey(signature: signature, id: id)
     }
     return noErr
 }
 
-private let displayShortcutEventTapHandler: CGEventTapCallBack = { _, type, event, _ in
+private let displayShortcutEventTapHandler: CGEventTapCallBack = { _, type, event, userInfo in
+    guard let userInfo else {
+        return Unmanaged.passUnretained(event)
+    }
+    let service = Unmanaged<DisplayGlobalHotkeyService>
+        .fromOpaque(userInfo)
+        .takeUnretainedValue()
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        Task { @MainActor in
+            service.reenableShortcutEventTap()
+        }
         return Unmanaged.passUnretained(event)
     }
     guard type == .keyDown,
           let digit = displayShortcutDigit(for: event) else {
         return Unmanaged.passUnretained(event)
     }
-    NotificationCenter.default.post(name: .pegpuExternalSessionShortcut, object: digit)
-    return nil
+    Task { @MainActor in
+        service.handleShortcut(digit: digit)
+    }
+    return Unmanaged.passUnretained(event)
 }
 
 private func displayShortcutDigit(for event: CGEvent) -> Int? {
@@ -228,6 +288,29 @@ private func displayShortcutDigit(for event: CGEvent) -> Int? {
 
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     switch keyCode {
+    case kVK_ANSI_1: return 1
+    case kVK_ANSI_2: return 2
+    case kVK_ANSI_3: return 3
+    case kVK_ANSI_4: return 4
+    case kVK_ANSI_5: return 5
+    case kVK_ANSI_6: return 6
+    case kVK_ANSI_7: return 7
+    case kVK_ANSI_8: return 8
+    case kVK_ANSI_9: return 9
+    default: return nil
+    }
+}
+
+private func displayShortcutDigit(for event: NSEvent) -> Int? {
+    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    guard flags.contains(.command),
+          flags.contains(.option),
+          !flags.contains(.control),
+          !flags.contains(.shift) else {
+        return nil
+    }
+
+    switch Int(event.keyCode) {
     case kVK_ANSI_1: return 1
     case kVK_ANSI_2: return 2
     case kVK_ANSI_3: return 3
