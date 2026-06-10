@@ -872,25 +872,19 @@ h1::after {
 .setup-danger {
   display: block;
   margin-top: 0.9rem;
-  padding: 0.82rem 0.9rem;
-  border: 1px solid rgba(255, 77, 94, 0.82);
-  border-left: 6px solid var(--red);
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 77, 94, 0.58);
   border-radius: 7px;
-  background:
-    linear-gradient(90deg, rgba(255, 77, 94, 0.24), rgba(255, 77, 94, 0.08)),
-    rgba(255, 77, 94, 0.12);
-  color: #ffe0e4;
-  font-weight: 800;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
-    0 0 22px rgba(255, 77, 94, 0.1);
+  background: rgba(255, 77, 94, 0.09);
+  color: #c9d0c7;
+  font-weight: 400;
 }
 
 .setup-danger-title {
   display: block;
+  margin-bottom: 0.28rem;
   color: #fff;
-  font-weight: 950;
-  text-transform: uppercase;
+  font-weight: 400;
 }
 
 .setup-command-block {
