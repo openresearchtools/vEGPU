@@ -14,9 +14,38 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
     public struct Debian: Codable, Equatable, Sendable {
         public var name: String
         public var url: String
+        public var mirrors: [String]
         public var sha512: String
         public var size: String
         public var variant: String
+
+        enum CodingKeys: String, CodingKey {
+            case name
+            case url
+            case mirrors
+            case sha512
+            case size
+            case variant
+        }
+
+        public init(name: String, url: String, mirrors: [String] = [], sha512: String, size: String, variant: String) {
+            self.name = name
+            self.url = url
+            self.mirrors = mirrors
+            self.sha512 = sha512
+            self.size = size
+            self.variant = variant
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decode(String.self, forKey: .name)
+            url = try container.decode(String.self, forKey: .url)
+            mirrors = try container.decodeIfPresent([String].self, forKey: .mirrors) ?? []
+            sha512 = try container.decode(String.self, forKey: .sha512)
+            size = try container.decode(String.self, forKey: .size)
+            variant = try container.decode(String.self, forKey: .variant)
+        }
     }
 
     public struct Kernel: Codable, Equatable, Sendable {
@@ -80,6 +109,9 @@ public struct RuntimeManifest: Codable, Equatable, Sendable {
         debian: Debian(
             name: "debian-13-generic-arm64-20260509-2473.qcow2",
             url: "https://cloud.debian.org/images/cloud/trixie/20260509-2473/debian-13-generic-arm64-20260509-2473.qcow2",
+            mirrors: [
+                "https://mirrors.nju.edu.cn/debian-cdimage/cloud/trixie/20260509-2473/debian-13-generic-arm64-20260509-2473.qcow2"
+            ],
             sha512: "16edf9daf931f2038d9f6ed4ee3e66d6e40c0cd3826dda83563a48ef1d76cb11a51ea9094b1e727deb4ed1bd253a58bd3c135c5cc77468ff64c1029878bc32dc",
             size: "408M",
             variant: "generic"
@@ -147,6 +179,7 @@ public final class ManifestStore: @unchecked Sendable {
         let expected = defaultManifest()
         if current.createdBy == "PEGPU" &&
             (current.id != expected.id ||
+             current.debian != expected.debian ||
              current.kernel.version == "pinned-to-debian-image" ||
              current.guestPackages.signature != expected.guestPackages.signature) {
             try write(expected)

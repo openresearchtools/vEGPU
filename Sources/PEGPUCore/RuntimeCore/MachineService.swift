@@ -546,20 +546,47 @@ public final class MachineService: @unchecked Sendable {
         let manifest = try manifestStore.load()
         let temporary = files.disk.deletingPathExtension().appendingPathExtension("qcow2.download")
         try? FileManager.default.removeItem(at: temporary)
+        let imageURLs = debianImageURLs(for: manifest)
         progress.report(ProgressEvent(stage: "download", message: "Downloading Debian runtime image", detail: manifest.debian.name, percent: 0))
-        guard let url = URL(string: manifest.debian.url) else {
-            throw RuntimeError.message("Invalid Debian image URL: \(manifest.debian.url)")
+        var failures: [String] = []
+        var downloadedURL: String?
+        for candidate in imageURLs {
+            guard let url = URL(string: candidate) else {
+                failures.append("\(candidate): invalid URL")
+                continue
+            }
+            let label = candidate == manifest.debian.url ? manifest.debian.name : "\(manifest.debian.name) via mirror"
+            progress.report(ProgressEvent(stage: "download", message: "Downloading Debian runtime image", detail: label, percent: 0))
+            do {
+                try await download.download(url, to: temporary)
+                progress.report(ProgressEvent(stage: "verify", message: "Verifying Debian image checksum", detail: "SHA-512"))
+                let actual = try sha512Hex(of: temporary)
+                guard actual == manifest.debian.sha512 else {
+                    try? FileManager.default.removeItem(at: temporary)
+                    failures.append("\(candidate): checksum mismatch, actual \(actual)")
+                    continue
+                }
+                downloadedURL = candidate
+                break
+            } catch {
+                try? FileManager.default.removeItem(at: temporary)
+                failures.append("\(candidate): \(firstLine(String(describing: error)))")
+            }
         }
-        try await download.download(url, to: temporary)
-        progress.report(ProgressEvent(stage: "verify", message: "Verifying Debian image checksum", detail: "SHA-512"))
-        let actual = try sha512Hex(of: temporary)
-        guard actual == manifest.debian.sha512 else {
-            try? FileManager.default.removeItem(at: temporary)
-            throw RuntimeError.message("Debian image checksum mismatch\nexpected \(manifest.debian.sha512)\nactual   \(actual)")
+        guard let downloadedURL else {
+            let detail = failures.isEmpty ? "no Debian image URLs configured" : failures.joined(separator: "\n")
+            throw RuntimeError.message("Debian runtime image download failed\n\(detail)")
         }
         try FileManager.default.moveItem(at: temporary, to: files.disk)
-        try JSON.write(DiskSource(manifest: manifest.id, image: manifest.debian.name, url: manifest.debian.url, sha512: manifest.debian.sha512), to: files.diskSource)
+        try JSON.write(DiskSource(manifest: manifest.id, image: manifest.debian.name, url: downloadedURL, sha512: manifest.debian.sha512), to: files.diskSource)
         progress.report(ProgressEvent(stage: "download", message: "Runtime image is ready", detail: manifest.debian.name, percent: 100, level: .success))
+    }
+
+    private func debianImageURLs(for manifest: RuntimeManifest) -> [String] {
+        var seen = Set<String>()
+        return ([manifest.debian.url] + manifest.debian.mirrors)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     private func createPflashVars(templatePath: String, destination: URL) throws {

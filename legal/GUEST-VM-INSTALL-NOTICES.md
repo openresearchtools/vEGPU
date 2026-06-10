@@ -21,6 +21,10 @@ service:
 https://cloud.debian.org/images/cloud/trixie/
 ```
 
+If that primary image service is unavailable, PEGPU may retry the same pinned
+image through a mirror URL recorded in the runtime manifest. Mirror downloads are
+accepted only when the downloaded image matches the manifest SHA-512 checksum.
+
 Packages installed with `apt-get` come from the Debian repositories configured
 inside that VM unless another repository is explicitly listed below. Debian
 packages carry their own package metadata and license/copyright files inside
