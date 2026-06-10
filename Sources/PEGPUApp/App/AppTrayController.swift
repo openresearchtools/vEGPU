@@ -2,7 +2,7 @@ import AppKit
 import PEGPUCore
 
 @MainActor
-final class AppTrayController: NSObject {
+final class AppTrayController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private weak var appDelegate: AppDelegate?
     private weak var model: NativeAppModel?
@@ -60,6 +60,7 @@ final class AppTrayController: NSObject {
         }
         updateMenu()
         updateStatusItemPresentation()
+        model.displayControlMenu.refresh()
         refreshStatus()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
@@ -113,6 +114,9 @@ final class AppTrayController: NSObject {
             model.refreshHostSleepGuard()
             await MainActor.run {
                 self.statusText = next
+                if next.contains("running") {
+                    model.displayControlMenu.refresh()
+                }
                 self.updateMenu()
             }
         }
@@ -136,6 +140,7 @@ final class AppTrayController: NSObject {
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = self
 
         menu.addItem(disabled("PEGPU: \(statusText)"))
         menu.addItem(.separator())
@@ -169,8 +174,53 @@ final class AppTrayController: NSObject {
         startAtLogin.state = model?.configStore.load().startRuntimeAtLogin == true ? .on : .off
         menu.addItem(startAtLogin)
 
+        menu.addItem(.separator())
+        addDisplaySessionItems(to: menu)
+
         menu.addItem(item("Quit and Stop Runtime...", #selector(quitAndStopRuntime)))
         return menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        model?.displayControlMenu.refresh()
+    }
+
+    private func addDisplaySessionItems(to menu: NSMenu) {
+        guard let displayControl = model?.displayControlMenu else {
+            menu.addItem(disabled("External Displays: unavailable"))
+            return
+        }
+        if displayControl.sessions.isEmpty {
+            menu.addItem(disabled(displayControl.busy ? "Loading eGPU displays..." : "No PCIe GPUs found"))
+            return
+        }
+        for (offset, session) in displayControl.sessions.enumerated() {
+            if session.running {
+                let enter = displaySessionItem(
+                    "Enter \(session.title) (Option-Cmd-\(offset + 2))",
+                    #selector(enterDisplaySession(_:)),
+                    session: session
+                )
+                enter.isEnabled = !displayControl.busy
+                menu.addItem(enter)
+
+                let stop = displaySessionItem("Stop \(session.title)", #selector(stopDisplaySession(_:)), session: session)
+                stop.isEnabled = !displayControl.busy
+                menu.addItem(stop)
+
+                let reload = displaySessionItem("Reload \(session.title)", #selector(reloadDisplaySession(_:)), session: session)
+                reload.isEnabled = !displayControl.busy
+                menu.addItem(reload)
+            } else {
+                let start = displaySessionItem(
+                    "Start \(session.title) on eGPU Display (Option-Cmd-\(offset + 2))",
+                    #selector(startDisplaySession(_:)),
+                    session: session
+                )
+                start.isEnabled = !displayControl.busy
+                menu.addItem(start)
+            }
+        }
     }
 
     private func item(_ title: String, _ action: Selector) -> NSMenuItem {
@@ -183,6 +233,20 @@ final class AppTrayController: NSObject {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
         return item
+    }
+
+    private func displaySessionItem(_ title: String, _ action: Selector, session: DisplaySession) -> NSMenuItem {
+        let item = item(title, action)
+        item.representedObject = session.id
+        return item
+    }
+
+    private func displaySession(from sender: NSMenuItem) -> DisplaySession? {
+        guard let sessionID = sender.representedObject as? String,
+              let displayControl = model?.displayControlMenu else {
+            return nil
+        }
+        return displayControl.sessions.first { $0.id == sessionID }
     }
 
     @objc private func openApp() {
@@ -243,6 +307,26 @@ final class AppTrayController: NSObject {
 
     @objc private func quitAndStopRuntime() {
         appDelegate?.quitAndStopRuntime()
+    }
+
+    @objc private func startDisplaySession(_ sender: NSMenuItem) {
+        guard let session = displaySession(from: sender) else { return }
+        model?.displayControlMenu.startSession(session)
+    }
+
+    @objc private func enterDisplaySession(_ sender: NSMenuItem) {
+        guard let session = displaySession(from: sender) else { return }
+        model?.displayControlMenu.enterSession(session)
+    }
+
+    @objc private func stopDisplaySession(_ sender: NSMenuItem) {
+        guard let session = displaySession(from: sender) else { return }
+        model?.displayControlMenu.stopSession(session)
+    }
+
+    @objc private func reloadDisplaySession(_ sender: NSMenuItem) {
+        guard let session = displaySession(from: sender) else { return }
+        model?.displayControlMenu.reloadSession(session)
     }
 
 }
