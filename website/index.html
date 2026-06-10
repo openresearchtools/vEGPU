@@ -189,13 +189,19 @@
           <article class="warning-card">
             <h3>The clean restart ritual</h3>
             <p>
-              If you stopped the server and want to launch with eGPUs attached: unplug the eGPUs, wait 5 seconds, plug them back in, wait another 5 seconds, then start the server. Most of the time the GPUs attach. Sometimes macOS is just being macOS.
+              If you stopped the server and want to launch with eGPUs attached: unplug the eGPUs, wait 5 seconds, plug them back in, wait another 5 seconds, then start the server. Most of the time the GPUs attach.
             </p>
           </article>
           <article class="warning-card">
             <h3>First setup happens without eGPUs attached</h3>
             <p>
               Start the VM headless or GUI, let Debian finish its first boot work, run the NVIDIA installer if you use NVIDIA cards, stop the VM completely, then plug in your eGPUs and launch the server with the devices attached.
+            </p>
+          </article>
+          <article class="warning-card">
+            <h3>Choose graphics or compute for heavy sessions</h3>
+            <p>
+              Treat the external GPUs as either the graphics/rendering path or the compute path for a session. Heavy 3D rendering while loading AI models or other large compute jobs can overload PCIe passthrough and may kernel panic the Mac.
             </p>
           </article>
         </div>
