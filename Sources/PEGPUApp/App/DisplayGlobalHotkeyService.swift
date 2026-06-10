@@ -6,6 +6,8 @@ final class DisplayGlobalHotkeyService {
     private weak var displayControl: DisplayControlMenuModel?
     private var handlerRef: EventHandlerRef?
     private var shortcutObserver: NSObjectProtocol?
+    private var shortcutEventTap: CFMachPort?
+    private var shortcutEventTapSource: CFRunLoopSource?
     private var hotKeyRefs: [EventHotKeyRef] = []
     private var lastShortcutDigit: Int?
     private var lastShortcutTime: TimeInterval = 0
@@ -18,6 +20,7 @@ final class DisplayGlobalHotkeyService {
 
     func start() {
         installShortcutObserver()
+        installShortcutEventTap()
         guard handlerRef == nil else { return }
 
         var eventType = EventTypeSpec(
@@ -43,6 +46,8 @@ final class DisplayGlobalHotkeyService {
     }
 
     func invalidate() {
+        removeShortcutEventTap()
+
         for ref in hotKeyRefs {
             UnregisterEventHotKey(ref)
         }
@@ -57,6 +62,39 @@ final class DisplayGlobalHotkeyService {
             NotificationCenter.default.removeObserver(shortcutObserver)
         }
         shortcutObserver = nil
+    }
+
+    private func installShortcutEventTap() {
+        guard shortcutEventTap == nil else { return }
+        let mask = CGEventMask(1) << CGEventMask(CGEventType.keyDown.rawValue)
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: displayShortcutEventTapHandler,
+            userInfo: nil
+        ) else {
+            NSLog("PEGPU display hotkey event tap could not install; relying on registered hotkeys")
+            return
+        }
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        shortcutEventTap = tap
+        shortcutEventTapSource = source
+    }
+
+    private func removeShortcutEventTap() {
+        if let shortcutEventTap {
+            CGEvent.tapEnable(tap: shortcutEventTap, enable: false)
+            CFMachPortInvalidate(shortcutEventTap)
+        }
+        if let shortcutEventTapSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), shortcutEventTapSource, .commonModes)
+        }
+        shortcutEventTap = nil
+        shortcutEventTapSource = nil
     }
 
     private func installShortcutObserver() {
@@ -165,4 +203,40 @@ private let displayGlobalHotkeyHandler: EventHandlerUPP = { _, eventRef, userDat
         service.handleHotkey(signature: signature, id: id)
     }
     return noErr
+}
+
+private let displayShortcutEventTapHandler: CGEventTapCallBack = { _, type, event, _ in
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        return Unmanaged.passUnretained(event)
+    }
+    guard type == .keyDown,
+          let digit = displayShortcutDigit(for: event) else {
+        return Unmanaged.passUnretained(event)
+    }
+    NotificationCenter.default.post(name: .pegpuExternalSessionShortcut, object: digit)
+    return nil
+}
+
+private func displayShortcutDigit(for event: CGEvent) -> Int? {
+    let flags = event.flags
+    guard flags.contains(.maskCommand),
+          flags.contains(.maskAlternate),
+          !flags.contains(.maskControl),
+          !flags.contains(.maskShift) else {
+        return nil
+    }
+
+    let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+    switch keyCode {
+    case kVK_ANSI_1: return 1
+    case kVK_ANSI_2: return 2
+    case kVK_ANSI_3: return 3
+    case kVK_ANSI_4: return 4
+    case kVK_ANSI_5: return 5
+    case kVK_ANSI_6: return 6
+    case kVK_ANSI_7: return 7
+    case kVK_ANSI_8: return 8
+    case kVK_ANSI_9: return 9
+    default: return nil
+    }
 }
