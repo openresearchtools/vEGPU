@@ -732,7 +732,47 @@ jobs:
           find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/glib-2.83.0/'
           find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/openssl-1.1.1b/'
           find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/display-runtime/upstream-sources" -type f | grep -F '/gstreamer-1.19.1/'
-          find "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/llama-runtime" -type f | grep -F 'llama-b9500'
+          python3 - "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama" "$APP/Contents/Resources/PEGPURoot/legal/generated/license-files/llama-runtime" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          runtime_root = Path(sys.argv[1])
+          license_root = Path(sys.argv[2])
+          manifest = json.loads((runtime_root / "llama-runtime-manifest.json").read_text())
+          if not str(manifest.get("tag") or "").strip():
+              raise SystemExit("llama runtime manifest is missing tag")
+          assets = manifest.get("assets")
+          if not isinstance(assets, dict):
+              raise SystemExit("llama runtime manifest assets missing")
+          required = {
+              "macos": "-bin-macos-arm64.tar.gz",
+              "cuda13": "-bin-debian-trixie-cuda13-arm64.tar.gz",
+              "vulkan": "-bin-debian-trixie-vulkan-arm64.tar.gz",
+          }
+          runtime_root_real = runtime_root.resolve()
+          for key, suffix in required.items():
+              asset = assets.get(key)
+              if not isinstance(asset, dict):
+                  raise SystemExit(f"llama runtime manifest missing asset: {key}")
+              name = str(asset.get("name") or "").strip()
+              rel = str(asset.get("path") or "").strip()
+              if not name.endswith(suffix):
+                  raise SystemExit(f"llama runtime asset {key} does not end with {suffix}: {name}")
+              if not rel:
+                  raise SystemExit(f"llama runtime asset {key} is missing path")
+              archive = (runtime_root / rel).resolve()
+              try:
+                  archive.relative_to(runtime_root_real)
+              except ValueError as exc:
+                  raise SystemExit(f"llama runtime asset {key} escapes runtime root: {rel}") from exc
+              if archive.name != name:
+                  raise SystemExit(f"llama runtime asset {key} path/name mismatch: {rel} != {name}")
+              if not archive.is_file():
+                  raise SystemExit(f"bundled llama runtime archive missing: {rel}")
+          if not any(path.is_file() for path in license_root.rglob("*")):
+              raise SystemExit("llama runtime license files missing")
+          PY
           if tar -tzf "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
             echo "generated app source tarball must not include scaling helper build artifacts" >&2
             exit 1
