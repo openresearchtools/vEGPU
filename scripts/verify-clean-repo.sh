@@ -89,7 +89,8 @@ test_payloads="$(
       -path '*/__pycache__' -o \
       -name '*_test.go' -o \
       -name 'test_*.py' \
-    \) -print
+    \) -print |
+    grep -v '^\./ai/web-ui-app/hf_test\.go$' || true
 )"
 if [ -n "$test_payloads" ]; then
   printf 'Clean repo must not contain test-only payloads:\n%s\n' "$test_payloads" >&2

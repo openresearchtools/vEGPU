@@ -229,6 +229,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/hf/tree", a.handleHFTree)
 	mux.HandleFunc("/api/hf/download", a.handleHFDownload)
 	mux.HandleFunc("/api/hf/downloads", a.handleHFDownloads)
+	mux.HandleFunc("/api/hf/downloads/", a.handleHFDownloadControl)
 
 	mux.HandleFunc("/core", a.serveCoreUI)
 	mux.HandleFunc("/core/", a.serveCoreUI)
@@ -982,6 +983,44 @@ func (a *App) handleHFDownloads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]any{"downloads": a.hf.Downloads()})
+}
+
+func (a *App) handleHFDownloadControl(w http.ResponseWriter, r *http.Request) {
+	if !a.requireAuth(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/hf/downloads/"), "/")
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		respondError(w, http.StatusBadRequest, fmt.Errorf("expected /api/hf/downloads/:id/:action"))
+		return
+	}
+	var (
+		task DownloadTask
+		err  error
+	)
+	switch parts[1] {
+	case "pause":
+		task, err = a.hf.PauseDownload(parts[0])
+	case "resume":
+		task, err = a.hf.ResumeDownload(parts[0])
+	case "stop":
+		task, err = a.hf.StopDownload(parts[0])
+	case "restart":
+		task, err = a.hf.RestartDownload(parts[0])
+	default:
+		respondError(w, http.StatusBadRequest, fmt.Errorf("unknown download action %s", parts[1]))
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, task)
 }
 
 func (a *App) handleV1Models(w http.ResponseWriter, r *http.Request) {

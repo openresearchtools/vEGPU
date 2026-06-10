@@ -43,6 +43,7 @@ public struct LlmsHFDownloadSpec: Codable, Equatable, Sendable {
     public var paths: [String]
     public var token: String?
     public var progressPath: String?
+    public var restart: Bool?
 }
 
 public struct LlmsModelCopySpec: Codable, Equatable, Sendable {

@@ -1206,6 +1206,15 @@
 		await refreshDownloads(true);
 	}
 
+	async function controlHFDownload(id, action) {
+		await apiFetch(`/api/hf/downloads/${encodeURIComponent(id)}/${encodeURIComponent(action)}`, {
+			method: "POST",
+			body: JSON.stringify({})
+		});
+		setStatus(`Download ${action} requested`);
+		await refreshDownloads(true);
+	}
+
 	async function refreshDownloads(keepPolling = false, render = true) {
 		const data = await apiFetch("/api/hf/downloads");
 		const now = Date.now();
@@ -1223,8 +1232,8 @@
 		}
 		state.downloads = data.downloads ?? [];
 		if (state.downloadTimer) clearTimeout(state.downloadTimer);
-		const active = state.downloads.some(
-			(download) => download.status === "queued" || download.status === "running"
+		const active = state.downloads.some((download) =>
+			["queued", "running", "retrying", "stalled"].includes(download.status)
 		);
 		if ((keepPolling || active) && active) {
 			state.downloadTimer = setTimeout(() => {
@@ -2072,17 +2081,35 @@
 			.map((download) => {
 				const total = Number(download.totalBytes ?? 0);
 				const downloaded = Number(download.downloadedBytes ?? 0);
+				const status = String(download.status || "");
 				const completePercent =
-					download.status === "complete"
+					status === "complete"
 						? 100
 						: total > 0
 							? Math.max(0, Math.min(100, (downloaded / total) * 100))
 							: 0;
 				const speed = state.downloadStats.get(download.id)?.speed ?? 0;
+				const busy = ["queued", "running", "retrying", "stalled"].includes(status);
+				const resumable = ["paused", "stopped", "error"].includes(status) && download.canResume !== false;
+				const complete = status === "complete";
+				const actions = [
+					busy
+						? `<button class="mini-button" type="button" data-download-action="pause" data-download-id="${escapeHTML(download.id)}">Pause</button>`
+						: "",
+					resumable
+						? `<button class="mini-button" type="button" data-download-action="resume" data-download-id="${escapeHTML(download.id)}">Resume</button>`
+						: "",
+					busy
+						? `<button class="mini-button" type="button" data-download-action="stop" data-download-id="${escapeHTML(download.id)}">Stop</button>`
+						: "",
+					!complete
+						? `<button class="mini-button mini-button-danger" type="button" data-download-action="restart" data-download-id="${escapeHTML(download.id)}">Restart</button>`
+						: ""
+				].filter(Boolean).join("");
 				return `
 				<div class="download-item">
 					<div class="download-item-head">
-						<span>${escapeHTML(download.status)}</span>
+						<span>${escapeHTML(status)}</span>
 						<span class="muted">${escapeHTML(String(download.location || "mac").toUpperCase())}</span>
 						<span class="muted">${escapeHTML(formatBytes(speed) || "0 B")}/s</span>
 					</div>
@@ -2093,6 +2120,7 @@
 					)}</p>
 					<div class="progress-track"><div class="progress-bar" style="width: ${completePercent}%"></div></div>
 					${download.error ? `<p class="danger-text">${escapeHTML(download.error)}</p>` : ""}
+					${actions ? `<div class="inline-actions download-actions">${actions}</div>` : ""}
 				</div>`;
 			})
 			.join("");
@@ -2345,6 +2373,11 @@
 		});
 		el.listHFButton.addEventListener("click", () => listHF().catch(showError));
 		el.downloadHFButton.addEventListener("click", () => downloadHF().catch(showError));
+		el.downloadsList.addEventListener("click", (event) => {
+			const button = event.target.closest("[data-download-action]");
+			if (!button) return;
+			controlHFDownload(button.dataset.downloadId, button.dataset.downloadAction).catch(showError);
+		});
 		el.hfEntriesList.addEventListener("change", (event) => {
 			const input = event.target.closest("[data-hf-path]");
 			if (!input) return;

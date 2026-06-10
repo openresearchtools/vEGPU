@@ -423,13 +423,23 @@ public final class LlmsRuntimeService: @unchecked Sendable {
             let url = hfResolveURL(repo: repo, revision: revision, path: remotePath)
             let headerArgs = tokenHeader.map { "-H \(shellQuote($0)) " } ?? ""
             let temp = target + ".part"
-            let script = [
+            let knownSize = sizes[remotePath] ?? 0
+            var scriptLines = [
                 "set -eu",
                 "sudo -n -u pegpu install -d -m 0755 \(shellQuote(URL(fileURLWithPath: target).deletingLastPathComponent().path))",
-                "rm -f \(shellQuote(temp))",
-                "sudo -n -u pegpu sh -lc \(shellQuote("curl -L --fail --retry 3 --connect-timeout 15 \(headerArgs)-o \(shellQuote(temp)) \(shellQuote(url))"))",
-                "sudo -n -u pegpu mv \(shellQuote(temp)) \(shellQuote(target))"
-            ].joined(separator: "\n")
+            ]
+            if spec.restart == true {
+                scriptLines.append("sudo -n -u pegpu rm -f \(shellQuote(temp)) \(shellQuote(target))")
+            }
+            if knownSize > 0 {
+                scriptLines.append("if [ -f \(shellQuote(target)) ] && [ \"$(stat -c %s \(shellQuote(target)) 2>/dev/null || echo 0)\" = \(knownSize) ]; then exit 0; fi")
+                scriptLines.append("if [ -f \(shellQuote(temp)) ] && [ \"$(stat -c %s \(shellQuote(temp)) 2>/dev/null || echo 0)\" -gt \(knownSize) ]; then sudo -n -u pegpu rm -f \(shellQuote(temp)); fi")
+            } else {
+                scriptLines.append("if [ -f \(shellQuote(target)) ]; then exit 0; fi")
+            }
+            scriptLines.append("sudo -n -u pegpu sh -lc \(shellQuote("curl -L --fail --connect-timeout 30 --retry 999999 --retry-delay 2 --retry-all-errors --speed-limit 1024 --speed-time 90 -C - \(headerArgs)-o \(shellQuote(temp)) \(shellQuote(url))"))")
+            scriptLines.append("sudo -n -u pegpu mv \(shellQuote(temp)) \(shellQuote(target))")
+            let script = scriptLines.joined(separator: "\n")
             let poller = startRemoteSizeProgress(
                 remotePath: temp,
                 baseBytes: downloadedBytes,
@@ -438,15 +448,15 @@ public final class LlmsRuntimeService: @unchecked Sendable {
                 progressPath: spec.progressPath
             )
             do {
-                _ = try await runGuestScript(script, timeout: 60 * 60)
+                _ = try await runGuestScript(script)
             } catch {
                 poller?.cancel()
                 throw error
             }
             poller?.cancel()
-            let knownSize = sizes[remotePath] ?? 0
+            let expectedSize = sizes[remotePath] ?? 0
             let actualSize = (try? await guestFileSizes([target]))?[target] ?? 0
-            downloadedBytes += knownSize > 0 ? knownSize : actualSize
+            downloadedBytes += expectedSize > 0 ? expectedSize : actualSize
             writeModelCopyProgress(spec.progressPath, status: "running", current: remotePath, copiedBytes: downloadedBytes, totalBytes: totalBytes)
         }
         writeModelCopyProgress(spec.progressPath, status: "complete", current: nil, copiedBytes: downloadedBytes, totalBytes: totalBytes)
@@ -860,7 +870,7 @@ public final class LlmsRuntimeService: @unchecked Sendable {
         }
     }
 
-    private func runGuestScript(_ script: String, timeout: TimeInterval) async throws -> String {
+    private func runGuestScript(_ script: String, timeout: TimeInterval? = nil) async throws -> String {
         try await ssh.ssh("bash -lc \(shellQuote(script))", timeout: timeout)
     }
 

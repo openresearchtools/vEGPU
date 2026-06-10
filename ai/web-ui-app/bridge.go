@@ -78,6 +78,7 @@ type BridgeHFDownloadSpec struct {
 	Paths        []string `json:"paths"`
 	Token        string   `json:"token,omitempty"`
 	ProgressPath string   `json:"progressPath,omitempty"`
+	Restart      bool     `json:"restart,omitempty"`
 }
 
 type BridgeModelCopySpec struct {

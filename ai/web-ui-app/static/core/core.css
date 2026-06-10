@@ -1105,6 +1105,10 @@ textarea.input:focus {
 	word-break: break-word;
 }
 
+.download-actions {
+	margin-top: 8px;
+}
+
 .progress-track {
 	height: 8px;
 	margin-top: 8px;
