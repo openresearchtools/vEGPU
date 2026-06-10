@@ -440,23 +440,6 @@
             <em>Model switching and local OpenAI-compatible runtime inspiration.</em>
           </a>
         </div>
-        <aside class="compact-license" id="license" aria-labelledby="license-title">
-          <div class="section-kicker">license reality</div>
-          <h3 id="license-title">GPL stuff stays GPL. The launcher side stays separate.</h3>
-          <p>
-            PEGPU follows the UTM and UTM-QEMU style split, just with a harder boundary: PEGPU Machine handles the GPL DriverKit/QEMU/VM mechanics, while PEGPU handles the launcher, GUI, and AI runtime layers. The package keeps that boundary visible in the installed apps, Help menu, notices, source archives, and license files.
-          </p>
-          <p>
-            PEGPU.app ships an app-visible distribution LICENSES file for the installed runtime payloads, helper programs, framework dependencies, and app-managed runtime archives. Source archives installed with the app have adjacent NOTICES, LICENSES, and manifest sidecars for the files inside those archives, including source-only build inputs used to reproduce app-side artifacts. PEGPU Machine.app carries its own external Machine/QEMU notices, licenses, and source bundles.
-          </p>
-          <div class="license-mini">
-            <span><strong>PEGPU Machine:</strong> QEMU patch stack, Scott's VFIO/DriverKit base, UTM/QEMU display-session mechanics, guest driver mechanics.</span>
-            <span><strong>PEGPU:</strong> native macOS app, UTM-derived GUI display code, ANGLE/CocoaSpice, sidecar, routing, model/runtime controls.</span>
-          </div>
-          <p class="forking-note">
-            Forking note: respect upstream copyrights and licenses. For my added work, reuse it however you want as long as the original projects' license obligations are handled correctly.
-          </p>
-        </aside>
       </section>
 
       <section class="section final-cta" aria-labelledby="final-title">

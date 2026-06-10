@@ -469,58 +469,6 @@ h1::after {
   color: #abb2a9;
 }
 
-.compact-license {
-  margin-top: 1rem;
-  padding: 1rem 1.15rem;
-  border: 1px solid rgba(101, 255, 122, 0.18);
-  border-radius: 8px;
-  background: rgba(101, 255, 122, 0.035);
-}
-
-.compact-license .section-kicker {
-  margin-bottom: 0.55rem;
-  font-size: 0.72rem;
-}
-
-.compact-license h3 {
-  margin: 0;
-  color: #fff;
-  font-size: clamp(1.15rem, 2.4vw, 1.55rem);
-  line-height: 1.15;
-}
-
-.compact-license p {
-  max-width: 980px;
-  margin: 0.65rem 0 0;
-  color: #b6beb3;
-  font-size: 0.98rem;
-}
-
-.license-mini {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-  margin-top: 0.85rem;
-}
-
-.license-mini span {
-  padding: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.035);
-  color: #aeb6ac;
-  font-size: 0.9rem;
-}
-
-.license-mini strong {
-  color: #fff;
-}
-
-.forking-note {
-  color: #939b91 !important;
-  font-size: 0.9rem !important;
-}
-
 .screenshot-band {
   width: 100%;
   padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 3vw, 2.5rem);
@@ -1247,7 +1195,6 @@ h1::after {
   .split,
   .feature-grid,
   .warning-grid,
-  .license-mini,
   .link-grid {
     grid-template-columns: 1fr;
   }
