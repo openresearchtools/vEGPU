@@ -132,6 +132,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
             SpiceConnectionDrain.shared.drain(connection)
         }
         releaseAllInput()
+        setExternalInputCaptureState(false)
         connection = nil
         display = nil
         input = nil
@@ -325,7 +326,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
             }
             return
         }
-        externalInputCaptureEnabled = enabled
+        setExternalInputCaptureState(enabled)
         releaseAllInput()
         input?.requestMouseMode(enabled)
         selectQemuMouse(relative: enabled)
@@ -334,6 +335,12 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
         } else if connected {
             status = "SPICE connected"
         }
+    }
+
+    private func setExternalInputCaptureState(_ enabled: Bool) {
+        guard externalInputCaptureEnabled != enabled else { return }
+        externalInputCaptureEnabled = enabled
+        NotificationCenter.default.post(name: .pegpuExternalInputCaptureDidChange, object: enabled)
     }
 
     func releaseAllInput() {
@@ -607,7 +614,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
         connecting = false
         connected = false
         releaseAllInput()
-        externalInputCaptureEnabled = false
+        setExternalInputCaptureState(false)
         qmpMouseTask?.cancel()
         qmpMouseTask = nil
         connection = nil

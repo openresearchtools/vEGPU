@@ -8,7 +8,9 @@ final class AppTrayController: NSObject {
     private weak var model: NativeAppModel?
     private var globalHotkeys: DisplayGlobalHotkeyService?
     private var profileObserver: NSObjectProtocol?
+    private var captureObserver: NSObjectProtocol?
     private var statusText = "checking"
+    private var externalInputCaptureActive = false
     private var timer: Timer?
 
     var screenAnchorRect: NSRect? {
@@ -43,7 +45,20 @@ final class AppTrayController: NSObject {
                 }
             }
         }
+        if captureObserver == nil {
+            captureObserver = NotificationCenter.default.addObserver(
+                forName: .pegpuExternalInputCaptureDidChange,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                Task { @MainActor [weak self] in
+                    self?.externalInputCaptureActive = notification.object as? Bool == true
+                    self?.updateStatusItemPresentation()
+                }
+            }
+        }
         updateMenu()
+        updateStatusItemPresentation()
         refreshStatus()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
@@ -60,6 +75,10 @@ final class AppTrayController: NSObject {
             NotificationCenter.default.removeObserver(profileObserver)
         }
         profileObserver = nil
+        if let captureObserver {
+            NotificationCenter.default.removeObserver(captureObserver)
+        }
+        captureObserver = nil
         globalHotkeys?.invalidate()
         globalHotkeys = nil
         model?.stopHostSleepGuardForShutdown()
@@ -74,7 +93,16 @@ final class AppTrayController: NSObject {
         image?.size = NSSize(width: 19, height: 19)
         image?.isTemplate = true
         statusItem.button?.image = image
-        statusItem.button?.imagePosition = .imageOnly
+        updateStatusItemPresentation()
+    }
+
+    private func updateStatusItemPresentation() {
+        statusItem.length = externalInputCaptureActive ? NSStatusItem.variableLength : NSStatusItem.squareLength
+        guard let button = statusItem.button else { return }
+        button.imagePosition = externalInputCaptureActive ? .imageLeft : .imageOnly
+        button.title = externalInputCaptureActive ? " ⌥⌘1 Release" : ""
+        button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        button.toolTip = externalInputCaptureActive ? "PEGPU external display captured. Press ⌥⌘1 to release." : "PEGPU"
     }
 
     private func refreshStatus() {

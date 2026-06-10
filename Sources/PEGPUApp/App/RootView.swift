@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: NativeAppModel.Tab
     @State private var sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
+    @State private var externalInputCaptureActive = false
 
     init(model: NativeAppModel) {
         self.model = model
@@ -76,6 +77,9 @@ struct RootView: View {
                 selectedTab = .section(.runtime)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pegpuExternalInputCaptureDidChange)) { notification in
+            externalInputCaptureActive = notification.object as? Bool == true
+        }
     }
 
     private var availableSections: [NativeAppModel.Section] {
@@ -88,6 +92,9 @@ struct RootView: View {
     }
 
     private var windowTitle: String {
+        if externalInputCaptureActive {
+            return "PEGPU - External Display - ⌥⌘1 Release"
+        }
         guard selectedTab == .section(.gui), model.displayControlMenu.activeSessionID != nil else { return "PEGPU" }
         return "PEGPU - External Display"
     }
