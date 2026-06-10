@@ -800,7 +800,7 @@ if [ "$INCLUDE_MACHINE" = "1" ]; then
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
   <title>PEGPU</title>
-  <options customize="always" require-scripts="true" rootVolumeOnly="true"/>
+  <options customize="always" require-scripts="true" rootVolumeOnly="true" hostArchitectures="arm64"/>
   <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
   <installation-check script="sipDisabled()"/>
   <script><![CDATA[
@@ -954,7 +954,7 @@ else
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
   <title>PEGPU</title>
-  <options customize="always" require-scripts="true" rootVolumeOnly="true"/>
+  <options customize="always" require-scripts="true" rootVolumeOnly="true" hostArchitectures="arm64"/>
   <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
   <installation-check script="sipDisabled()"/>
   <script><![CDATA[

@@ -1067,6 +1067,7 @@ jobs:
           test -f "$OUT"
           pkgutil --expand "$OUT" "$RUNNER_TEMP/pegpu-check/pkg-expanded"
           test -f "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
+          grep -F 'hostArchitectures="arm64"' "$RUNNER_TEMP/pegpu-check/pkg-expanded/Distribution"
           grep -R -F 'For convenience, PEGPU.app Help can render external PEGPU Machine notices and licenses' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
           grep -R -F 'The Help menu marks those Machine-owned rows as EXTERNAL' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
           grep -R -F 'PEGPU uses a stricter form of the UTM / UTM-QEMU-style' "$RUNNER_TEMP/pegpu-check/pkg-expanded"
