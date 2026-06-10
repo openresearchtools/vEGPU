@@ -106,7 +106,7 @@ final class DisplayGlobalHotkeyService {
         shortcutEventTapSource = nil
     }
 
-    private func reenableShortcutEventTap() {
+    fileprivate func reenableShortcutEventTap() {
         if let shortcutEventTap {
             CGEvent.tapEnable(tap: shortcutEventTap, enable: true)
         } else {
