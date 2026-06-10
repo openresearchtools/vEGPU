@@ -204,6 +204,18 @@
               Treat the external GPUs as either the graphics/rendering path or the compute path for a session. Heavy 3D rendering while loading AI models or other large compute jobs can overload PCIe passthrough and may kernel panic the Mac.
             </p>
           </article>
+          <article class="warning-card hard">
+            <h3>This is experimental, not production ready</h3>
+            <p>
+              Thunderbolt PCIe passthrough on Apple Silicon is not on parity with mature Intel Thunderbolt passthrough paths. Expect bugs, occasional macOS kernel panics, and forced restarts while the driver and runtime improve.
+            </p>
+          </article>
+          <article class="warning-card">
+            <h3>For AI, keep display rendering off the eGPUs</h3>
+            <p>
+              If you mainly want VLMs, ComfyUI, or other AI workloads, use the PEGPU GUI display as your primary display. It uses the Mac's internal graphics for 3D rendering, so external cards are not competing for limited passthrough capacity. Advanced users can enable headless-only mode in Developer Options and control the VM through the embedded terminal or SSH.
+            </p>
+          </article>
         </div>
       </section>
 
