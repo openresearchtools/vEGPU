@@ -2,18 +2,30 @@
 
 [Back to README](README.md)
 
+## Contents
+
+- [Step 00: Download Latest Version](#step-00-download-latest-version)
+- [First Run](#first-run)
+- [1. Disable SIP on Apple Silicon](#1-disable-sip-on-apple-silicon)
+- [2. Unblock the Downloaded Package](#2-unblock-the-downloaded-package)
+- [3. Install the Package](#3-install-the-package)
+- [4. Approve the DriverKit Extension](#4-approve-the-driverkit-extension)
+- [5. Start PEGPU With No eGPU Plugged In](#5-start-pegpu-with-no-egpu-plugged-in)
+- [6. Install NVIDIA Support Inside the VM](#6-install-nvidia-support-inside-the-vm)
+- [7. Stop the VM, Attach eGPUs, Then Launch the Server With Them Attached](#7-stop-the-vm-attach-egpus-then-launch-the-server-with-them-attached)
+- [Note](#note)
+
+---
+
 ## Step 00: Download Latest Version
 
-<table>
-  <tr>
-    <td><strong>Download the latest version from Releases</strong> before starting the setup flow.</td>
-    <td align="right">
-      <a href="https://github.com/openresearchtools/PEGPU/releases/latest">
-        <img alt="Download Latest PEGPU Release" src="https://img.shields.io/badge/Download-Latest%20Release-65ff7a?style=for-the-badge&labelColor=111111">
-      </a>
-    </td>
-  </tr>
-</table>
+Download the latest version from Releases before starting the setup flow.
+
+<p align="center">
+  <a href="https://github.com/openresearchtools/PEGPU/releases/latest">
+    <img alt="Download Latest PEGPU Release" src="https://img.shields.io/badge/Download-Latest%20Release-65ff7a?style=for-the-badge&labelColor=111111">
+  </a>
+</p>
 
 > [!WARNING]
 > **Important upfront warning:** PEGPU requires installing an experimental
@@ -38,6 +50,8 @@
 > **Important:** Understand and consider the security risks of disabling SIP
 > before proceeding.
 
+---
+
 ## First Run
 
 Installation is the strange part, so here is the path through macOS security.
@@ -47,6 +61,8 @@ with SIP disabled, and the DriverKit extension is ad hoc signed. The warnings
 below are expected for this kind of package, but they are still real security
 decisions.
 
+---
+
 ## 1. Disable SIP on Apple Silicon
 
 Shut down, boot to startup options, open Recovery Terminal, run
@@ -54,6 +70,8 @@ Shut down, boot to startup options, open Recovery Terminal, run
 PEGPU depends on an experimental DriverKit/VFIO path for Thunderbolt PCIe
 passthrough, so SIP must be disabled before macOS will allow the required
 host-side extension flow.
+
+---
 
 ## 2. Unblock the Downloaded Package
 
@@ -69,19 +87,21 @@ xattr -dr com.apple.quarantine ~/Downloads/pegpu*.pkg
 
 ![macOS warning that the PEGPU package was not opened because Apple could not verify it.](website/assets/setup/gatekeeper-blocked.webp)
 
-Initial block
+*Initial block*
 
 ![Privacy and Security settings showing Open Anyway for the blocked PEGPU package.](website/assets/setup/privacy-open-anyway.webp)
 
-Open Anyway
+*Open Anyway*
 
 ![macOS confirmation dialog asking whether to open the PEGPU package anyway.](website/assets/setup/gatekeeper-confirm-open.webp)
 
-Confirm open
+*Confirm open*
 
 ![Privacy and Security password prompt to allow opening the PEGPU package.](website/assets/setup/privacy-password.webp)
 
-Admin approval
+*Admin approval*
+
+---
 
 ## 3. Install the Package
 
@@ -91,7 +111,9 @@ DriverKit extension talk to Thunderbolt PCIe hardware.
 
 ![macOS Installer password prompt for installing new software.](website/assets/setup/pkg-install-password.webp)
 
-Normal package authorization
+*Normal package authorization*
+
+---
 
 ## 4. Approve the DriverKit Extension
 
@@ -102,23 +124,25 @@ prompt, and confirm the toggle is on.
 
 ![Password prompt saying PEGPU Machine is trying to modify a System Extension.](website/assets/setup/driver-extension-password.webp)
 
-Allow modification
+*Allow modification*
 
 ![macOS driver extension alert with Open System Settings button below OK.](website/assets/setup/driver-extension-open-settings.webp)
 
-Choose Open System Settings
+*Choose Open System Settings*
 
 ![Driver Extensions settings showing the PEGPU Machine extension toggle off.](website/assets/setup/driver-extension-disabled.webp)
 
-Toggle on
+*Toggle on*
 
 ![System Extensions password prompt to allow modifying a system extension.](website/assets/setup/system-extension-password.webp)
 
-Confirm system change
+*Confirm system change*
 
 ![Driver Extensions settings showing the PEGPU Machine extension enabled.](website/assets/setup/driver-extension-enabled.webp)
 
-Enabled
+*Enabled*
+
+---
 
 ## 5. Start PEGPU With No eGPU Plugged In
 
@@ -141,15 +165,17 @@ while PCIe passthrough is active, because sleep can wedge or panic the machine.
 
 ![macOS Local Network permission prompt explaining PEGPU needs private connection access to the Linux VM.](website/assets/setup/local-network.webp)
 
-Allow Local Network
+*Allow Local Network*
 
 ![Password prompt for mounting the Linux home folder over the private vmnet NFS link.](website/assets/setup/linux-share.webp)
 
-Mount Linux share
+*Mount Linux share*
 
 ![Password prompt for installing the PEGPU sleep guard helper.](website/assets/setup/sleep-guard.webp)
 
-Install sleep guard
+*Install sleep guard*
+
+---
 
 ## 6. Install NVIDIA Support Inside the VM
 
@@ -167,11 +193,13 @@ embedded terminal.
 
 ![PEGPU GPU card showing Booting status and the Run Installer button.](website/assets/setup/nvidia-driver-card-booting.webp)
 
-Run Installer
+*Run Installer*
 
 ![PEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button.](website/assets/setup/nvidia-driver-install-confirm.webp)
 
-Install Driver confirmation
+*Install Driver confirmation*
+
+---
 
 ## 7. Stop the VM, Attach eGPUs, Then Launch the Server With Them Attached
 
@@ -179,6 +207,8 @@ If Sidecar does not show the cards, stop the server, unplug the eGPUs, wait 5
 seconds, plug them back in, wait another 5 seconds, and launch again. This does
 not reinstall the VM; it gives macOS another clean chance to hand the PCIe
 devices to QEMU.
+
+---
 
 ## Note
 
