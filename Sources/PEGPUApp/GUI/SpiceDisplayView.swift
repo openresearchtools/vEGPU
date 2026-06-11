@@ -16,6 +16,10 @@ struct SpiceDisplayView: NSViewRepresentable {
         nsView.retina = retina
         nsView.needsLayout = true
     }
+
+    static func dismantleNSView(_ nsView: SpiceDisplayContainerView, coordinator: ()) {
+        nsView.detachFromSession()
+    }
 }
 
 final class SpiceDisplayContainerView: NSView {
@@ -76,6 +80,10 @@ final class SpiceDisplayContainerView: NSView {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(metalView)
         needsLayout = true
+    }
+
+    func detachFromSession() {
+        session.detach(metalView: metalView, renderer: renderer)
     }
 
     override func viewDidChangeBackingProperties() {

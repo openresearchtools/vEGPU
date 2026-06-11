@@ -1685,17 +1685,81 @@ EOS
 
 }
 
+install_spice_agent_session_wrapper() {
+  install -d /usr/local/bin
+  cat >/usr/local/bin/pegpu-spice-vdagent-session <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT=/usr/bin/spice-vdagent
+[ -x "$AGENT" ] || exit 0
+
+home="${HOME:-/home/pegpu}"
+display="${DISPLAY:-}"
+xauthority="${XAUTHORITY:-$home/.Xauthority}"
+
+display_number() {
+  local value="$1" rest number
+  [ -n "$value" ] || return 1
+  rest="${value##*:}"
+  number="${rest%%.*}"
+  case "$number" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  printf '%s\n' "$number"
+}
+
+[ "$(display_number "$display" 2>/dev/null || true)" = "0" ] || exit 0
+
+[ "$xauthority" = "$home/.Xauthority" ] || exit 0
+
+exec "$AGENT" "$@"
+EOS
+  chmod 0755 /usr/local/bin/pegpu-spice-vdagent-session
+}
+
+spice_agent_display_number() {
+  local value="$1" rest number
+  [ -n "$value" ] || return 1
+  rest="${value##*:}"
+  number="${rest%%.*}"
+  case "$number" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  printf '%s\n' "$number"
+}
+
+stop_external_spice_vdagents() {
+  local pid env display xauthority home
+  command -v pgrep >/dev/null 2>&1 || return 0
+  home="/home/$HUMAN_USER"
+  for pid in $(pgrep -u "$HUMAN_USER" -x spice-vdagent 2>/dev/null || true); do
+    [ -r "/proc/$pid/environ" ] || continue
+    env="$(tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null || true)"
+    display="$(printf '%s\n' "$env" | awk -F= '$1 == "DISPLAY" { print substr($0, index($0, "=") + 1); exit }')"
+    [ -n "$display" ] || continue
+    xauthority="$(printf '%s\n' "$env" | awk -F= '$1 == "XAUTHORITY" { print substr($0, index($0, "=") + 1); exit }')"
+    if [ "$(spice_agent_display_number "$display" 2>/dev/null || true)" = "0" ] &&
+       [ "${xauthority:-$home/.Xauthority}" = "$home/.Xauthority" ]; then
+      continue
+    fi
+    kill "$pid" >/dev/null 2>&1 || true
+  done
+}
+
 repair_spice_agent_session() {
+  install_spice_agent_session_wrapper
   install -d -o "$HUMAN_USER" -g "$HUMAN_USER" "/home/$HUMAN_USER/.config/autostart"
   cat >"/home/$HUMAN_USER/.config/autostart/spice-vdagent.desktop" <<'EOS'
 [Desktop Entry]
 Type=Application
 Name=SPICE Agent
-Exec=/usr/bin/spice-vdagent
+Exec=/usr/local/bin/pegpu-spice-vdagent-session
 OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 EOS
   chown "$HUMAN_USER:$HUMAN_USER" "/home/$HUMAN_USER/.config/autostart/spice-vdagent.desktop"
+  stop_external_spice_vdagents
 }
 
 write_root_file_if_changed() {
@@ -1861,6 +1925,7 @@ if [ "${1:-}" = "--install-display-control-only" ]; then
   run_customization write-prefs
   run_customization disable-idle
   install_display_control
+  repair_spice_agent_session
   /usr/local/sbin/pegpu-display-mode-helper reconcile-spice
   exit 0
 fi

@@ -103,6 +103,7 @@ final class NativeAppModel: ObservableObject {
     var metricsService: MetricsService
     let vfioService: VfioService
     var displayControlMenu: DisplayControlMenuModel
+    @Published private(set) var displaySession: SpiceSessionController
     let updates: AppUpdateService
     private var pollingStarted = false
     private var backgroundServicesStarted = false
@@ -139,6 +140,7 @@ final class NativeAppModel: ObservableObject {
         let progress = ProgressCenter()
         self.progress = progress
         let services = Self.makeServices(paths: paths, context: context, progress: progress)
+        let displaySession = Self.makeDisplaySession(paths: paths, context: context)
         self.configStore = services.configStore
         let loadedConfig = services.configStore.load()
         self.runtimeLaunchMode = loadedConfig.launchMode
@@ -153,6 +155,7 @@ final class NativeAppModel: ObservableObject {
         self.metricsService = services.metricsService
         self.vfioService = VfioService()
         self.updates = AppUpdateService()
+        self.displaySession = displaySession
         self.sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
         self.shortcuts = Self.loadWebShortcuts(paths: paths)
         progress.observe { [weak self] (event: ProgressEvent) in
@@ -200,12 +203,50 @@ final class NativeAppModel: ObservableObject {
         )
     }
 
+    private static func makeDisplaySession(paths: AppPaths, context: MachineProfileContext) -> SpiceSessionController {
+        let files = MachineFiles(machineDir: paths.machine, liveDir: context.hostRuntimeRoot)
+        return SpiceSessionController(socketURL: files.spiceSocket, qmpSocketURL: files.qmp, paths: paths)
+    }
+
     var webHelperBaseURL: URL {
         goHelperSupervisor.baseURL
     }
 
     var machineFiles: MachineFiles {
         MachineFiles(machineDir: paths.machine, liveDir: machineContext.hostRuntimeRoot)
+    }
+
+    func startDisplayInputSession() {
+        guard machineService.currentPid() != nil else {
+            displaySession.disconnect()
+            return
+        }
+        displaySession.start()
+    }
+
+    func reconnectDisplayInputSession() {
+        guard machineService.currentPid() != nil else {
+            displaySession.disconnect()
+            return
+        }
+        displaySession.reconnect()
+    }
+
+    func setExternalDisplayInputCapture(_ enabled: Bool) {
+        if enabled {
+            guard machineService.currentPid() != nil else {
+                displaySession.disconnect()
+                displayControlMenu.clearRuntimeState()
+                return
+            }
+            displaySession.start()
+            displaySession.setDynamicResolutionEnabled(true)
+        }
+        displaySession.setExternalInputCapture(enabled)
+    }
+
+    func disconnectDisplayInputSession() {
+        displaySession.disconnect()
     }
 
     var machineProfileLocked: Bool {
@@ -374,7 +415,8 @@ final class NativeAppModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([profile.url])
     }
 
-    func removeMachineProfileFromList(_ profile: MachineProfile) {
+    @discardableResult
+    func removeMachineProfile(_ profile: MachineProfile, deleteFiles: Bool = false) -> Bool {
         do {
             if machineProfileLocked, profile.id == pendingMachineID {
                 throw RuntimeError.message("VM is running. Stop VM first.")
@@ -383,6 +425,11 @@ final class NativeAppModel: ObservableObject {
             guard registry.machines.count > 1 else {
                 throw RuntimeError.message("At least one VM must stay registered.")
             }
+            guard registry.machines.contains(where: { $0.id == profile.id }) else {
+                throw RuntimeError.message("Machine profile is not registered.")
+            }
+            let profileRoot = profile.url.standardizedFileURL
+            let runtimeRoot = deleteFiles ? runtimeRootForRemoval(profile) : nil
             registry.machines.removeAll { $0.id == profile.id }
             if registry.selectedID == profile.id {
                 registry.selectedID = registry.machines[0].id
@@ -396,9 +443,41 @@ final class NativeAppModel: ObservableObject {
                     rebindServices(to: next)
                 }
             }
-            appendOutput("[info] VM removed from list: \(profile.name)")
+            if deleteFiles {
+                try deleteMachineProfileFiles(profileRoot: profileRoot, runtimeRoot: runtimeRoot)
+                appendOutput("[success] VM deleted: \(profile.name)")
+            } else {
+                appendOutput("[info] VM removed from list: \(profile.name)")
+            }
+            machineProfileMessage = nil
+            return true
         } catch {
-            machineProfileMessage = "Could not remove VM: \(firstLine(String(describing: error)))"
+            machineProfileMessage = "Could not \(deleteFiles ? "delete" : "remove") VM: \(firstLine(String(describing: error)))"
+            return false
+        }
+    }
+
+    func removeMachineProfileFromList(_ profile: MachineProfile) {
+        removeMachineProfile(profile, deleteFiles: false)
+    }
+
+    private func runtimeRootForRemoval(_ profile: MachineProfile) -> URL? {
+        let identityURL = MachineProfileMaintenance.identityURL(profileRoot: profile.url)
+        if let identity = try? JSON.read(MachineProfileIdentity.self, from: identityURL) {
+            return MachineRuntimePaths.hostRuntimeRoot(for: identity.profileID)
+        }
+        return MachineRuntimePaths.hostRuntimeRoot(for: profile.id)
+    }
+
+    private func deleteMachineProfileFiles(profileRoot: URL, runtimeRoot: URL?) throws {
+        let fm = FileManager.default
+        let roots = [profileRoot.standardizedFileURL, runtimeRoot?.standardizedFileURL].compactMap { $0 }
+        var deleted = Set<String>()
+        for root in roots where !deleted.contains(root.path) {
+            deleted.insert(root.path)
+            if fm.fileExists(atPath: root.path) {
+                try fm.removeItem(at: root)
+            }
         }
     }
 
@@ -442,6 +521,7 @@ final class NativeAppModel: ObservableObject {
 
     private func rebindServices(to profile: MachineProfile) {
         NotificationCenter.default.post(name: .pegpuMachineProfileWillSwitch, object: self)
+        displaySession.disconnect()
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()
@@ -461,6 +541,7 @@ final class NativeAppModel: ObservableObject {
         hostSetupService = services.hostSetupService
         metricsService = services.metricsService
         displayControlMenu = services.displayControlMenu
+        displaySession = Self.makeDisplaySession(paths: newPaths, context: context)
         let loaded = services.configStore.load()
         runtimeLaunchMode = loaded.launchMode
         guiRetina = loaded.guiRetina
@@ -755,6 +836,7 @@ final class NativeAppModel: ObservableObject {
                 await MainActor.run {
                     self.displayControlMenu.refresh()
                     if saved.launchMode == .gui {
+                        self.displaySession.start()
                         NotificationCenter.default.post(name: .pegpuReconnectDisplay, object: self)
                     }
                 }
@@ -781,6 +863,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         terminalConnected = false
         displayControlMenu.clearRuntimeState()
+        disconnectDisplayInputSession()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("stop") {
@@ -793,6 +876,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         terminalConnected = false
         displayControlMenu.clearRuntimeState()
+        disconnectDisplayInputSession()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         appendOutput("[warning] Battery below 15%; PEGPU is shutting down the VM to prevent battery drain and PCIe sleep risk")
 
@@ -830,6 +914,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         terminalConnected = false
         displayControlMenu.clearRuntimeState()
+        disconnectDisplayInputSession()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("reset") {
@@ -844,6 +929,7 @@ final class NativeAppModel: ObservableObject {
                 await MainActor.run {
                     self.displayControlMenu.refresh()
                     if self.runtimeLaunchMode == .gui {
+                        self.displaySession.start()
                         NotificationCenter.default.post(name: .pegpuReconnectDisplay, object: self)
                     }
                 }
@@ -1114,6 +1200,7 @@ final class NativeAppModel: ObservableObject {
         if machineService.currentPid() != nil {
             await MainActor.run {
                 displayControlMenu.clearRuntimeState()
+                disconnectDisplayInputSession()
                 NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
             }
             try await machineService.stopMachine(timeout: 90)
@@ -1125,6 +1212,7 @@ final class NativeAppModel: ObservableObject {
     }
 
     func shutdownBackgroundServices() {
+        disconnectDisplayInputSession()
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()

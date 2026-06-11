@@ -4,13 +4,12 @@ import PEGPUCore
 
 struct GUIDisplayTabView: View {
     @ObservedObject var model: NativeAppModel
-    @StateObject private var session: SpiceSessionController
+    @ObservedObject private var session: SpiceSessionController
     @ObservedObject private var displayControl: DisplayControlMenuModel
 
     init(model: NativeAppModel) {
         self.model = model
-        let files = model.machineFiles
-        self._session = StateObject(wrappedValue: SpiceSessionController(socketURL: files.spiceSocket, qmpSocketURL: files.qmp, paths: model.paths))
+        self.session = model.displaySession
         self.displayControl = model.displayControlMenu
     }
 
@@ -19,26 +18,8 @@ struct GUIDisplayTabView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             session.start()
+            session.setDynamicResolutionEnabled(true)
             displayControl.refresh()
-            syncExternalCapture(displayControl.activeSessionID)
-        }
-        .onDisappear {
-            session.disconnect()
-        }
-        .onReceive(displayControl.$activeSessionID) { activeSessionID in
-            syncExternalCapture(activeSessionID)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .pegpuRuntimeWillStop)) { _ in
-            session.disconnect()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .pegpuMachineProfileWillSwitch)) { _ in
-            session.disconnect()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .pegpuReconnectDisplay)) { _ in
-            session.reconnect()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .pegpuReleaseExternalInputCapture)) { _ in
-            session.setExternalInputCapture(false)
         }
     }
 
@@ -52,22 +33,6 @@ struct GUIDisplayTabView: View {
             } else {
                 Color.black
                     .ignoresSafeArea()
-            }
-            ExternalInputCaptureView(session: session)
-                .frame(width: 0, height: 0)
-                .allowsHitTesting(false)
-        }
-    }
-
-    private func syncExternalCapture(_ activeSessionID: String?) {
-        session.setDynamicResolutionEnabled(true)
-        if activeSessionID == nil {
-            session.setExternalInputCapture(false)
-        } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                if displayControl.activeSessionID != nil {
-                    session.setExternalInputCapture(true)
-                }
             }
         }
     }

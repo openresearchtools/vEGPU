@@ -1,29 +1,6 @@
 import AppKit
-import SwiftUI
 
-struct ExternalInputCaptureView: NSViewRepresentable {
-    @ObservedObject var session: SpiceSessionController
-
-    func makeNSView(context: Context) -> ExternalInputCaptureNSView {
-        let view = ExternalInputCaptureNSView(frame: .zero)
-        view.session = session
-        view.captureEnabled = session.externalInputCaptureEnabled
-        return view
-    }
-
-    func updateNSView(_ nsView: ExternalInputCaptureNSView, context: Context) {
-        nsView.session = session
-        nsView.captureEnabled = session.externalInputCaptureEnabled
-    }
-
-    static func dismantleNSView(_ nsView: ExternalInputCaptureNSView, coordinator: ()) {
-        nsView.captureEnabled = false
-    }
-}
-
-final class ExternalInputCaptureNSView: NSView {
-    weak var session: SpiceSessionController?
-
+final class ExternalInputCaptureController {
     var captureEnabled = false {
         didSet {
             guard oldValue != captureEnabled else { return }
@@ -31,24 +8,26 @@ final class ExternalInputCaptureNSView: NSView {
         }
     }
 
+    private let eventHandler: (NSEvent) -> Void
     private var localMonitor: Any?
     private var eventTap: CFMachPort?
     private var eventTapSource: CFRunLoopSource?
     private var cursorHidden = false
-    private var previousWindowTitle: String?
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        updateWindowTitle()
+    init(eventHandler: @escaping (NSEvent) -> Void) {
+        self.eventHandler = eventHandler
+    }
+
+    deinit {
+        disableCapture()
     }
 
     private func enableCapture() {
-        updateWindowTitle()
         if !installEventTap() {
-            NSLog("PEGPU external input capture could not install global event tap; falling back to key-window local monitor")
+            NSLog("PEGPU external input capture could not install global event tap; falling back to app-local monitor")
             installLocalMonitor()
         }
-        centerHostCursor()
+        centerHostCursorOnActiveScreen()
         CGAssociateMouseAndMouseCursorPosition(boolean_t(0))
         if !cursorHidden {
             NSCursor.hide()
@@ -64,33 +43,13 @@ final class ExternalInputCaptureNSView: NSView {
             NSCursor.unhide()
             cursorHidden = false
         }
-        restoreWindowTitle()
-    }
-
-    private func updateWindowTitle() {
-        guard captureEnabled, let window else { return }
-        if previousWindowTitle == nil {
-            previousWindowTitle = window.title
-        }
-        window.title = "PEGPU - External Display"
-    }
-
-    private func restoreWindowTitle() {
-        guard let window else {
-            previousWindowTitle = nil
-            return
-        }
-        if let previousWindowTitle {
-            window.title = previousWindowTitle
-        }
-        previousWindowTitle = nil
     }
 
     private func installLocalMonitor() {
         guard localMonitor == nil else { return }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: Self.eventMask) { [weak self] event in
             guard let self, self.captureEnabled else { return event }
-            self.session?.handleExternalCaptureEvent(event)
+            self.eventHandler(event)
             return nil
         }
     }
@@ -110,26 +69,7 @@ final class ExternalInputCaptureNSView: NSView {
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: Self.cgEventMask,
-            callback: { _, type, event, userInfo in
-                guard let userInfo else {
-                    return Unmanaged.passUnretained(event)
-                }
-                let view = Unmanaged<ExternalInputCaptureNSView>.fromOpaque(userInfo).takeUnretainedValue()
-                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    if let eventTap = view.eventTap {
-                        CGEvent.tapEnable(tap: eventTap, enable: true)
-                    }
-                    return Unmanaged.passUnretained(event)
-                }
-                guard view.captureEnabled, let nsEvent = NSEvent(cgEvent: event) else {
-                    return Unmanaged.passUnretained(event)
-                }
-                DispatchQueue.main.async { [weak view] in
-                    guard let view, view.captureEnabled else { return }
-                    view.session?.handleExternalCaptureEvent(nsEvent)
-                }
-                return nil
-            },
+            callback: externalInputCaptureEventTapHandler,
             userInfo: userInfo
         ) else {
             return false
@@ -145,6 +85,7 @@ final class ExternalInputCaptureNSView: NSView {
     private func removeEventTap() {
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
         }
         if let eventTapSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), eventTapSource, .commonModes)
@@ -153,11 +94,23 @@ final class ExternalInputCaptureNSView: NSView {
         eventTapSource = nil
     }
 
-    private func centerHostCursor() {
-        let screen = window?.screen ?? NSScreen.main
+    fileprivate func reenableEventTap() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+        } else {
+            _ = installEventTap()
+        }
+    }
+
+    fileprivate func handleCapturedEvent(_ event: NSEvent) {
+        eventHandler(event)
+    }
+
+    private func centerHostCursorOnActiveScreen() {
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouseLocation) } ?? NSScreen.main
         guard let frame = screen?.frame else { return }
-        let center = CGPoint(x: frame.midX, y: frame.midY)
-        CGWarpMouseCursorPosition(center)
+        CGWarpMouseCursorPosition(CGPoint(x: frame.midX, y: frame.midY))
     }
 
     private static let eventTypes: [CGEventType] = [
@@ -197,4 +150,28 @@ final class ExternalInputCaptureNSView: NSView {
         .keyUp,
         .flagsChanged
     ]
+}
+
+private let externalInputCaptureEventTapHandler: CGEventTapCallBack = { _, type, event, userInfo in
+    guard let userInfo else {
+        return Unmanaged.passUnretained(event)
+    }
+    let controller = Unmanaged<ExternalInputCaptureController>
+        .fromOpaque(userInfo)
+        .takeUnretainedValue()
+
+    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        controller.reenableEventTap()
+        return Unmanaged.passUnretained(event)
+    }
+
+    guard controller.captureEnabled, let nsEvent = NSEvent(cgEvent: event) else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    DispatchQueue.main.async { [weak controller] in
+        guard let controller, controller.captureEnabled else { return }
+        controller.handleCapturedEvent(nsEvent)
+    }
+    return nil
 }

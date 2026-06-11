@@ -190,11 +190,6 @@ public final class MachineProfileRegistryStore: @unchecked Sendable {
            !next.machines.contains(where: { $0.path == preferredPath }) {
             next.machines.append(MachineProfile(name: profileName(for: preferredPath), path: preferredPath))
         }
-        let defaultPath = AppPaths.defaultProfileRoot.standardizedFileURL.path
-        if !next.machines.contains(where: { $0.path == defaultPath }),
-           fileManager.fileExists(atPath: defaultPath) {
-            next.machines.insert(MachineProfile(name: "Default", path: defaultPath), at: 0)
-        }
         if !next.machines.contains(where: { $0.id == next.selectedID }) {
             if let preferredPath,
                let preferred = next.machines.first(where: { $0.path == preferredPath }) {

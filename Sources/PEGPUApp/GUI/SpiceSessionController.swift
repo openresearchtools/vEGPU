@@ -67,6 +67,9 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     private var pasteboardChangeCount = NSPasteboard.general.changeCount
     private var desiredDisplayPixelSize = CGSize.zero
     private var scrollAccumulator: CGFloat = 0
+    private lazy var externalInputCapture = ExternalInputCaptureController { [weak self] event in
+        self?.handleExternalCaptureEvent(event)
+    }
 
     init(socketURL: URL, qmpSocketURL: URL, paths: AppPaths) {
         self.socketURL = socketURL
@@ -144,11 +147,24 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     }
 
     func attach(metalView: MTKView, renderer: CSMetalRenderer) {
+        if let currentRenderer = self.renderer, currentRenderer !== renderer, let display {
+            display.removeRenderer(currentRenderer)
+        }
         self.metalView = metalView
         self.renderer = renderer
         if let display {
             display.addRenderer(renderer)
             requestMetalDraw()
+        }
+    }
+
+    func detach(metalView: MTKView, renderer: CSMetalRenderer) {
+        if self.metalView === metalView {
+            self.metalView = nil
+        }
+        if self.renderer === renderer {
+            display?.removeRenderer(renderer)
+            self.renderer = nil
         }
     }
 
@@ -339,6 +355,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
 
     private func setExternalInputCaptureState(_ enabled: Bool) {
         guard externalInputCaptureEnabled != enabled else { return }
+        externalInputCapture.captureEnabled = enabled
         externalInputCaptureEnabled = enabled
         NotificationCenter.default.post(name: .pegpuExternalInputCaptureDidChange, object: enabled)
     }

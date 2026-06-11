@@ -5,6 +5,7 @@ struct ManageMachinesView: View {
     @ObservedObject var model: NativeAppModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedID: String?
+    @State private var removalProfile: MachineProfile?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -37,8 +38,8 @@ struct ManageMachinesView: View {
                         Button("Reveal in Finder") {
                             model.revealMachineProfile(profile)
                         }
-                        Button("Remove from List") {
-                            model.removeMachineProfileFromList(profile)
+                        Button("Remove...") {
+                            removalProfile = profile
                         }
                     }
                 }
@@ -94,21 +95,97 @@ struct ManageMachinesView: View {
                 .help("Show the selected VM profile folder in Finder.")
                 Button("Remove") {
                     if let profile = selectedProfile {
-                        model.removeMachineProfileFromList(profile)
-                        selectedID = model.pendingMachineID
+                        removalProfile = profile
                     }
                 }
                 .disabled(selectedProfile == nil)
-                .help("Remove the VM from the list without deleting its files.")
+                .help("Choose whether to remove this VM from the list or delete its files and settings.")
             }
         }
         .padding(20)
         .frame(minWidth: 760, minHeight: 420)
+        .sheet(item: $removalProfile) { profile in
+            MachineProfileRemovalView(
+                profile: profile,
+                cancel: {
+                    removalProfile = nil
+                },
+                confirm: { deleteFiles in
+                    if model.removeMachineProfile(profile, deleteFiles: deleteFiles) {
+                        selectedID = model.pendingMachineID
+                        removalProfile = nil
+                    }
+                }
+            )
+        }
     }
 
     private var selectedProfile: MachineProfile? {
         let id = selectedID ?? model.pendingMachineID
         return model.machineProfiles.first { $0.id == id }
+    }
+}
+
+private struct MachineProfileRemovalView: View {
+    let profile: MachineProfile
+    let cancel: () -> Void
+    let confirm: (Bool) -> Void
+    @State private var deleteFiles = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Remove \(profile.name)?")
+                .font(.title3.weight(.semibold))
+
+            Text("Removing from the list keeps the VM folder on disk so it can be added again later.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("VM folder")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(profile.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color(nsColor: .textColor))
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.cardBackground(colorScheme))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border(colorScheme, opacity: 0.7), lineWidth: 1))
+            }
+
+            Toggle("Also delete this VM and its settings from disk", isOn: $deleteFiles)
+                .toggleStyle(.checkbox)
+
+            if deleteFiles {
+                Text("This permanently deletes the VM folder, disk image, saved settings, secrets, and host runtime state. This does not move files to Trash.")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    cancel()
+                }
+                Button("Remove from List") {
+                    confirm(false)
+                }
+                Button("Delete VM and Settings") {
+                    confirm(true)
+                }
+                .buttonStyle(DangerButtonStyle())
+                .disabled(!deleteFiles)
+            }
+        }
+        .padding(20)
+        .frame(width: 520)
     }
 }
 
