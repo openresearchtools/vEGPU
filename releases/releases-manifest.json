@@ -1,7 +1,35 @@
 {
   "schemaVersion": 1,
   "channel": "stable",
-  "updatedAt": "",
-  "latest": null,
-  "items": []
+  "updatedAt": "2026-06-11T12:55:03Z",
+  "latest": {
+    "version": "0.1.0",
+    "build": "341",
+    "tag": "v0.1.0",
+    "name": "v0.1.0",
+    "prerelease": false,
+    "publishedAt": "2026-06-11T12:54:22Z",
+    "releasePageURL": "https://github.com/openresearchtools/PEGPU/releases/tag/v0.1.0",
+    "packageURL": "https://github.com/openresearchtools/PEGPU/releases/download/v0.1.0/PEGPU-v0.1.0.pkg",
+    "packageName": "PEGPU-v0.1.0.pkg",
+    "packageSize": 605113790,
+    "packageSHA256": "fbe71c3496366b2569b37d7adfa83190eccd864941b5cb96b4ea909eb7f11666",
+    "minimumMacOS": "14.0"
+  },
+  "items": [
+    {
+      "version": "0.1.0",
+      "build": "341",
+      "tag": "v0.1.0",
+      "name": "v0.1.0",
+      "prerelease": false,
+      "publishedAt": "2026-06-11T12:54:22Z",
+      "releasePageURL": "https://github.com/openresearchtools/PEGPU/releases/tag/v0.1.0",
+      "packageURL": "https://github.com/openresearchtools/PEGPU/releases/download/v0.1.0/PEGPU-v0.1.0.pkg",
+      "packageName": "PEGPU-v0.1.0.pkg",
+      "packageSize": 605113790,
+      "packageSHA256": "fbe71c3496366b2569b37d7adfa83190eccd864941b5cb96b4ea909eb7f11666",
+      "minimumMacOS": "14.0"
+    }
+  ]
 }
