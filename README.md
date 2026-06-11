@@ -1,5 +1,25 @@
 # PEGPU
 
+![PEGPU external display session controls](website/assets/slides/external-display.webp)
+
+**External displays.** Secondary-click in the GUI tab to turn on external
+display sessions on eGPUs. There is no fixed limit: each GPU has its own
+external display session, and every monitor connected to that GPU shares the
+same session so Linux/NVIDIA settings can extend or mirror them. Move into a
+session with the app-shown shortcuts for that GPU, from `⌥⌘2` through `⌥⌘9`;
+`⌥⌘1` always releases control back to the Mac. The main Mac-driven GUI does
+not lock the pointer because it uses absolute mouse mirroring directly on the
+screen.
+
+<p align="center">
+  <a href="INSTALLATION.md">
+    <img alt="Open PEGPU Installation Manual" src="https://img.shields.io/badge/Installation-Manual-ff5a66?style=for-the-badge&labelColor=111111">
+  </a>
+  <a href="GALLERY.md">
+    <img alt="Open PEGPU Gallery" src="https://img.shields.io/badge/Open%20Gallery-PEGPU-65ff7a?style=for-the-badge&labelColor=111111">
+  </a>
+</p>
+
 > [!IMPORTANT]
 > **PEGPU Installation and Documentation**
 >
