@@ -1,10 +1,22 @@
 # PEGPU
 
-> **User documentation and installer:** <https://pegpu.com>
+> [!IMPORTANT]
+> **PEGPU Installation and Documentation**
 >
-> Release downloads, installation instructions, setup warnings, screenshots, and
-> usage notes are maintained on the PEGPU website. This repository is primarily
-> for source code, architecture, licensing, and developer documentation.
+> To install and use PEGPU, refer directly to the official website:
+>
+> **https://pegpu.com**
+>
+> The PEGPU website is the primary resource for:
+>
+> - application descriptions
+> - latest release downloads
+> - installation manuals
+> - setup warnings and compatibility notes
+> - illustrative screenshots
+> - practical usage instructions
+
+## About PEGPU
 
 PEGPU is an experimental macOS application for running NVIDIA Thunderbolt eGPUs
 through a Linux VM on Apple Silicon Macs. It is built as two related
