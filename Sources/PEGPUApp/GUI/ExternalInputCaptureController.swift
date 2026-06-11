@@ -169,9 +169,6 @@ private let externalInputCaptureEventTapHandler: CGEventTapCallBack = { _, type,
         return Unmanaged.passUnretained(event)
     }
 
-    DispatchQueue.main.async { [weak controller] in
-        guard let controller, controller.captureEnabled else { return }
-        controller.handleCapturedEvent(nsEvent)
-    }
+    controller.handleCapturedEvent(nsEvent)
     return nil
 }
