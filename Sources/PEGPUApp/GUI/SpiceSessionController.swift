@@ -67,9 +67,6 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     private var pasteboardChangeCount = NSPasteboard.general.changeCount
     private var desiredDisplayPixelSize = CGSize.zero
     private var scrollAccumulator: CGFloat = 0
-    private lazy var externalInputCapture = ExternalInputCaptureController { [weak self] event in
-        self?.handleExternalCaptureEvent(event)
-    }
 
     init(socketURL: URL, qmpSocketURL: URL, paths: AppPaths) {
         self.socketURL = socketURL
@@ -199,10 +196,6 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     }
 
     func handleSpiceDisplayEvent(_ event: NSEvent, geometry: DisplayRenderGeometry, in view: NSView) {
-        if event.type == .keyDown, let shortcut = externalSessionShortcut(event) {
-            NotificationCenter.default.post(name: .pegpuExternalSessionShortcut, object: shortcut)
-            return
-        }
         guard let input else { return }
         guard !externalInputCaptureEnabled else { return }
         let point = view.convert(event.locationInWindow, from: nil)
@@ -247,10 +240,6 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
     }
 
     func handleExternalCaptureEvent(_ event: NSEvent) {
-        if event.type == .keyDown, let shortcut = externalSessionShortcut(event) {
-            NotificationCenter.default.post(name: .pegpuExternalSessionShortcut, object: shortcut)
-            return
-        }
         guard externalInputCaptureEnabled, let input else { return }
 
         switch event.type {
@@ -315,17 +304,6 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
         }
     }
 
-    private func externalSessionShortcut(_ event: NSEvent) -> Int? {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard flags == [.command, .option],
-              let text = event.charactersIgnoringModifiers,
-              let digit = Int(text),
-              (1...9).contains(digit) else {
-            return nil
-        }
-        return digit
-    }
-
     func setExternalInputCapture(_ enabled: Bool) {
         guard externalInputCaptureEnabled != enabled else {
             if enabled {
@@ -355,7 +333,6 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
 
     private func setExternalInputCaptureState(_ enabled: Bool) {
         guard externalInputCaptureEnabled != enabled else { return }
-        externalInputCapture.captureEnabled = enabled
         externalInputCaptureEnabled = enabled
         NotificationCenter.default.post(name: .pegpuExternalInputCaptureDidChange, object: enabled)
     }

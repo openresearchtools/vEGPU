@@ -104,6 +104,7 @@ final class NativeAppModel: ObservableObject {
     let vfioService: VfioService
     var displayControlMenu: DisplayControlMenuModel
     @Published private(set) var displaySession: SpiceSessionController
+    let externalDisplayCapture: ExternalDisplayCaptureCoordinator
     let updates: AppUpdateService
     private var pollingStarted = false
     private var backgroundServicesStarted = false
@@ -156,6 +157,11 @@ final class NativeAppModel: ObservableObject {
         self.vfioService = VfioService()
         self.updates = AppUpdateService()
         self.displaySession = displaySession
+        self.externalDisplayCapture = ExternalDisplayCaptureCoordinator(
+            displaySession: displaySession,
+            displayControl: services.displayControlMenu,
+            machine: services.machineService
+        )
         self.sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
         self.shortcuts = Self.loadWebShortcuts(paths: paths)
         progress.observe { [weak self] (event: ProgressEvent) in
@@ -488,7 +494,7 @@ final class NativeAppModel: ObservableObject {
 
     private func rebindServices(to profile: MachineProfile) {
         NotificationCenter.default.post(name: .pegpuMachineProfileWillSwitch, object: self)
-        displaySession.disconnect()
+        externalDisplayCapture.forceRelease(disconnect: true, restorePreviousApp: false)
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()
@@ -508,7 +514,13 @@ final class NativeAppModel: ObservableObject {
         hostSetupService = services.hostSetupService
         metricsService = services.metricsService
         displayControlMenu = services.displayControlMenu
-        displaySession = Self.makeDisplaySession(paths: newPaths, context: context)
+        let newDisplaySession = Self.makeDisplaySession(paths: newPaths, context: context)
+        displaySession = newDisplaySession
+        externalDisplayCapture.rebind(
+            displaySession: newDisplaySession,
+            displayControl: services.displayControlMenu,
+            machine: services.machineService
+        )
         let loaded = services.configStore.load()
         runtimeLaunchMode = loaded.launchMode
         guiRetina = loaded.guiRetina
@@ -829,11 +841,10 @@ final class NativeAppModel: ObservableObject {
     func stopRuntime() {
         runtimePane = .output
         terminalConnected = false
-        displayControlMenu.clearRuntimeState()
-        displaySession.disconnect()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("stop") {
+                await self.externalDisplayCapture.releaseForRuntimeStop(disconnect: true)
                 try await self.machineService.stopMachine()
             }
         }
@@ -842,10 +853,9 @@ final class NativeAppModel: ObservableObject {
     func shutdownRuntimeForLowBattery() async throws -> String {
         runtimePane = .output
         terminalConnected = false
-        displayControlMenu.clearRuntimeState()
-        displaySession.disconnect()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         appendOutput("[warning] Battery below 15%; PEGPU is shutting down the VM to prevent battery drain and PCIe sleep risk")
+        await externalDisplayCapture.releaseForRuntimeStop(disconnect: true)
 
         guard machineService.currentPid() != nil else {
             try? await machineService.forceHostSleepGuardOff()
@@ -880,11 +890,10 @@ final class NativeAppModel: ObservableObject {
     func resetRuntime(config: MachineConfig? = nil) {
         runtimePane = .output
         terminalConnected = false
-        displayControlMenu.clearRuntimeState()
-        displaySession.disconnect()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("reset") {
+                await self.externalDisplayCapture.releaseForRuntimeStop(disconnect: true)
                 if let config {
                     let saved = try await self.machineService.saveConfig(config)
                     await MainActor.run {
@@ -1165,11 +1174,8 @@ final class NativeAppModel: ObservableObject {
 
     func quitAndStopRuntime() async throws {
         if machineService.currentPid() != nil {
-            await MainActor.run {
-                displayControlMenu.clearRuntimeState()
-                displaySession.disconnect()
-                NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
-            }
+            NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
+            await externalDisplayCapture.releaseForRuntimeStop(disconnect: true)
             try await machineService.stopMachine(timeout: 90)
         }
         try? await machineService.forceHostSleepGuardOff()
@@ -1179,7 +1185,7 @@ final class NativeAppModel: ObservableObject {
     }
 
     func shutdownBackgroundServices() {
-        displaySession.disconnect()
+        externalDisplayCapture.forceRelease(disconnect: true, restorePreviousApp: false)
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()

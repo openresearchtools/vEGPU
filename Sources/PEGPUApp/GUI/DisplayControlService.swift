@@ -463,6 +463,63 @@ final class DisplayControlMenuModel: ObservableObject {
         }
     }
 
+    func activateSessionForCapture(_ session: DisplaySession) async -> Bool {
+        guard !busy else { return false }
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return false
+        }
+        cancelRefresh()
+        busy = true
+        message = nil
+        defer { busy = false }
+        return await activateSessionForCaptureLocked(session)
+    }
+
+    func activateOrderedSessionForCapture(number: Int) async -> Bool {
+        guard !busy else { return false }
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return false
+        }
+        cancelRefresh()
+        busy = true
+        message = nil
+        defer { busy = false }
+
+        if sessions.isEmpty {
+            await refreshSessionsOnly()
+        }
+        guard number > 0, sessions.indices.contains(number - 1) else {
+            message = "External display shortcut has no matching GPU."
+            return false
+        }
+        return await activateSessionForCaptureLocked(sessions[number - 1])
+    }
+
+    func releaseSessionForCapture() async {
+        var waits = 0
+        while busy, machine.currentPid() != nil, waits < 50 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            waits += 1
+        }
+        guard machine.currentPid() != nil else {
+            clearRuntimeState()
+            return
+        }
+        cancelRefresh()
+        busy = true
+        message = nil
+        defer { busy = false }
+        do {
+            try await service.releaseSession()
+            message = nil
+        } catch {
+            message = String(describing: error)
+        }
+        await refreshSessionsOnly()
+    }
+
     func stopSession(_ session: DisplaySession) {
         guard machine.currentPid() != nil else {
             clearRuntimeState()
@@ -587,6 +644,29 @@ final class DisplayControlMenuModel: ObservableObject {
         refreshGeneration += 1
         refreshTask?.cancel()
         refreshTask = nil
+    }
+
+    private func activateSessionForCaptureLocked(_ requestedSession: DisplaySession) async -> Bool {
+        do {
+            var session = sessions.first { $0.id == requestedSession.id } ?? requestedSession
+            if !session.running {
+                try await service.startSession(session)
+                await refreshSessionsOnly()
+                session = sessions.first { $0.id == requestedSession.id } ?? session
+            }
+            try await service.enterSession(session)
+            await refreshSessionsOnly()
+            guard activeSessionID != nil else {
+                message = "External display session did not become active."
+                return false
+            }
+            message = nil
+            return true
+        } catch {
+            message = String(describing: error)
+            await refreshSessionsOnly()
+            return false
+        }
     }
 
     private func refreshSessionsOnly() async {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DisplayControlMenuItems: View {
     @ObservedObject var model: DisplayControlMenuModel
+    var captureCoordinator: ExternalDisplayCaptureCoordinator?
     var beforeAction: (() -> Void)?
     var deferAfterBeforeAction = false
 
@@ -46,13 +47,18 @@ struct DisplayControlMenuItems: View {
                 if session.running {
                     Button("Enter \(session.title) (⌥⌘\(offset + 2))") {
                         perform {
-                            model.enterSession(session)
+                            if let captureCoordinator {
+                                captureCoordinator.capture(session: session)
+                            } else {
+                                model.enterSession(session)
+                            }
                         }
                     }
                     .disabled(model.busy)
 
                     Button("Stop \(session.title)") {
                         perform {
+                            captureCoordinator?.forceReleaseIfCapturing(sessionID: session.id)
                             model.stopSession(session)
                         }
                     }
@@ -60,6 +66,7 @@ struct DisplayControlMenuItems: View {
 
                     Button("Reload \(session.title)") {
                         perform {
+                            captureCoordinator?.forceReleaseIfCapturing(sessionID: session.id)
                             model.reloadSession(session)
                         }
                     }
@@ -67,7 +74,11 @@ struct DisplayControlMenuItems: View {
                 } else {
                     Button("Start \(session.title) (⌥⌘\(offset + 2))") {
                         perform {
-                            model.startSession(session)
+                            if let captureCoordinator {
+                                captureCoordinator.capture(session: session)
+                            } else {
+                                model.startSession(session)
+                            }
                         }
                     }
                     .disabled(model.busy)

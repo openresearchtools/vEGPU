@@ -5,6 +5,7 @@ import PEGPUCore
 struct SidebarView: View {
     let monitor: SidebarMonitorState
     @ObservedObject var displayControlMenu: DisplayControlMenuModel
+    @ObservedObject var externalDisplayCapture: ExternalDisplayCaptureCoordinator
     let sections: [NativeAppModel.Section]
     let shortcuts: [WebShortcut]
     let reloadRuntime: () -> Void
@@ -33,6 +34,7 @@ struct SidebarView: View {
                                 collapsed: collapsed,
                                 onReload: reloadAction(for: section, tab: tab),
                                 displayControlMenu: section == .gui ? displayControlMenu : nil,
+                                externalDisplayCapture: section == .gui ? externalDisplayCapture : nil,
                                 beforeDisplayMenuAction: section == .gui ? { selectedTab = .section(.gui) } : nil
                             ) {
                                 selectedTab = .section(section)
@@ -233,6 +235,7 @@ private struct SidebarRow: View {
     var onReload: (() -> Void)? = nil
     var onRemove: (() -> Void)? = nil
     var displayControlMenu: DisplayControlMenuModel? = nil
+    var externalDisplayCapture: ExternalDisplayCaptureCoordinator? = nil
     var beforeDisplayMenuAction: (() -> Void)? = nil
     let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
@@ -244,6 +247,7 @@ private struct SidebarRow: View {
                 .contextMenu {
                     DisplayControlMenuItems(
                         model: displayControlMenu,
+                        captureCoordinator: externalDisplayCapture,
                         beforeAction: beforeDisplayMenuAction,
                         deferAfterBeforeAction: beforeDisplayMenuAction != nil
                     )

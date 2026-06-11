@@ -6,6 +6,5 @@ extension Notification.Name {
     static let pegpuReconnectDisplay = Notification.Name("dev.pegpu.reconnectDisplay")
     static let pegpuMachineProfileWillSwitch = Notification.Name("dev.pegpu.machineProfileWillSwitch")
     static let pegpuMachineProfileDidSwitch = Notification.Name("dev.pegpu.machineProfileDidSwitch")
-    static let pegpuExternalSessionShortcut = Notification.Name("dev.pegpu.externalSessionShortcut")
     static let pegpuExternalInputCaptureDidChange = Notification.Name("dev.pegpu.externalInputCaptureDidChange")
 }

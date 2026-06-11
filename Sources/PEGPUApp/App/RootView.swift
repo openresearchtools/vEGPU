@@ -21,6 +21,7 @@ struct RootView: View {
                 SidebarView(
                     monitor: model.sidebarMonitor,
                     displayControlMenu: model.displayControlMenu,
+                    externalDisplayCapture: model.externalDisplayCapture,
                     sections: availableSections,
                     shortcuts: model.shortcuts,
                     reloadRuntime: {
