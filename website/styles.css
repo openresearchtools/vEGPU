@@ -10,6 +10,9 @@
   --cyan: #5ee7ff;
   --amber: #ffc857;
   --red: #ff4d5e;
+  --site-gutter: 1rem;
+  --site-max-width: 1280px;
+  --site-width: min(var(--site-max-width), calc(100% - (var(--site-gutter) * 2)));
 }
 
 * {
@@ -102,7 +105,7 @@ code {
   left: 50%;
   z-index: 10;
   display: flex;
-  width: min(1120px, calc(100% - 2rem));
+  width: var(--site-width);
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -211,7 +214,7 @@ code {
 
 .hero-content {
   position: relative;
-  width: min(1120px, calc(100% - 2rem));
+  width: var(--site-width);
   margin: 0 auto;
   padding: clamp(6rem, 8.5vh, 7.2rem) 0 clamp(1.35rem, 3vh, 2.2rem);
 }
@@ -360,7 +363,7 @@ h1::after {
 }
 
 .start-strip {
-  width: min(1120px, calc(100% - 2rem));
+  width: var(--site-width);
   margin: 0 auto;
   padding: clamp(0.8rem, 1.8vw, 1.2rem) 0 0;
 }
@@ -403,7 +406,7 @@ h1::after {
 }
 
 .section {
-  width: min(1120px, calc(100% - 2rem));
+  width: var(--site-width);
   margin: 0 auto;
   padding: clamp(4rem, 8vw, 7.5rem) 0;
 }
@@ -584,7 +587,7 @@ h1::after {
 
 .screenshot-band {
   width: 100%;
-  padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.5rem) clamp(2rem, 5vw, 4.5rem);
+  padding: clamp(1.25rem, 3vw, 2.5rem) 0 clamp(2rem, 5vw, 4.5rem);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background:
@@ -593,7 +596,7 @@ h1::after {
 }
 
 .screenshot-carousel {
-  width: min(1120px, 100%);
+  width: var(--site-width);
   margin: 0 auto;
 }
 
@@ -855,8 +858,8 @@ h1::after {
 
 .warning-section {
   width: 100%;
-  padding-left: max(1rem, calc((100% - 1120px) / 2));
-  padding-right: max(1rem, calc((100% - 1120px) / 2));
+  padding-left: max(var(--site-gutter), calc((100% - var(--site-max-width)) / 2));
+  padding-right: max(var(--site-gutter), calc((100% - var(--site-max-width)) / 2));
   border-top: 1px solid rgba(255, 77, 94, 0.26);
   border-bottom: 1px solid rgba(255, 77, 94, 0.26);
   background:
@@ -1211,7 +1214,7 @@ h1::after {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
-  width: min(1120px, calc(100% - 2rem));
+  width: var(--site-width);
   margin: 0 auto;
   padding: 1.3rem 0;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
