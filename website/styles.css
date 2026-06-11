@@ -338,10 +338,23 @@ h1::after {
 }
 
 .button.primary {
-  border-color: rgba(101, 255, 122, 0.62);
-  background: #65ff7a;
-  color: #031105;
-  box-shadow: 0 0 34px rgba(101, 255, 122, 0.18);
+  border-color: rgba(101, 255, 122, 0.48);
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.18), rgba(101, 255, 122, 0.06)),
+    rgba(6, 18, 8, 0.78);
+  color: #dcffe1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 18px rgba(101, 255, 122, 0.08);
+}
+
+.button.primary:hover,
+.button.primary:focus-visible {
+  border-color: rgba(101, 255, 122, 0.64);
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.24), rgba(101, 255, 122, 0.09)),
+    rgba(8, 24, 10, 0.84);
+  color: #f0fff2;
 }
 
 .button.quiet {
@@ -576,12 +589,9 @@ h1::after {
   align-items: stretch;
   gap: 0.5rem;
   margin-top: 1rem;
-  padding: 0.38rem;
-  border: 1px solid rgba(101, 255, 122, 0.32);
-  border-radius: 7px;
-  background:
-    linear-gradient(180deg, rgba(101, 255, 122, 0.11), rgba(101, 255, 122, 0.03)),
-    rgba(0, 0, 0, 0.58);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .release-link {
@@ -600,9 +610,14 @@ h1::after {
 
 .release-link.primary {
   flex: 1 1 auto;
-  border: 1px solid rgba(101, 255, 122, 0.58);
-  background: var(--green);
-  color: #031105;
+  border: 1px solid rgba(101, 255, 122, 0.5);
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.2), rgba(101, 255, 122, 0.075)),
+    rgba(6, 20, 8, 0.84);
+  color: #dcffe1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 18px rgba(101, 255, 122, 0.08);
 }
 
 .release-link.secondary {
@@ -660,6 +675,15 @@ h1::after {
 .release-link.secondary:focus-visible {
   border-color: rgba(101, 255, 122, 0.48);
   background: rgba(101, 255, 122, 0.09);
+}
+
+.release-link.primary:hover,
+.release-link.primary:focus-visible {
+  border-color: rgba(101, 255, 122, 0.68);
+  background:
+    linear-gradient(180deg, rgba(101, 255, 122, 0.27), rgba(101, 255, 122, 0.105)),
+    rgba(8, 26, 10, 0.88);
+  color: #f0fff2;
 }
 
 .release-link.is-disabled {
