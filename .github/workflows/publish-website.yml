@@ -1,0 +1,70 @@
+name: Publish Website
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "website/**"
+      - "releases/**"
+      - ".github/workflows/publish-website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Prepare static site
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out PEGPU
+        uses: actions/checkout@v6
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Prepare website artifact
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/pegpu-site"
+          mkdir -p "$RUNNER_TEMP/pegpu-site"
+          cp -a website/. "$RUNNER_TEMP/pegpu-site/"
+          mkdir -p "$RUNNER_TEMP/pegpu-site/releases"
+          cp releases/releases-manifest.json "$RUNNER_TEMP/pegpu-site/releases/releases-manifest.json"
+          touch "$RUNNER_TEMP/pegpu-site/.nojekyll"
+          test -s "$RUNNER_TEMP/pegpu-site/index.html"
+          test -s "$RUNNER_TEMP/pegpu-site/script.js"
+          test -s "$RUNNER_TEMP/pegpu-site/styles.css"
+          test -s "$RUNNER_TEMP/pegpu-site/CNAME"
+          test -s "$RUNNER_TEMP/pegpu-site/releases/releases-manifest.json"
+          python3 -m json.tool "$RUNNER_TEMP/pegpu-site/releases/releases-manifest.json" >/dev/null
+          if grep -R -n 'api.github.com' "$RUNNER_TEMP/pegpu-site"; then
+            echo "website must read static manifests, not GitHub API" >&2
+            exit 1
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/pegpu-site
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

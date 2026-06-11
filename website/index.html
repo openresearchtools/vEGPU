@@ -13,7 +13,7 @@
     <meta property="og:description" content="A very unofficial passthrough runtime for NVIDIA RTX 30/40/50-series GPUs in Thunderbolt eGPU enclosures on Apple Silicon Macs.">
     <meta property="og:image" content="assets/slides/gui.webp">
     <link rel="icon" href="assets/pegpu-logo.png">
-    <link rel="stylesheet" href="styles.css?v=20260610">
+    <link rel="stylesheet" href="styles.css?v=20260611-release-responsive">
   </head>
   <body>
     <canvas id="signal-canvas" aria-hidden="true"></canvas>
@@ -50,6 +50,14 @@
           <p class="hero-footnote">
             * Compatibility/purpose labels only. PEGPU is not endorsed by, sponsored by, affiliated with, or encouraged by Apple, macOS, NVIDIA, Linux, Thunderbolt, QEMU, UTM, Debian, llama.cpp, or any other named company, protocol, project, or maintainer.
           </p>
+          <div class="release-strip" id="download" data-release-strip>
+            <a class="release-link primary is-loading" data-release-link="stable" href="https://github.com/openresearchtools/pegpu/releases" aria-disabled="true">Download PEGPU</a>
+            <a class="release-link manual" href="#setup">
+              <span>Installation Manual</span>
+              <small>Please read before installing</small>
+            </a>
+            <a class="release-link secondary" href="https://github.com/openresearchtools/pegpu/releases">Pre-releases on GitHub</a>
+          </div>
         </div>
       </section>
 
@@ -61,24 +69,24 @@
         <div class="hero-metrics" aria-label="Project highlights">
           <div>
             <span>tested split load</span>
-            <strong>Qwen 3.5 122B</strong>
+            <strong>Qwen 3.5 122B MoE LLM Q4_K_M</strong>
           </div>
           <div>
-            <span>M1 Max 64 GB + RTX 3090 24 GB</span>
-            <strong>up to 18 tok/s</strong>
+            <span>memory split</span>
+            <strong>M1 Max 64 GB unified + RTX 3090 24 GB VRAM</strong>
           </div>
           <div>
-            <span>runtime modes</span>
-            <strong>headless, GUI, external display</strong>
+            <span>split-run result</span>
+            <strong>32 Mac layers + 16 eGPU layers · 28.14 tok/s</strong>
           </div>
         </div>
       </section>
 
       <section class="section intro" id="story" aria-labelledby="story-title">
         <div class="section-kicker">what this is</div>
-        <h2 id="story-title">Thunderbolt eGPU passthrough for Macs that were never supposed to have it.</h2>
+        <h2 id="story-title">Thunderbolt 3/4 eGPU passthrough for Macs that were never supposed to have it.</h2>
         <p class="lead">
-          <a class="text-link" href="https://scottjg.com/posts/2026-05-05-egpu-mac-gaming/">Scott J. Goldman</a> found the wild bit: a way to pass Thunderbolt eGPU PCIe devices into a Linux VM on Apple Silicon by combining customized QEMU with a macOS DriverKit host extension. PEGPU builds on that base and tries to turn the whole thing into something you can actually live with.
+          <a class="text-link" href="https://scottjg.com/posts/2026-05-05-egpu-mac-gaming/">Scott J. Goldman</a> found the wild bit: a way to pass Thunderbolt 3/4 eGPU PCIe devices into a Linux VM on Apple Silicon by combining customized QEMU with a macOS DriverKit host extension. PEGPU builds on that base and tries to turn the whole thing into something you can actually live with.
         </p>
         <div class="split">
           <article>
@@ -148,33 +156,36 @@
         <div class="feature-grid">
           <article>
             <span class="feature-code">AI</span>
-            <h3>Split large models across Mac and NVIDIA memory</h3>
+            <h3>Split large models across Mac<sup>*</sup> and NVIDIA<sup>*</sup> memory</h3>
             <p>
-              A managed guest and host llama.cpp runtime can split work across macOS unified memory GPUs and NVIDIA GPUs inside the VM. In my test, a Qwen 3.5 122B model on an M1 Max 64 GB plus RTX 3090 24 GB reached up to 18 tokens per second. When a workload runs fully on the passed-through eGPU, it runs at the card's normal Linux speed too, including ComfyUI video generation models such as Wan 2.2.
+              A managed guest and host llama.cpp<sup>*</sup> runtime can split work across macOS<sup>*</sup> unified memory GPUs and NVIDIA<sup>*</sup> GPUs inside the VM. In my test, a Qwen<sup>*</sup> 3.5 122B MoE LLM quantized as Q4_K_M reached 28.14 tokens per second split across two devices: an M1 Max<sup>*</sup> with 64 GB unified memory handling 32 layers, and an RTX<sup>*</sup> 3090 with 24 GB VRAM handling 16 layers. When a workload runs fully on the passed-through eGPU, it runs at the card's normal Linux<sup>*</sup> speed too, including ComfyUI<sup>*</sup> video generation models such as Wan<sup>*</sup> 2.2.
             </p>
           </article>
           <article>
             <span class="feature-code">GUI</span>
             <h3>Accelerated display sessions</h3>
             <p>
-              Use external NVIDIA-driven displays for 3D rendering, ComfyUI video generation, random Linux desktop things, or games. Use the internal UTM-style window when you want smooth GUI output without spending the external GPU on the desktop.
+              Use external NVIDIA<sup>*</sup>-driven displays for 3D rendering, ComfyUI<sup>*</sup> video generation, random Linux<sup>*</sup> desktop things, or games. Use the internal UTM<sup>*</sup>-style window when you want smooth GUI output without spending the external GPU on the desktop.
             </p>
           </article>
           <article>
             <span class="feature-code">OPS</span>
-            <h3>Recipe-based Debian runtime</h3>
+            <h3>Recipe-based Debian<sup>*</sup> runtime</h3>
             <p>
-              PEGPU downloads the official Debian cloud image and scripts the setup. It does not ship a bundled VM and it does not vendor NVIDIA drivers or CUDA. The helper only installs from NVIDIA repositories inside Linux.
+              PEGPU downloads the official Debian<sup>*</sup> cloud image and scripts the setup. It does not ship a bundled VM and it does not vendor NVIDIA<sup>*</sup> drivers or CUDA<sup>*</sup>. The helper only installs from NVIDIA<sup>*</sup> repositories inside Linux<sup>*</sup>.
             </p>
           </article>
           <article>
             <span class="feature-code">X11</span>
-            <h3>XFCE because boring wins here</h3>
+            <h3>XFCE<sup>*</sup> because boring wins here</h3>
             <p>
-              XFCE on Xorg is light, old, and conservative in exactly the useful way. The Ubuntu/Wayland path from the base project can be luck-based on external screens, especially with wider or stranger monitors, and failures around custom DMA remapping can turn ugly fast. Xorg handles this more gracefully in my testing: internal SPICE/GL stays usable, external NVIDIA displays can run on one or more eGPUs, and the XFCE tree only adds about 250 MB idle RAM compared with headless mode.
+              XFCE<sup>*</sup> on Xorg<sup>*</sup> is light, old, and conservative in exactly the useful way. The Wayland<sup>*</sup> display path from the base project can be luck-based on external screens, especially with wider or stranger monitors, and failures around custom DMA remapping can turn ugly fast. Xorg<sup>*</sup> handles this more gracefully in my testing: internal SPICE<sup>*</sup>/GL stays usable, external NVIDIA<sup>*</sup> displays can run on one or more eGPUs, and the XFCE<sup>*</sup> tree only adds about 250 MB idle RAM compared with headless mode.
             </p>
           </article>
         </div>
+        <p class="feature-footnote">
+          * Names including NVIDIA, RTX, CUDA, macOS, Apple, Mac, M1 Max, Linux, Debian, Wayland, Xorg, XFCE, UTM, SPICE, Qwen, llama.cpp, ComfyUI, and Wan are compatibility or purpose references only. PEGPU is not affiliated with, endorsed by, sponsored by, or approved by those companies, projects, maintainers, or trademark owners.
+        </p>
       </section>
 
       <section class="section warning-section" aria-labelledby="danger-title">
@@ -395,7 +406,7 @@
       </section>
 
       <section class="section credits" id="links" aria-labelledby="links-title">
-        <div class="section-kicker">credit where it is due</div>
+        <div class="section-kicker">credit where it is due<sup>*</sup></div>
         <h2 id="links-title">Without Scott's repo this page would just be CSS and wishful thinking.</h2>
         <div class="link-grid">
           <a href="https://github.com/scottjg/qemu-vfio-apple">
@@ -444,13 +455,16 @@
             <em>Swift terminal emulator used for PEGPU's in-app Linux SSH terminal.</em>
           </a>
         </div>
+        <p class="credits-footnote">
+          * These are credits to the upstream and original projects that PEGPU builds on, derives from, integrates, or was inspired by. PEGPU is not affiliated with, endorsed by, sponsored by, or approved by those projects, maintainers, companies, or trademark owners.
+        </p>
       </section>
 
       <section class="section final-cta" aria-labelledby="final-title">
         <div class="section-kicker">personal project energy</div>
-        <h2 id="final-title">This is not a startup. It is a weekend-shaped obsession that escaped.</h2>
+        <h2 id="final-title">It is a weekend-shaped obsession that escaped.</h2>
         <p>
-          Issues, discussions, stars, forks, bug reports, better driver ideas, weird monitor reports, and build fixes are welcome. I built this because I wanted Apple Silicon Macs to use the eGPUs I already had, and because local AI hardware piles are more fun when they are not trapped on one side of an operating system wall.
+          PEGPU is experimental, imperfect, and built in the open. If it helps, breaks, half-works, or does something strange on your monitor setup, that is useful signal. Issues, fixes, logs, and better ideas are welcome.
         </p>
         <div class="cta-actions">
           <a class="button primary" href="https://github.com/openresearchtools/pegpu/issues">Browse existing issues</a>
@@ -460,8 +474,13 @@
     </main>
 
     <footer class="site-footer" aria-label="Site footer">
-      <span>pegpu.com</span>
-      <span>Very unofficial. Very experimental. Very personal.</span>
+      <a class="footer-brand" href="#top" aria-label="PEGPU home">
+        <img src="assets/pegpu-logo.png" alt="">
+        <span>
+          <strong>PEGPU</strong>
+          <em>pegpu.com</em>
+        </span>
+      </a>
       <div class="footer-policy overlay-host" data-overlay-host>
         <a class="policy-trigger overlay-trigger" href="#privacy-policy-overlay" aria-expanded="false" aria-controls="privacy-policy-overlay">Cookie &amp; Privacy Policy</a>
         <div class="policy-overlay" id="privacy-policy-overlay" role="dialog" aria-label="Cookie and privacy policy">
@@ -484,6 +503,6 @@
       </div>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=20260611-release-responsive"></script>
   </body>
 </html>

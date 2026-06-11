@@ -263,6 +263,62 @@ copyButtons.forEach((button) => {
   });
 });
 
+const releaseManifestPaths = {
+  stable: ["releases/releases-manifest.json", "../releases/releases-manifest.json"],
+};
+
+async function loadReleaseManifest(paths) {
+  let lastError = null;
+
+  for (const path of paths) {
+    try {
+      const response = await fetch(path, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("release manifest unavailable");
+}
+
+const releaseLink = document.querySelector("[data-release-link='stable']");
+
+function renderReleaseLink(manifest) {
+  const latest = manifest?.latest;
+  if (!releaseLink) return;
+
+  releaseLink.classList.remove("is-loading");
+
+  if (!latest || !latest.packageURL) {
+    releaseLink.classList.add("is-disabled");
+    releaseLink.setAttribute("aria-disabled", "true");
+    releaseLink.href = "https://github.com/openresearchtools/pegpu/releases";
+    releaseLink.textContent = "Download unavailable";
+    return;
+  }
+
+  releaseLink.classList.remove("is-disabled");
+  releaseLink.removeAttribute("aria-disabled");
+  releaseLink.href = latest.packageURL;
+  releaseLink.title = latest.packageName || "";
+  const version = latest.name || latest.tag || (latest.version ? `v${latest.version}` : "");
+  releaseLink.textContent = version ? `Download PEGPU ${version}` : "Download PEGPU";
+}
+
+loadReleaseManifest(releaseManifestPaths.stable)
+  .then(renderReleaseLink)
+  .catch(() => {
+    if (!releaseLink) return;
+    releaseLink.classList.remove("is-loading");
+    releaseLink.classList.add("is-disabled");
+    releaseLink.setAttribute("aria-disabled", "true");
+    releaseLink.textContent = "Download unavailable";
+  });
+
 const overlayHosts = Array.from(document.querySelectorAll("[data-overlay-host]"));
 
 function setOverlayOpen(host, isOpen) {
