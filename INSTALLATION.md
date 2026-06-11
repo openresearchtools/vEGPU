@@ -19,13 +19,9 @@
 
 ## Step 00: Download Latest Version
 
-Download the latest version from Releases before starting the setup flow.
-
-<p align="center">
-  <a href="https://github.com/openresearchtools/PEGPU/releases/latest">
-    <img alt="Download Latest PEGPU Release" src="https://img.shields.io/badge/Download-Latest%20Release-65ff7a?style=for-the-badge&labelColor=111111">
-  </a>
-</p>
+Download the latest version from
+[PEGPU Releases](https://github.com/openresearchtools/PEGPU/releases/latest)
+before starting the setup flow.
 
 > [!WARNING]
 > **Important upfront warning:** PEGPU requires installing an experimental
@@ -85,21 +81,32 @@ remove the quarantine flag from the download in Terminal:
 xattr -dr com.apple.quarantine ~/Downloads/pegpu*.pkg
 ```
 
-![macOS warning that the PEGPU package was not opened because Apple could not verify it.](website/assets/setup/gatekeeper-blocked.webp)
-
-*Initial block*
-
-![Privacy and Security settings showing Open Anyway for the blocked PEGPU package.](website/assets/setup/privacy-open-anyway.webp)
-
-*Open Anyway*
-
-![macOS confirmation dialog asking whether to open the PEGPU package anyway.](website/assets/setup/gatekeeper-confirm-open.webp)
-
-*Confirm open*
-
-![Privacy and Security password prompt to allow opening the PEGPU package.](website/assets/setup/privacy-password.webp)
-
-*Admin approval*
+<table>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img alt="macOS warning that the PEGPU package was not opened because Apple could not verify it." src="website/assets/setup/gatekeeper-blocked.webp" width="100%">
+      <br>
+      <sub><strong>Initial block</strong></sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img alt="Privacy and Security settings showing Open Anyway for the blocked PEGPU package." src="website/assets/setup/privacy-open-anyway.webp" width="100%">
+      <br>
+      <sub><strong>Open Anyway</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img alt="macOS confirmation dialog asking whether to open the PEGPU package anyway." src="website/assets/setup/gatekeeper-confirm-open.webp" width="100%">
+      <br>
+      <sub><strong>Confirm open</strong></sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img alt="Privacy and Security password prompt to allow opening the PEGPU package." src="website/assets/setup/privacy-password.webp" width="100%">
+      <br>
+      <sub><strong>Admin approval</strong></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -109,9 +116,15 @@ The installer password notice is the normal macOS authorization prompt for a
 `.pkg`. It installs the app plus the Machine components that let QEMU and the
 DriverKit extension talk to Thunderbolt PCIe hardware.
 
-![macOS Installer password prompt for installing new software.](website/assets/setup/pkg-install-password.webp)
-
-*Normal package authorization*
+<table align="center">
+  <tr>
+    <td align="center" valign="top">
+      <img alt="macOS Installer password prompt for installing new software." src="website/assets/setup/pkg-install-password.webp" width="540">
+      <br>
+      <sub><strong>Normal package authorization</strong></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -122,25 +135,39 @@ Settings*, not OK. OK closes the alert without opening the approval page. In
 Driver Extensions, enable `PEGPU Machine`, approve the System Extensions
 prompt, and confirm the toggle is on.
 
-![Password prompt saying PEGPU Machine is trying to modify a System Extension.](website/assets/setup/driver-extension-password.webp)
-
-*Allow modification*
-
-![macOS driver extension alert with Open System Settings button below OK.](website/assets/setup/driver-extension-open-settings.webp)
-
-*Choose Open System Settings*
-
-![Driver Extensions settings showing the PEGPU Machine extension toggle off.](website/assets/setup/driver-extension-disabled.webp)
-
-*Toggle on*
-
-![System Extensions password prompt to allow modifying a system extension.](website/assets/setup/system-extension-password.webp)
-
-*Confirm system change*
-
-![Driver Extensions settings showing the PEGPU Machine extension enabled.](website/assets/setup/driver-extension-enabled.webp)
-
-*Enabled*
+<table>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img alt="Password prompt saying PEGPU Machine is trying to modify a System Extension." src="website/assets/setup/driver-extension-password.webp" width="100%">
+      <br>
+      <sub><strong>Allow modification</strong></sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img alt="macOS driver extension alert with Open System Settings button below OK." src="website/assets/setup/driver-extension-open-settings.webp" width="100%">
+      <br>
+      <sub><strong>Choose Open System Settings</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img alt="Driver Extensions settings showing the PEGPU Machine extension toggle off." src="website/assets/setup/driver-extension-disabled.webp" width="100%">
+      <br>
+      <sub><strong>Toggle on</strong></sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img alt="System Extensions password prompt to allow modifying a system extension." src="website/assets/setup/system-extension-password.webp" width="100%">
+      <br>
+      <sub><strong>Confirm system change</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center" valign="top">
+      <img alt="Driver Extensions settings showing the PEGPU Machine extension enabled." src="website/assets/setup/driver-extension-enabled.webp" width="540">
+      <br>
+      <sub><strong>Enabled</strong></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -163,17 +190,25 @@ all depend on it. The Linux share password prompt mounts the VM home folder
 over the private vmnet NFS link. The sleep guard helper prevents macOS sleep
 while PCIe passthrough is active, because sleep can wedge or panic the machine.
 
-![macOS Local Network permission prompt explaining PEGPU needs private connection access to the Linux VM.](website/assets/setup/local-network.webp)
-
-*Allow Local Network*
-
-![Password prompt for mounting the Linux home folder over the private vmnet NFS link.](website/assets/setup/linux-share.webp)
-
-*Mount Linux share*
-
-![Password prompt for installing the PEGPU sleep guard helper.](website/assets/setup/sleep-guard.webp)
-
-*Install sleep guard*
+<table>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img alt="macOS Local Network permission prompt explaining PEGPU needs private connection access to the Linux VM." src="website/assets/setup/local-network.webp" width="100%">
+      <br>
+      <sub><strong>Allow Local Network</strong></sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img alt="Password prompt for mounting the Linux home folder over the private vmnet NFS link." src="website/assets/setup/linux-share.webp" width="100%">
+      <br>
+      <sub><strong>Mount Linux share</strong></sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img alt="Password prompt for installing the PEGPU sleep guard helper." src="website/assets/setup/sleep-guard.webp" width="100%">
+      <br>
+      <sub><strong>Install sleep guard</strong></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -191,13 +226,20 @@ embedded terminal.
 > Starting the VM with NVIDIA cards passed through before the driver stack is
 > installed is very likely to kernel panic macOS.
 
-![PEGPU GPU card showing Booting status and the Run Installer button.](website/assets/setup/nvidia-driver-card-booting.webp)
-
-*Run Installer*
-
-![PEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button.](website/assets/setup/nvidia-driver-install-confirm.webp)
-
-*Install Driver confirmation*
+<table>
+  <tr>
+    <td width="40%" align="center" valign="top">
+      <img alt="PEGPU GPU card showing Booting status and the Run Installer button." src="website/assets/setup/nvidia-driver-card-booting.webp" width="100%">
+      <br>
+      <sub><strong>Run Installer</strong></sub>
+    </td>
+    <td width="60%" align="center" valign="top">
+      <img alt="PEGPU Install NVIDIA Linux Driver confirmation sheet with Debian command preview and Install Driver button." src="website/assets/setup/nvidia-driver-install-confirm.webp" width="100%">
+      <br>
+      <sub><strong>Install Driver confirmation</strong></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
