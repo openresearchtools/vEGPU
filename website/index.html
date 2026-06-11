@@ -13,7 +13,7 @@
     <meta property="og:description" content="A very unofficial passthrough runtime for NVIDIA RTX 30/40/50-series GPUs in Thunderbolt eGPU enclosures on Apple Silicon Macs.">
     <meta property="og:image" content="assets/slides/gui.webp">
     <link rel="icon" href="assets/pegpu-logo.png">
-    <link rel="stylesheet" href="styles.css?v=20260611-width-system">
+    <link rel="stylesheet" href="styles.css?v=20260611-sip-warning">
   </head>
   <body>
     <canvas id="signal-canvas" aria-hidden="true"></canvas>
@@ -62,10 +62,31 @@
       </section>
 
       <section class="start-strip" aria-label="Important warning and project highlights">
-        <div class="danger-panel" role="note" aria-label="Security warning">
-          <strong>Important upfront warning:</strong>
-          this only works with SIP disabled and an ad-hoc signed DriverKit extension. That has real security implications. Do not do this on a machine that holds sensitive data unless you are fully comfortable with that trade.
-        </div>
+        <details class="danger-panel" role="note" aria-label="Security warning">
+          <summary>
+            <span>
+              <strong>Important upfront warning:</strong>
+              PEGPU requires installing an experimental kernel driver extension that has not yet been notarized by Apple. As a result, System Integrity Protection (SIP) must be disabled before PEGPU can be installed.
+            </span>
+            <span class="danger-panel-hint">Show SIP disable steps</span>
+          </summary>
+          <div class="danger-panel-body">
+            <p>To disable SIP:</p>
+            <ol>
+              <li>Shut down your Mac.</li>
+              <li>Press and hold the power button until startup options appear.</li>
+              <li>Select <strong>Options</strong> to enter Recovery Mode.</li>
+              <li>Open <strong>Terminal</strong> from the menu bar.</li>
+              <li>Run the following command:</li>
+            </ol>
+            <div class="setup-command-block">
+              <code>csrutil disable</code>
+              <button class="copy-command" type="button" data-copy-value="csrutil disable">Copy</button>
+            </div>
+            <p>Restart your Mac normally.</p>
+            <p><strong>Important:</strong> Understand and consider the security risks of disabling SIP before proceeding.</p>
+          </div>
+        </details>
         <div class="hero-metrics" aria-label="Project highlights">
           <div>
             <span>tested split load</span>
@@ -503,6 +524,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260611-width-system"></script>
+    <script src="script.js?v=20260611-sip-warning"></script>
   </body>
 </html>

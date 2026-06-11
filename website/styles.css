@@ -358,6 +358,77 @@ h1::after {
   color: #ffe0e4;
 }
 
+.danger-panel summary {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 0.38rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.danger-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.danger-panel summary::after {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--red);
+  content: "+";
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.danger-panel[open] summary::after {
+  content: "-";
+}
+
+.danger-panel-hint {
+  grid-column: 1 / -1;
+  justify-self: start;
+  color: #ff9aa4;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.danger-panel-body {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 77, 94, 0.24);
+  color: #ffdce0;
+}
+
+.danger-panel-body p,
+.danger-panel-body ol {
+  margin: 0.75rem 0 0;
+}
+
+.danger-panel-body ol {
+  padding-left: 1.35rem;
+}
+
+.danger-panel-body li + li {
+  margin-top: 0.32rem;
+}
+
+.danger-panel-body .setup-command-block {
+  max-width: 36rem;
+  margin-top: 0.85rem;
+}
+
+.danger-panel[open] .danger-panel-hint {
+  color: #ffc7cd;
+}
+
 .danger-panel strong {
   color: #fff;
 }

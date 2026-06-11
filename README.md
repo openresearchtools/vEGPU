@@ -21,10 +21,7 @@
 >
 > PEGPU requires installing an experimental kernel driver extension that has not
 > yet been notarized by Apple. As a result, System Integrity Protection (SIP)
-> must be disabled before PEGPU can function correctly.
->
-> SIP must be disabled because PEGPU relies on an experimental DriverKit/VFIO
-> path for Thunderbolt PCIe passthrough, which macOS blocks unless SIP is off.
+> must be disabled before PEGPU can be installed.
 >
 > To disable SIP:
 >
