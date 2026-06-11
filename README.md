@@ -16,6 +16,33 @@
 > - illustrative screenshots
 > - practical usage instructions
 
+> [!WARNING]
+> **Important upfront warning**
+>
+> PEGPU requires installing an experimental kernel driver extension that has not
+> yet been notarized by Apple. As a result, System Integrity Protection (SIP)
+> must be disabled before PEGPU can function correctly.
+>
+> SIP must be disabled because PEGPU relies on an experimental DriverKit/VFIO
+> path for Thunderbolt PCIe passthrough, which macOS blocks unless SIP is off.
+>
+> To disable SIP:
+>
+> 1. Shut down your Mac.
+> 2. Press and hold the power button until startup options appear.
+> 3. Select **Options** to enter Recovery Mode.
+> 4. Open **Terminal** from the menu bar.
+> 5. Run the following command:
+>
+>    ```sh
+>    csrutil disable
+>    ```
+>
+> 6. Restart your Mac normally.
+>
+> **Important:** Understand and consider the security risks of disabling SIP
+> before proceeding.
+
 ## About PEGPU
 
 PEGPU is an experimental macOS application for running NVIDIA Thunderbolt eGPUs
