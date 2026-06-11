@@ -121,6 +121,7 @@
               </p>
               <p class="carousel-caption" data-caption="3">
                 <strong>Models.</strong> The Models view manages model files and llama.cpp launches. Pick the Mac backend, the Linux/eGPU backend, or a split run where llama.cpp RPC bridges host and guest; TurboQuant is only the optional llama.cpp build/flag path for KV-cache quantization, not a separate GPU target. The UI assembles the real launch details: devices, RPC endpoint, GPU layers, tensor split, and cache type.
+                <span class="carousel-note">Tip: Models does not repeatedly probe SSH for devices. With the VM running and GPU passthrough active, click Refresh Devices once to surface all connected GPUs.</span>
               </p>
               <p class="carousel-caption" data-caption="4">
                 <strong>Chat.</strong> The Chat tab talks to the currently loaded model through the local OpenAI-compatible route. It is there to test the selected model, backend, and split inference path from inside PEGPU before you point another app at the same runtime.
@@ -402,16 +403,6 @@
             <strong>scottjg/qemu-vfio-apple</strong>
             <em>Star it, follow it, help the driver side get better.</em>
           </a>
-          <a href="https://github.com/openresearchtools/pegpu-machine">
-            <span>GPL runtime</span>
-            <strong>openresearchtools/pegpu-machine</strong>
-            <em>Patched QEMU, DriverKit host, guest tools, VM mechanics.</em>
-          </a>
-          <a href="https://github.com/openresearchtools/pegpu">
-            <span>launcher, GUI, AI layer</span>
-            <strong>openresearchtools/pegpu</strong>
-            <em>Native launcher plus the UTM-derived GUI display side, ANGLE/CocoaSpice integration, files, ports, and model tooling.</em>
-          </a>
           <a href="https://github.com/utmapp/UTM">
             <span>main GUI foundation</span>
             <strong>utmapp/UTM</strong>
@@ -446,6 +437,11 @@
             <span>runtime routing idea</span>
             <strong>mostlygeek/llama-swap</strong>
             <em>Model switching and local OpenAI-compatible runtime inspiration.</em>
+          </a>
+          <a href="https://github.com/migueldeicaza/SwiftTerm">
+            <span>embedded terminal</span>
+            <strong>migueldeicaza/SwiftTerm</strong>
+            <em>Swift terminal emulator used for PEGPU's in-app Linux SSH terminal.</em>
           </a>
         </div>
       </section>

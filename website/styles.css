@@ -402,6 +402,10 @@ h1::after {
   padding: clamp(4rem, 8vw, 7.5rem) 0;
 }
 
+.section.intro {
+  padding-bottom: clamp(1.75rem, 3.5vw, 3rem);
+}
+
 .setup {
   padding-bottom: clamp(2rem, 4vw, 3.6rem);
 }
@@ -471,7 +475,7 @@ h1::after {
 
 .screenshot-band {
   width: 100%;
-  padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 3vw, 2.5rem);
+  padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.5rem) clamp(2rem, 5vw, 4.5rem);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background:
@@ -663,6 +667,14 @@ h1::after {
 
 .carousel-caption strong {
   color: #f4fff1;
+}
+
+.carousel-note {
+  display: block;
+  margin-top: 0.62rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--amber);
+  color: #9ea99b;
 }
 
 .key-combo {
