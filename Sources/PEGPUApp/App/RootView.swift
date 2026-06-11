@@ -85,6 +85,9 @@ struct RootView: View {
         .onReceive(model.displayControlMenu.objectWillChange) { _ in
             displayTitleRefresh = displayTitleRefresh &+ 1
         }
+        .onReceive(model.externalDisplayCapture.objectWillChange) { _ in
+            displayTitleRefresh = displayTitleRefresh &+ 1
+        }
     }
 
     private var availableSections: [NativeAppModel.Section] {
@@ -97,21 +100,18 @@ struct RootView: View {
     }
 
     private var windowTitle: String {
-        guard selectedTab == .section(.gui) else { return "PEGPU" }
         _ = displayTitleRefresh
+        let activeID = model.externalDisplayCapture.captureSessionID ?? model.displayControlMenu.activeSessionID
         let runningSessionShortcuts = model.displayControlMenu.sessions.enumerated()
             .filter { $0.element.running }
-            .filter { $0.element.id != model.displayControlMenu.activeSessionID }
-            .map { "\($0.element.modelTitle) ⌥⌘\($0.offset + 2)" }
-        if model.displayControlMenu.activeSession != nil {
-            let items = ["⌥⌘1 Release"] + runningSessionShortcuts
+            .filter { $0.element.id != activeID }
+            .map { "⌥⌘\($0.offset + 2) \($0.element.modelTitle)" }
+        if model.externalDisplayCapture.captureActive || externalInputCaptureActive || activeID != nil {
+            let items = ["⌥⌘1 - Release"] + runningSessionShortcuts
             return "PEGPU - \(items.joined(separator: " · "))"
         }
-        if externalInputCaptureActive {
-            return "PEGPU - External Display - ⌥⌘1 Release"
-        }
         guard !runningSessionShortcuts.isEmpty else { return "PEGPU" }
-        return "PEGPU - External Displays: \(runningSessionShortcuts.joined(separator: " · "))"
+        return "PEGPU - \(runningSessionShortcuts.joined(separator: " · "))"
     }
 }
 

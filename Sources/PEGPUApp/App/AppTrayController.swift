@@ -87,10 +87,16 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     }
 
     private func updateStatusItemPresentation() {
-        statusItem.length = NSStatusItem.squareLength
         guard let button = statusItem.button else { return }
-        button.imagePosition = .imageOnly
-        button.title = ""
+        if model?.externalDisplayCapture.captureActive == true {
+            statusItem.length = NSStatusItem.variableLength
+            button.imagePosition = .imageLeading
+            button.title = " ⌥⌘1 - Release"
+        } else {
+            statusItem.length = NSStatusItem.squareLength
+            button.imagePosition = .imageOnly
+            button.title = ""
+        }
         button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         button.toolTip = "PEGPU"
     }
@@ -111,6 +117,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     }
 
     private func updateMenu() {
+        updateStatusItemPresentation()
         statusItem.menu = makeMenu()
     }
 
@@ -157,7 +164,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
         if model?.machineService.currentPid() != nil {
             menu.addItem(.separator())
             if model?.externalDisplayCapture.captureActive == true {
-                let release = item("Release eGPU Display Capture", #selector(releaseDisplayCapture))
+                let release = item("⌥⌘1 - Release eGPU Display Capture", #selector(releaseDisplayCapture))
                 release.isEnabled = true
                 menu.addItem(release)
             }
@@ -218,9 +225,10 @@ final class AppTrayController: NSObject, NSMenuDelegate {
             menu.addItem(disabled(displayControl.busy ? "Loading eGPU displays..." : "No PCIe GPUs found"))
             return
         }
-        for session in displayControl.sessions {
+        for (offset, session) in displayControl.sessions.enumerated() {
+            let shortcut = "⌥⌘\(offset + 2)"
             if session.running {
-                let stop = displaySessionItem("Stop \(session.title)", #selector(stopDisplaySession(_:)), session: session)
+                let stop = displaySessionItem("Stop \(session.title) (\(shortcut))", #selector(stopDisplaySession(_:)), session: session)
                 stop.isEnabled = !displayControl.busy
                 menu.addItem(stop)
 
@@ -229,7 +237,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
                 menu.addItem(reload)
             } else {
                 let start = displaySessionItem(
-                    "Start \(session.title) on eGPU Display",
+                    "Start \(session.title) on eGPU Display (\(shortcut))",
                     #selector(startDisplaySession(_:)),
                     session: session
                 )
