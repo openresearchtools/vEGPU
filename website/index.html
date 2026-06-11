@@ -13,7 +13,7 @@
     <meta property="og:description" content="A very unofficial passthrough runtime for NVIDIA RTX 30/40/50-series GPUs in Thunderbolt eGPU enclosures on Apple Silicon Macs.">
     <meta property="og:image" content="assets/slides/gui.webp">
     <link rel="icon" href="assets/pegpu-logo.png">
-    <link rel="stylesheet" href="styles.css?v=20260611-sip-warning">
+    <link rel="stylesheet" href="styles.css?v=20260611-sip-warning-neutral">
   </head>
   <body>
     <canvas id="signal-canvas" aria-hidden="true"></canvas>
@@ -79,10 +79,7 @@
               <li>Open <strong>Terminal</strong> from the menu bar.</li>
               <li>Run the following command:</li>
             </ol>
-            <div class="setup-command-block">
-              <code>csrutil disable</code>
-              <button class="copy-command" type="button" data-copy-value="csrutil disable">Copy</button>
-            </div>
+            <pre class="sip-command-block"><code>csrutil disable</code></pre>
             <p>Restart your Mac normally.</p>
             <p><strong>Important:</strong> Understand and consider the security risks of disabling SIP before proceeding.</p>
           </div>
@@ -524,6 +521,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260611-sip-warning"></script>
+    <script src="script.js?v=20260611-sip-warning-neutral"></script>
   </body>
 </html>

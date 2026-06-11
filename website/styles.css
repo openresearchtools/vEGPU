@@ -402,9 +402,11 @@ h1::after {
 
 .danger-panel-body {
   margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255, 77, 94, 0.24);
-  color: #ffdce0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #c9d0c7;
 }
 
 .danger-panel-body p,
@@ -420,9 +422,23 @@ h1::after {
   margin-top: 0.32rem;
 }
 
-.danger-panel-body .setup-command-block {
+.sip-command-block {
   max-width: 36rem;
-  margin-top: 0.85rem;
+  margin: 0.85rem 0 0.2rem;
+  padding: 0.76rem 0.82rem;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.34);
+}
+
+.sip-command-block code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f4f8f1;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .danger-panel[open] .danger-panel-hint {
