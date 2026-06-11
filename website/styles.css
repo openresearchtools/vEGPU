@@ -99,17 +99,18 @@ code {
 .site-header {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
   z-index: 10;
   display: flex;
+  width: min(1120px, calc(100% - 2rem));
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.85rem clamp(1rem, 3vw, 2.6rem);
+  padding: 0.85rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(2, 2, 2, 0.76);
   backdrop-filter: blur(18px);
+  transform: translateX(-50%);
 }
 
 .brand {
