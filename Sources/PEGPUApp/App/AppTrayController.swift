@@ -12,6 +12,9 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     private var externalCaptureObserver: AnyCancellable?
     private var displayHotkeys: DisplayHotkeyService?
     private var menuUpdateScheduled = false
+    private var statusHintIndex = 0
+    private var statusHintSignature = ""
+    private var statusHintTimer: Timer?
     private var statusText = "checking"
     private var timer: Timer?
 
@@ -63,6 +66,8 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     func invalidate() {
         timer?.invalidate()
         timer = nil
+        statusHintTimer?.invalidate()
+        statusHintTimer = nil
         if let profileObserver {
             NotificationCenter.default.removeObserver(profileObserver)
         }
@@ -88,17 +93,66 @@ final class AppTrayController: NSObject, NSMenuDelegate {
 
     private func updateStatusItemPresentation() {
         guard let button = statusItem.button else { return }
-        if model?.externalDisplayCapture.captureActive == true {
-            statusItem.length = NSStatusItem.variableLength
-            button.imagePosition = .imageLeading
-            button.title = " ⌥⌘1 - Release"
-        } else {
+        let hints = statusShortcutHints()
+        let signature = hints.joined(separator: "\u{1F}")
+        if signature != statusHintSignature {
+            statusHintSignature = signature
+            statusHintIndex = 0
+        }
+
+        guard !hints.isEmpty else {
             statusItem.length = NSStatusItem.squareLength
             button.imagePosition = .imageOnly
             button.title = ""
+            updateStatusHintTimer(hintCount: 0)
+            return
         }
+
+        if statusHintIndex >= hints.count {
+            statusHintIndex = 0
+        }
+        statusItem.length = NSStatusItem.variableLength
+        button.imagePosition = .imageLeading
+        button.title = " \(hints[statusHintIndex])"
         button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         button.toolTip = "PEGPU"
+        updateStatusHintTimer(hintCount: hints.count)
+    }
+
+    private func statusShortcutHints() -> [String] {
+        guard let model else { return [] }
+        let displayControl = model.displayControlMenu
+        let activeID = model.externalDisplayCapture.captureSessionID ?? displayControl.activeSessionID
+        let runningSessionShortcuts = displayControl.sessions.enumerated()
+            .filter { $0.element.running }
+            .filter { $0.element.id != activeID }
+            .map { "⌥⌘\($0.offset + 2) \($0.element.modelTitle)" }
+        if model.externalDisplayCapture.captureActive || activeID != nil {
+            return ["⌥⌘1 - Release"] + runningSessionShortcuts
+        }
+        return runningSessionShortcuts
+    }
+
+    private func updateStatusHintTimer(hintCount: Int) {
+        guard hintCount > 1 else {
+            statusHintTimer?.invalidate()
+            statusHintTimer = nil
+            statusHintIndex = 0
+            return
+        }
+        guard statusHintTimer == nil else { return }
+        statusHintTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let hints = self.statusShortcutHints()
+                guard hints.count > 1 else {
+                    self.updateStatusItemPresentation()
+                    return
+                }
+                self.statusHintIndex = (self.statusHintIndex + 1) % hints.count
+                self.updateStatusItemPresentation()
+            }
+        }
     }
 
     private func refreshStatus() {
