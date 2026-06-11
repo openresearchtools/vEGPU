@@ -116,6 +116,25 @@ struct DisplaySession: Decodable, Equatable, Identifiable, Sendable {
     var title: String {
         "\(name) [\(bdf)]"
     }
+
+    var modelTitle: String {
+        Self.sanitizedGPUModel(name)
+    }
+
+    private static func sanitizedGPUModel(_ rawName: String) -> String {
+        var value = rawName
+        for token in ["NVIDIA", "GeForce", "AMD", "Radeon", "Graphics", "GPU", "RTX", "GTX"] {
+            value = value.replacingOccurrences(
+                of: "\\b\(token)\\b",
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
+        let cleaned = value
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? rawName : cleaned
+    }
 }
 
 struct DisplaySessionsPayload: Decodable {
@@ -350,12 +369,16 @@ final class DisplayControlMenuModel: ObservableObject {
         activeSessionID != nil
     }
 
+    var activeSession: DisplaySession? {
+        guard let activeSessionID else { return nil }
+        return sessions.first { $0.id == activeSessionID }
+    }
+
     var statusTitle: String {
         if busy {
             return "Working"
         }
-        if let activeSessionID,
-           let session = sessions.first(where: { $0.id == activeSessionID }) {
+        if let session = activeSession {
             return "External \(session.display)"
         }
         return "SPICE"
@@ -480,15 +503,6 @@ final class DisplayControlMenuModel: ObservableObject {
         }
     }
 
-    func handleExternalSessionShortcut(digit: Int) {
-        guard (1...9).contains(digit) else { return }
-        if digit == 1 {
-            releaseSession()
-        } else {
-            activateOrderedSessionFromShortcut(number: digit - 1)
-        }
-    }
-
     func reload() {
         guard machine.currentPid() != nil else {
             clearRuntimeState()
@@ -573,36 +587,6 @@ final class DisplayControlMenuModel: ObservableObject {
         refreshGeneration += 1
         refreshTask?.cancel()
         refreshTask = nil
-    }
-
-    private func activateOrderedSessionFromShortcut(number: Int) {
-        guard number > 0, !busy else { return }
-        guard machine.currentPid() != nil else {
-            clearRuntimeState()
-            return
-        }
-        cancelRefresh()
-        busy = true
-        message = nil
-        Task { @MainActor in
-            defer { busy = false }
-            do {
-                let sessionsPayload = try await service.sessions()
-                sessions = sessionsPayload.sessions.filter(\.valid)
-                activeSessionID = sessionsPayload.active == "macos" ? nil : sessionsPayload.active
-                gpus = sessions.map(\.gpu)
-                guard sessions.indices.contains(number - 1) else { return }
-                let session = sessions[number - 1]
-                if session.running {
-                    try await service.enterSession(session)
-                } else {
-                    try await service.startSession(session)
-                }
-                await refreshSessionsOnly()
-            } catch {
-                message = String(describing: error)
-            }
-        }
     }
 
     private func refreshSessionsOnly() async {

@@ -7,6 +7,7 @@ struct RootView: View {
     @State private var selectedTab: NativeAppModel.Tab
     @State private var sidebarCollapsed = UserDefaults.standard.bool(forKey: PreferencesKeys.sidebarCollapsed)
     @State private var externalInputCaptureActive = false
+    @State private var displayTitleRefresh = 0
 
     init(model: NativeAppModel) {
         self.model = model
@@ -80,6 +81,9 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .pegpuExternalInputCaptureDidChange)) { notification in
             externalInputCaptureActive = notification.object as? Bool == true
         }
+        .onReceive(model.displayControlMenu.objectWillChange) { _ in
+            displayTitleRefresh = displayTitleRefresh &+ 1
+        }
     }
 
     private var availableSections: [NativeAppModel.Section] {
@@ -92,11 +96,21 @@ struct RootView: View {
     }
 
     private var windowTitle: String {
+        guard selectedTab == .section(.gui) else { return "PEGPU" }
+        _ = displayTitleRefresh
+        let runningSessionShortcuts = model.displayControlMenu.sessions.enumerated()
+            .filter { $0.element.running }
+            .filter { $0.element.id != model.displayControlMenu.activeSessionID }
+            .map { "\($0.element.modelTitle) ⌥⌘\($0.offset + 2)" }
+        if model.displayControlMenu.activeSession != nil {
+            let items = ["⌥⌘1 Release"] + runningSessionShortcuts
+            return "PEGPU - \(items.joined(separator: " · "))"
+        }
         if externalInputCaptureActive {
             return "PEGPU - External Display - ⌥⌘1 Release"
         }
-        guard selectedTab == .section(.gui), model.displayControlMenu.activeSessionID != nil else { return "PEGPU" }
-        return "PEGPU - External Display"
+        guard !runningSessionShortcuts.isEmpty else { return "PEGPU" }
+        return "PEGPU - External Displays: \(runningSessionShortcuts.joined(separator: " · "))"
     }
 }
 

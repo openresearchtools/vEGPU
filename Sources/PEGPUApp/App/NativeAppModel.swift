@@ -216,39 +216,6 @@ final class NativeAppModel: ObservableObject {
         MachineFiles(machineDir: paths.machine, liveDir: machineContext.hostRuntimeRoot)
     }
 
-    func startDisplayInputSession() {
-        guard machineService.currentPid() != nil else {
-            displaySession.disconnect()
-            return
-        }
-        displaySession.start()
-    }
-
-    func reconnectDisplayInputSession() {
-        guard machineService.currentPid() != nil else {
-            displaySession.disconnect()
-            return
-        }
-        displaySession.reconnect()
-    }
-
-    func setExternalDisplayInputCapture(_ enabled: Bool) {
-        if enabled {
-            guard machineService.currentPid() != nil else {
-                displaySession.disconnect()
-                displayControlMenu.clearRuntimeState()
-                return
-            }
-            displaySession.start()
-            displaySession.setDynamicResolutionEnabled(true)
-        }
-        displaySession.setExternalInputCapture(enabled)
-    }
-
-    func disconnectDisplayInputSession() {
-        displaySession.disconnect()
-    }
-
     var machineProfileLocked: Bool {
         machineProfileLockedState || machineService.currentPid() != nil
     }
@@ -863,7 +830,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         terminalConnected = false
         displayControlMenu.clearRuntimeState()
-        disconnectDisplayInputSession()
+        displaySession.disconnect()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("stop") {
@@ -876,7 +843,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         terminalConnected = false
         displayControlMenu.clearRuntimeState()
-        disconnectDisplayInputSession()
+        displaySession.disconnect()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         appendOutput("[warning] Battery below 15%; PEGPU is shutting down the VM to prevent battery drain and PCIe sleep risk")
 
@@ -914,7 +881,7 @@ final class NativeAppModel: ObservableObject {
         runtimePane = .output
         terminalConnected = false
         displayControlMenu.clearRuntimeState()
-        disconnectDisplayInputSession()
+        displaySession.disconnect()
         NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
         Task {
             await runAction("reset") {
@@ -1200,7 +1167,7 @@ final class NativeAppModel: ObservableObject {
         if machineService.currentPid() != nil {
             await MainActor.run {
                 displayControlMenu.clearRuntimeState()
-                disconnectDisplayInputSession()
+                displaySession.disconnect()
                 NotificationCenter.default.post(name: .pegpuRuntimeWillStop, object: self)
             }
             try await machineService.stopMachine(timeout: 90)
@@ -1212,7 +1179,7 @@ final class NativeAppModel: ObservableObject {
     }
 
     func shutdownBackgroundServices() {
-        disconnectDisplayInputSession()
+        displaySession.disconnect()
         localProxySupervisor.stop()
         goHelperSupervisor.stop()
         nativeBridge.stop()

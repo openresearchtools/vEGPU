@@ -331,7 +331,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
             if enabled {
                 input?.requestMouseMode(true)
                 selectQemuMouse(relative: true)
-                status = "External mouse captured - Option-Cmd-1 releases"
+                status = "External mouse captured - ⌥⌘1 releases"
             } else {
                 releaseAllInput()
                 input?.requestMouseMode(false)
@@ -347,7 +347,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
         input?.requestMouseMode(enabled)
         selectQemuMouse(relative: enabled)
         if enabled {
-            status = "External mouse captured - Option-Cmd-1 releases"
+            status = "External mouse captured - ⌥⌘1 releases"
         } else if connected {
             status = "SPICE connected"
         }

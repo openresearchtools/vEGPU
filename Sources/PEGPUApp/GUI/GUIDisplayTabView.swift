@@ -20,6 +20,32 @@ struct GUIDisplayTabView: View {
             session.start()
             session.setDynamicResolutionEnabled(true)
             displayControl.refresh()
+            syncExternalCapture(displayControl.activeSessionID)
+        }
+        .onDisappear {
+            session.setExternalInputCapture(false)
+            session.disconnect()
+        }
+        .onReceive(displayControl.$activeSessionID) { activeSessionID in
+            syncExternalCapture(activeSessionID)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pegpuRuntimeWillStop)) { _ in
+            session.disconnect()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pegpuMachineProfileWillSwitch)) { _ in
+            session.disconnect()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pegpuReconnectDisplay)) { _ in
+            session.reconnect()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pegpuExternalSessionShortcut)) { notification in
+            guard let digit = notification.object as? Int else { return }
+            if digit == 1 {
+                displayControl.releaseSession()
+                session.setExternalInputCapture(false)
+            } else {
+                displayControl.enterOrderedSession(number: digit - 1)
+            }
         }
     }
 
@@ -33,6 +59,21 @@ struct GUIDisplayTabView: View {
             } else {
                 Color.black
                     .ignoresSafeArea()
+            }
+        }
+    }
+
+    private func syncExternalCapture(_ activeSessionID: String?) {
+        session.setDynamicResolutionEnabled(true)
+        if activeSessionID == nil {
+            session.setExternalInputCapture(false)
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                guard displayControl.activeSessionID != nil else {
+                    session.setExternalInputCapture(false)
+                    return
+                }
+                session.setExternalInputCapture(true)
             }
         }
     }

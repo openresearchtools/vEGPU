@@ -44,7 +44,7 @@ struct DisplayControlMenuItems: View {
         } else {
             ForEach(Array(model.sessions.enumerated()), id: \.element.id) { offset, session in
                 if session.running {
-                    Button("Enter \(session.title) (Option-Cmd-\(offset + 2))") {
+                    Button("Enter \(session.title) (⌥⌘\(offset + 2))") {
                         perform {
                             model.enterSession(session)
                         }
@@ -65,7 +65,7 @@ struct DisplayControlMenuItems: View {
                     }
                     .disabled(model.busy)
                 } else {
-                    Button("Start \(session.title) (Option-Cmd-\(offset + 2))") {
+                    Button("Start \(session.title) (⌥⌘\(offset + 2))") {
                         perform {
                             model.startSession(session)
                         }

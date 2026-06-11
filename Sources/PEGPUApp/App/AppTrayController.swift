@@ -7,18 +7,10 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private weak var appDelegate: AppDelegate?
     private weak var model: NativeAppModel?
-    private var globalHotkeys: DisplayGlobalHotkeyService?
     private var profileObserver: NSObjectProtocol?
-    private var captureObserver: NSObjectProtocol?
-    private var releaseCaptureObserver: NSObjectProtocol?
-    private var reconnectDisplayObserver: NSObjectProtocol?
-    private var runtimeStopObserver: NSObjectProtocol?
     private var displayControlObserver: AnyCancellable?
-    private var activeSessionObserver: AnyCancellable?
-    private var captureSyncTask: Task<Void, Never>?
     private var menuUpdateScheduled = false
     private var statusText = "checking"
-    private var externalInputCaptureActive = false
     private var timer: Timer?
 
     var screenAnchorRect: NSRect? {
@@ -37,13 +29,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
 
     func configure(model: NativeAppModel) {
         self.model = model
-        if globalHotkeys == nil {
-            let globalHotkeys = DisplayGlobalHotkeyService(displayControl: model.displayControlMenu)
-            globalHotkeys.start()
-            self.globalHotkeys = globalHotkeys
-        }
         bindDisplayControlMenu(model.displayControlMenu)
-        bindExternalInputCapture(model)
         if profileObserver == nil {
             profileObserver = NotificationCenter.default.addObserver(
                 forName: .pegpuMachineProfileDidSwitch,
@@ -51,53 +37,9 @@ final class AppTrayController: NSObject, NSMenuDelegate {
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.rebindDisplayHotkeys()
-                }
-            }
-        }
-        if releaseCaptureObserver == nil {
-            releaseCaptureObserver = NotificationCenter.default.addObserver(
-                forName: .pegpuReleaseExternalInputCapture,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.model?.setExternalDisplayInputCapture(false)
-                }
-            }
-        }
-        if reconnectDisplayObserver == nil {
-            reconnectDisplayObserver = NotificationCenter.default.addObserver(
-                forName: .pegpuReconnectDisplay,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.model?.reconnectDisplayInputSession()
-                }
-            }
-        }
-        if runtimeStopObserver == nil {
-            runtimeStopObserver = NotificationCenter.default.addObserver(
-                forName: .pegpuRuntimeWillStop,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.model?.disconnectDisplayInputSession()
-                }
-            }
-        }
-        if captureObserver == nil {
-            captureObserver = NotificationCenter.default.addObserver(
-                forName: .pegpuExternalInputCaptureDidChange,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                let active = notification.object as? Bool == true
-                Task { @MainActor [weak self] in
-                    self?.externalInputCaptureActive = active
-                    self?.updateStatusItemPresentation()
+                    guard let self, let model = self.model else { return }
+                    self.bindDisplayControlMenu(model.displayControlMenu)
+                    self.updateMenu()
                 }
             }
         }
@@ -120,39 +62,9 @@ final class AppTrayController: NSObject, NSMenuDelegate {
             NotificationCenter.default.removeObserver(profileObserver)
         }
         profileObserver = nil
-        if let captureObserver {
-            NotificationCenter.default.removeObserver(captureObserver)
-        }
-        captureObserver = nil
-        if let releaseCaptureObserver {
-            NotificationCenter.default.removeObserver(releaseCaptureObserver)
-        }
-        releaseCaptureObserver = nil
-        if let reconnectDisplayObserver {
-            NotificationCenter.default.removeObserver(reconnectDisplayObserver)
-        }
-        reconnectDisplayObserver = nil
-        if let runtimeStopObserver {
-            NotificationCenter.default.removeObserver(runtimeStopObserver)
-        }
-        runtimeStopObserver = nil
         displayControlObserver = nil
-        activeSessionObserver = nil
-        captureSyncTask?.cancel()
-        captureSyncTask = nil
-        globalHotkeys?.invalidate()
-        globalHotkeys = nil
         model?.stopHostSleepGuardForShutdown()
         NSStatusBar.system.removeStatusItem(statusItem)
-    }
-
-    func restartDisplayHotkeys() {
-        globalHotkeys?.restart()
-        if globalHotkeys == nil, let model {
-            let globalHotkeys = DisplayGlobalHotkeyService(displayControl: model.displayControlMenu)
-            globalHotkeys.start()
-            self.globalHotkeys = globalHotkeys
-        }
     }
 
     private func configureIcon() {
@@ -167,12 +79,12 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     }
 
     private func updateStatusItemPresentation() {
-        statusItem.length = externalInputCaptureActive ? NSStatusItem.variableLength : NSStatusItem.squareLength
+        statusItem.length = NSStatusItem.squareLength
         guard let button = statusItem.button else { return }
-        button.imagePosition = externalInputCaptureActive ? .imageLeft : .imageOnly
-        button.title = externalInputCaptureActive ? " ⌥⌘1 Release" : ""
+        button.imagePosition = .imageOnly
+        button.title = ""
         button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        button.toolTip = externalInputCaptureActive ? "PEGPU external display captured. Press ⌥⌘1 to release." : "PEGPU"
+        button.toolTip = "PEGPU"
     }
 
     private func refreshStatus() {
@@ -192,19 +104,6 @@ final class AppTrayController: NSObject, NSMenuDelegate {
 
     private func updateMenu() {
         statusItem.menu = makeMenu()
-    }
-
-    private func rebindDisplayHotkeys() {
-        globalHotkeys?.invalidate()
-        if let model {
-            bindDisplayControlMenu(model.displayControlMenu)
-            bindExternalInputCapture(model)
-            let globalHotkeys = DisplayGlobalHotkeyService(displayControl: model.displayControlMenu)
-            globalHotkeys.start()
-            self.globalHotkeys = globalHotkeys
-        } else {
-            globalHotkeys = nil
-        }
     }
 
     private func makeMenu() -> NSMenu {
@@ -265,35 +164,6 @@ final class AppTrayController: NSObject, NSMenuDelegate {
         }
     }
 
-    private func bindExternalInputCapture(_ model: NativeAppModel) {
-        captureSyncTask?.cancel()
-        activeSessionObserver = model.displayControlMenu.$activeSessionID.sink { [weak self, weak model] activeSessionID in
-            Task { @MainActor [weak self, weak model] in
-                guard let self, let model else { return }
-                self.syncExternalInputCapture(activeSessionID: activeSessionID, model: model)
-            }
-        }
-    }
-
-    private func syncExternalInputCapture(activeSessionID: String?, model: NativeAppModel) {
-        captureSyncTask?.cancel()
-        guard activeSessionID != nil else {
-            model.setExternalDisplayInputCapture(false)
-            return
-        }
-        model.startDisplayInputSession()
-        captureSyncTask = Task { @MainActor [weak self, weak model] in
-            try? await Task.sleep(nanoseconds: 150_000_000)
-            guard let self, let model, !Task.isCancelled else { return }
-            guard model.displayControlMenu.activeSessionID != nil else {
-                model.setExternalDisplayInputCapture(false)
-                return
-            }
-            model.setExternalDisplayInputCapture(true)
-            self.updateStatusItemPresentation()
-        }
-    }
-
     private func scheduleMenuUpdate() {
         guard !menuUpdateScheduled else { return }
         menuUpdateScheduled = true
@@ -315,16 +185,8 @@ final class AppTrayController: NSObject, NSMenuDelegate {
             menu.addItem(disabled(displayControl.busy ? "Loading eGPU displays..." : "No PCIe GPUs found"))
             return
         }
-        for (offset, session) in displayControl.sessions.enumerated() {
+        for session in displayControl.sessions {
             if session.running {
-                let enter = displaySessionItem(
-                    "Enter \(session.title) (Option-Cmd-\(offset + 2))",
-                    #selector(enterDisplaySession(_:)),
-                    session: session
-                )
-                enter.isEnabled = !displayControl.busy
-                menu.addItem(enter)
-
                 let stop = displaySessionItem("Stop \(session.title)", #selector(stopDisplaySession(_:)), session: session)
                 stop.isEnabled = !displayControl.busy
                 menu.addItem(stop)
@@ -334,7 +196,7 @@ final class AppTrayController: NSObject, NSMenuDelegate {
                 menu.addItem(reload)
             } else {
                 let start = displaySessionItem(
-                    "Start \(session.title) on eGPU Display (Option-Cmd-\(offset + 2))",
+                    "Start \(session.title) on eGPU Display",
                     #selector(startDisplaySession(_:)),
                     session: session
                 )
@@ -433,11 +295,6 @@ final class AppTrayController: NSObject, NSMenuDelegate {
     @objc private func startDisplaySession(_ sender: NSMenuItem) {
         guard let session = displaySession(from: sender) else { return }
         model?.displayControlMenu.startSession(session)
-    }
-
-    @objc private func enterDisplaySession(_ sender: NSMenuItem) {
-        guard let session = displaySession(from: sender) else { return }
-        model?.displayControlMenu.enterSession(session)
     }
 
     @objc private func stopDisplaySession(_ sender: NSMenuItem) {

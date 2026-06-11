@@ -114,12 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             window.orderOut(nil)
         }
         NSApplication.shared.setActivationPolicy(.accessory)
-        tray?.restartDisplayHotkeys()
     }
 
     func showMainWindow() {
         NSApplication.shared.setActivationPolicy(.regular)
-        tray?.restartDisplayHotkeys()
         if let mainWindow {
             mainWindow.makeKeyAndOrderFront(nil)
         } else {
