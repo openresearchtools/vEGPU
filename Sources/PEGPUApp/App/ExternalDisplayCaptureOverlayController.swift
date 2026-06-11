@@ -15,9 +15,11 @@ final class ExternalDisplayCaptureOverlayController {
 
     func show(eventHandler: @escaping (NSEvent) -> Void) {
         self.eventHandler = eventHandler
+        let current = NSRunningApplication.current
+        let front = NSWorkspace.shared.frontmostApplication
+        let appWasAlreadyFrontmost = front?.processIdentifier == current.processIdentifier
+        let shouldActivateApp = appWasAlreadyFrontmost || NSApp.activationPolicy() == .accessory
         if previousFrontmostApp == nil {
-            let current = NSRunningApplication.current
-            let front = NSWorkspace.shared.frontmostApplication
             if front?.processIdentifier != current.processIdentifier {
                 previousFrontmostApp = front
             }
@@ -26,8 +28,10 @@ final class ExternalDisplayCaptureOverlayController {
         installScreenObserver()
         rebuildWindows()
         detachCursor()
-        NSApp.activate(ignoringOtherApps: true)
-        orderWindowsFront()
+        if shouldActivateApp {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        orderWindowsFront(activateApp: shouldActivateApp)
     }
 
     func hide(restorePreviousApp: Bool = true) {
@@ -81,7 +85,7 @@ final class ExternalDisplayCaptureOverlayController {
             }
             let window = ExternalDisplayCaptureWindow(
                 contentRect: screen.frame,
-                styleMask: [.borderless],
+                styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false,
                 screen: screen
@@ -94,18 +98,26 @@ final class ExternalDisplayCaptureOverlayController {
             window.ignoresMouseEvents = false
             window.acceptsMouseMovedEvents = true
             window.isReleasedWhenClosed = false
+            window.hidesOnDeactivate = false
+            window.becomesKeyOnlyIfNeeded = false
+            window.worksWhenModal = true
             window.contentView = contentView
             return window
         }
     }
 
-    private func orderWindowsFront() {
+    private func orderWindowsFront(activateApp: Bool = false) {
         guard !windows.isEmpty else { return }
         let mouseLocation = NSEvent.mouseLocation
         let keyWindow = windows.first { $0.frame.contains(mouseLocation) } ?? windows.first
         for window in windows {
             if window === keyWindow {
-                window.makeKeyAndOrderFront(nil)
+                if activateApp {
+                    window.makeKeyAndOrderFront(nil)
+                } else {
+                    window.orderFrontRegardless()
+                    window.makeKey()
+                }
             } else {
                 window.orderFrontRegardless()
             }
@@ -135,7 +147,7 @@ final class ExternalDisplayCaptureOverlayController {
     }
 }
 
-private final class ExternalDisplayCaptureWindow: NSWindow {
+private final class ExternalDisplayCaptureWindow: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
