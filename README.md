@@ -1,6 +1,6 @@
 # PEGPU
 
-![PEGPU external display session controls](website/assets/slides/external-display.webp)
+![PEGPU carousel preview](website/assets/slides/pegpu-carousel-preview.webp)
 
 **External displays.** Secondary-click in the GUI tab to turn on external
 display sessions on eGPUs. There is no fixed limit: each GPU has its own
