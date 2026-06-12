@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-12T13:24:14Z",
+  "updatedAt": "2026-06-12T15:16:22Z",
   "seedVersion": "0.1.100",
   "latest": {
-    "version": "0.1.101",
+    "version": "0.1.102",
     "mode": "artifact-only",
-    "packageName": "PEGPU-v0.1.101.pkg",
-    "packageSize": 617694446,
-    "packageSHA256": "6a0d1ff08466d3ddc12294ac7d48221bbcc893b59d1a130d9d8dc6e147181e7b",
-    "runId": "27417826556",
-    "sourceRevision": "32173650ab085a92326c2f9e1dd1100ee7259e1c",
+    "packageName": "PEGPU-v0.1.102.pkg",
+    "packageSize": 624894338,
+    "packageSHA256": "2a7db5a6b84fa56eb5a05b1ee7a96e8643911de07b00da607976ca0df7e4b30f",
+    "runId": "27424012374",
+    "sourceRevision": "a83b4d69da5ea6e8a12741d956a1deb50ce06904",
     "sourceRef": "refs/heads/main",
-    "createdAt": "2026-06-12T13:24:14Z",
+    "createdAt": "2026-06-12T15:16:22Z",
     "components": {
       "display": "app-run",
       "scaling": "build",
@@ -20,6 +20,23 @@
     }
   },
   "items": [
+    {
+      "version": "0.1.102",
+      "mode": "artifact-only",
+      "packageName": "PEGPU-v0.1.102.pkg",
+      "packageSize": 624894338,
+      "packageSHA256": "2a7db5a6b84fa56eb5a05b1ee7a96e8643911de07b00da607976ca0df7e4b30f",
+      "runId": "27424012374",
+      "sourceRevision": "a83b4d69da5ea6e8a12741d956a1deb50ce06904",
+      "sourceRef": "refs/heads/main",
+      "createdAt": "2026-06-12T15:16:22Z",
+      "components": {
+        "display": "app-run",
+        "scaling": "build",
+        "performance": "build",
+        "machine": "trigger"
+      }
+    },
     {
       "version": "0.1.101",
       "mode": "artifact-only",
