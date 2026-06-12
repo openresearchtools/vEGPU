@@ -38,7 +38,7 @@ public final class GuestSyncService: @unchecked Sendable {
         try await syncPerformanceApp()
         try await syncBundledLlamaRuntimeSeed()
         if !force, let runtimePid, markerMatches(runtimePid: runtimePid, fingerprint: fingerprint) {
-            if await guestDriverReady() {
+            if await guestDriverReady(), await guestDriverPackageReady() {
                 try await reconcileBundledLlamaRuntimes()
                 return false
             }
@@ -61,6 +61,8 @@ public final class GuestSyncService: @unchecked Sendable {
 
         try await syncPackages(kind: "driver DKMS", packages: bundledDriverPackages)
         try await syncPackages(kind: "guest", packages: manifest.guestPackages)
+        progress.report(ProgressEvent(stage: "guest-tools", message: "Installing or upgrading Linux guest DMA package"))
+        _ = try await ssh.agent(["ensure-driver-package"])
         progress.report(ProgressEvent(stage: "guest-tools", message: "Installing or refreshing guest tools"))
         _ = try await ssh.agent(["update-tools"])
         if await guestDriverReady() {
@@ -291,6 +293,10 @@ public final class GuestSyncService: @unchecked Sendable {
         return status["driverInstalled"] as? String == "yes" &&
             status["moduleLoaded"] as? String == "yes" &&
             status["driverReady"] as? String == "yes"
+    }
+
+    private func guestDriverPackageReady() async -> Bool {
+        await ssh.sshMaybe("test -x /usr/sbin/apple-dma-config")
     }
 
     private func guestSyncFingerprint(manifest: RuntimeManifest, bundledDriverPackages: [ManifestPackage]) throws -> String {

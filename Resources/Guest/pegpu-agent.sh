@@ -339,6 +339,17 @@ install_driver_dkms_packages() {
   driver_dkms_installed "$package_name"
 }
 
+ensure_driver_package() {
+  if ! install_driver_dkms_packages; then
+    log "apple DMA DKMS package is not installed and no DKMS package is available in the guest package cache"
+    return 1
+  fi
+  if [ ! -x /usr/sbin/apple-dma-config ]; then
+    log "apple DMA configuration helper is missing after DKMS package install"
+    return 1
+  fi
+}
+
 dkms_autoinstall_for_installed_kernels() {
   local kernel running failed
   running="$(uname -r)"
@@ -967,10 +978,7 @@ update_tools() {
 install_driver() {
   setup_dkms_autorebuild
   install_dkms_prereqs
-  if ! install_driver_dkms_packages; then
-    log "apple DMA DKMS package is not installed and no DKMS package is available in the guest package cache"
-    return 1
-  fi
+  ensure_driver_package
   dkms_autoinstall_for_installed_kernels
   ensure_driver_persistence
   depmod -a || true
@@ -989,10 +997,7 @@ install_driver() {
 dkms_refresh() {
   setup_dkms_autorebuild
   install_dkms_prereqs
-  if ! install_driver_dkms_packages; then
-    log "apple DMA DKMS package is not installed and no DKMS package is available in the guest package cache"
-    return 1
-  fi
+  ensure_driver_package
   dkms_autoinstall_for_installed_kernels
   ensure_driver_persistence
   depmod -a || true
@@ -1702,6 +1707,9 @@ case "${1:-status}" in
     ;;
   update-tools)
     update_tools
+    ;;
+  ensure-driver-package)
+    ensure_driver_package
     ;;
   disable-idle)
     disable_idle

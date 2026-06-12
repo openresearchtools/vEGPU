@@ -313,7 +313,7 @@ def run_gui(args: argparse.Namespace) -> int:
             self.status.get_style_context().add_class("pegpu-muted")
             footer.pack_start(self.status, False, False, 0)
 
-            self.note = Gtk.Label(label=APPLY_NOTE, xalign=0)
+            self.note = Gtk.Label(label="", xalign=0)
             self.note.set_line_wrap(True)
             self.note.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
             self.note.set_max_width_chars(66)
@@ -363,6 +363,9 @@ def run_gui(args: argparse.Namespace) -> int:
                 active = display_mode(data.get("active")) if data.get("active") else "Unknown"
                 restart = "restart needed" if data.get("restartRequired") else "ready"
                 self.status.set_text(f"Active: {active}   Saved: {saved}   Status: {restart}")
+                self.note.set_text("")
+                if not self.busy:
+                    self.apply_button.set_sensitive(True)
                 saved_data = data.get("saved")
                 if isinstance(saved_data, dict):
                     mode = mode_for_shift(saved_data.get("shift"))
@@ -370,6 +373,8 @@ def run_gui(args: argparse.Namespace) -> int:
                         self.select_mode(mode)
             except Exception as exc:
                 self.status.set_text(str(exc))
+                self.note.set_text("")
+                self.apply_button.set_sensitive(False)
 
         def on_apply(self, _button: Any) -> None:
             if self.busy:
@@ -389,8 +394,12 @@ def run_gui(args: argparse.Namespace) -> int:
                     self.set_busy(False)
                     if error:
                         self.status.set_text(error)
+                        self.note.set_text("")
+                        if not helper_exists():
+                            self.apply_button.set_sensitive(False)
                     else:
-                        self.status.set_text(APPLY_NOTE)
+                        self.status.set_text(f"Saved {mode.label}.")
+                        self.note.set_text(APPLY_NOTE)
                         self.refresh_status()
                     return False
 
