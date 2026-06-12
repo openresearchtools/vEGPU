@@ -10,6 +10,23 @@ install_file() {
   install -m "$mode" "$source" "$target"
 }
 
+remove_stale_icons() {
+  local base="$1"
+  rm -f \
+    "$base/share/icons/hicolor/scalable/apps/pegpu-performance.svg" \
+    "$base/share/icons/hicolor/256x256/apps/pegpu-performance.png" \
+    "$base/share/icons/hicolor/1024x1024/apps/pegpu-performance.png" \
+    "$base/share/pegpu-performance/pegpu-performance.png"
+  rmdir \
+    "$base/share/icons/hicolor/scalable/apps" \
+    "$base/share/icons/hicolor/scalable" \
+    "$base/share/icons/hicolor/256x256/apps" \
+    "$base/share/icons/hicolor/256x256" \
+    "$base/share/icons/hicolor/1024x1024/apps" \
+    "$base/share/icons/hicolor/1024x1024" \
+    "$base/share/pegpu-performance" >/dev/null 2>&1 || true
+}
+
 trust_desktop_file() {
   local user="$1" file="$2" uid bus checksum home
   [ -f "$file" ] || return 0
@@ -57,6 +74,7 @@ install_file 0755 "$ROOT/bin/pegpu-performance" "$PREFIX/bin/pegpu-performance"
 install_file 0644 "$ROOT/src/pegpu_performance.py" "$PREFIX/lib/pegpu-performance/pegpu_performance.py"
 install_file 0644 "$ROOT/share/applications/pegpu-performance.desktop" "$PREFIX/share/applications/pegpu-performance.desktop"
 
+remove_stale_icons "$PREFIX"
 source="$ROOT/share/icons/hicolor/512x512/apps/pegpu-performance.png"
 [ -f "$source" ] && install_file 0644 "$source" "$PREFIX/share/icons/hicolor/512x512/apps/pegpu-performance.png"
 

@@ -77,6 +77,24 @@ EOF
 cat >"$PKG_DIR/DEBIAN/postinst" <<'EOF'
 #!/usr/bin/env bash
 set -e
+remove_stale_icons() {
+  base="$1"
+  rm -f \
+    "$base/share/icons/hicolor/scalable/apps/pegpu-performance.svg" \
+    "$base/share/icons/hicolor/256x256/apps/pegpu-performance.png" \
+    "$base/share/icons/hicolor/1024x1024/apps/pegpu-performance.png" \
+    "$base/share/pegpu-performance/pegpu-performance.png"
+  rmdir \
+    "$base/share/icons/hicolor/scalable/apps" \
+    "$base/share/icons/hicolor/scalable" \
+    "$base/share/icons/hicolor/256x256/apps" \
+    "$base/share/icons/hicolor/256x256" \
+    "$base/share/icons/hicolor/1024x1024/apps" \
+    "$base/share/icons/hicolor/1024x1024" \
+    "$base/share/pegpu-performance" >/dev/null 2>&1 || true
+}
+remove_stale_icons /usr
+remove_stale_icons /usr/local
 install -d /etc/sudoers.d
 if [ ! -f /etc/sudoers.d/90-pegpu-performance ]; then
   cat >/etc/sudoers.d/90-pegpu-performance <<'SUDOERS'
@@ -92,6 +110,9 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+  if [ -d /usr/local/share/icons/hicolor ]; then
+    gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor >/dev/null 2>&1 || true
+  fi
 fi
 if getent passwd pegpu >/dev/null 2>&1; then
   home="$(getent passwd pegpu | cut -d: -f6)"
