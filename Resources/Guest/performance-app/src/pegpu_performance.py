@@ -14,7 +14,7 @@ from typing import Any
 APP_ICON_NAME = "pegpu-performance"
 HELPER = os.environ.get("PEGPU_DMA_CONFIG", "/usr/sbin/apple-dma-config")
 APPLY_NOTE = "Saved. To apply cleanly, stop the PEGPU server, shut down the VM, unplug the eGPU, plug it back in, then start PEGPU again."
-EXPLANATION = "Controls the Apple DMA coalescing window. Larger windows can reduce DMA mapping overhead, while smaller windows favor stability."
+EXPLANATION = "Controls the DMA coalescing window. Larger windows can reduce DMA mapping overhead, while smaller windows favor stability."
 WINDOW_WIDTH = 520
 PANEL_WIDTH = 476
 HEADER_TEXT_WIDTH = 380

@@ -70,7 +70,7 @@ Architecture: $ARCH
 Maintainer: PEGPU <support@pegpu.local>
 Depends: python3, python3-gi, gir1.2-gtk-3.0, libglib2.0-bin, sudo
 Description: DMA coalescing performance helper for PEGPU guests
- Provides a GTK app and CLI for selecting the Apple DMA coalescing
+ Provides a GTK app and CLI for selecting the DMA coalescing
  window used by the guest-side apple_dma driver.
 EOF
 
