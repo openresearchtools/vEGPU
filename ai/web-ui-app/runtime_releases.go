@@ -117,12 +117,12 @@ func (m *RuntimeManager) FetchInstall(ctx context.Context, family, tag, linuxBac
 		return out, fmt.Errorf("release %s does not have matched macOS and %s Linux assets", release.Tag, backendLabel(backend))
 	}
 	releaseFamily := normalizeReleaseFamily(release.Family)
-	pairID := managedRuntimePairID(releaseFamily, backend)
-	macRuntime, err := m.ensureDownloadedReleaseRuntime(ctx, "macos", managedRuntimeID(releaseFamily, "macos", ""), release, release.MacOSAsset, "", "")
+	pairID := managedReleaseRuntimePairID(releaseFamily, release.Tag, backend)
+	macRuntime, err := m.ensureDownloadedReleaseRuntime(ctx, "macos", managedReleaseRuntimeID(releaseFamily, release.Tag, "macos", backend), release, release.MacOSAsset, "", pairID)
 	if err != nil {
 		return out, err
 	}
-	linuxRuntime, err := m.ensureDownloadedReleaseRuntime(ctx, "linux", managedRuntimeID(releaseFamily, "linux", backend), release, linuxAsset, backend, pairID)
+	linuxRuntime, err := m.ensureDownloadedReleaseRuntime(ctx, "linux", managedReleaseRuntimeID(releaseFamily, release.Tag, "linux", backend), release, linuxAsset, backend, pairID)
 	if err != nil {
 		return out, err
 	}
@@ -266,8 +266,16 @@ func runtimeMatchesReleaseAsset(runtimeInfo ManagedRuntime, release RuntimeRelea
 		if sanitizeID(runtimeInfo.PairID) != sanitizeID(pairID) {
 			return false
 		}
-	} else if strings.TrimSpace(runtimeInfo.PairID) != "" {
-		return false
+	} else {
+		expectedPairID := sanitizeID(pairID)
+		actualPairID := sanitizeID(runtimeInfo.PairID)
+		if expectedPairID != "" {
+			if actualPairID != expectedPairID {
+				return false
+			}
+		} else if actualPairID != "" {
+			return false
+		}
 	}
 	return true
 }
@@ -431,6 +439,32 @@ func managedRuntimeID(family, platform, backend string) string {
 
 func managedRuntimePairID(family, backend string) string {
 	return sanitizeID("managed-" + normalizeReleaseFamily(family) + "-" + normalizeLinuxBackend(backend))
+}
+
+func managedReleaseRuntimeID(family, tag, platform, backend string) string {
+	family = normalizeReleaseFamily(family)
+	release := releaseIDPart(tag)
+	platform = normalizeRuntimePlatform(platform)
+	switch platform {
+	case "macos":
+		return sanitizeID("managed-" + family + "-" + release + "-" + normalizeLinuxBackend(backend) + "-macos")
+	case "linux":
+		return sanitizeID("managed-" + family + "-" + release + "-" + normalizeLinuxBackend(backend) + "-linux")
+	default:
+		return ""
+	}
+}
+
+func managedReleaseRuntimePairID(family, tag, backend string) string {
+	return sanitizeID("managed-" + normalizeReleaseFamily(family) + "-" + releaseIDPart(tag) + "-" + normalizeLinuxBackend(backend))
+}
+
+func releaseIDPart(tag string) string {
+	id := sanitizeID(strings.TrimSpace(tag))
+	if id == "" {
+		return "release"
+	}
+	return id
 }
 
 func isManagedRuntimeID(id string) bool {

@@ -380,6 +380,11 @@ func shouldAutoSelectBundledStandardBackend(cfg AppConfig) (string, bool) {
 	if noActive {
 		return "cuda13", true
 	}
+	if strings.TrimSpace(cfg.Runtime.ActiveRuntimePair) != "" ||
+		strings.TrimSpace(cfg.Runtime.ActiveMacRuntime) != "" ||
+		strings.TrimSpace(cfg.Runtime.ActiveLinuxRuntime) != "" {
+		return "", false
+	}
 	values := []string{
 		cfg.Runtime.ActiveRuntimePair,
 		cfg.Runtime.ActiveVersion,
@@ -768,7 +773,7 @@ func statusMatchesManagedRuntime(runtimeInfo ManagedRuntime, status BridgeRuntim
 	if normalizeLinuxBackend(status.LinuxBackend) != normalizeLinuxBackend(runtimeInfo.LinuxBackend) {
 		return false
 	}
-	if strings.TrimSpace(runtimeInfo.SHA256) != "" && !strings.EqualFold(strings.TrimSpace(runtimeInfo.SHA256), strings.TrimSpace(status.SHA256)) {
+	if strings.TrimSpace(runtimeInfo.SHA256) != "" && strings.TrimSpace(status.SHA256) != "" && !strings.EqualFold(strings.TrimSpace(runtimeInfo.SHA256), strings.TrimSpace(status.SHA256)) {
 		return false
 	}
 	if strings.TrimSpace(status.ArchiveName) != "" && strings.TrimSpace(runtimeInfo.AssetName) != "" && strings.TrimSpace(status.ArchiveName) != strings.TrimSpace(runtimeInfo.AssetName) {

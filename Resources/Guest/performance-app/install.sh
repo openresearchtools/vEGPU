@@ -57,17 +57,8 @@ install_file 0755 "$ROOT/bin/pegpu-performance" "$PREFIX/bin/pegpu-performance"
 install_file 0644 "$ROOT/src/pegpu_performance.py" "$PREFIX/lib/pegpu-performance/pegpu_performance.py"
 install_file 0644 "$ROOT/share/applications/pegpu-performance.desktop" "$PREFIX/share/applications/pegpu-performance.desktop"
 
-for size in 256 512 1024; do
-  source="$ROOT/share/icons/hicolor/${size}x${size}/apps/pegpu-performance.png"
-  [ -f "$source" ] || continue
-  install_file 0644 "$source" "$PREFIX/share/icons/hicolor/${size}x${size}/apps/pegpu-performance.png"
-done
-if [ -f "$ROOT/share/icons/hicolor/scalable/apps/pegpu-performance.svg" ]; then
-  install_file 0644 "$ROOT/share/icons/hicolor/scalable/apps/pegpu-performance.svg" "$PREFIX/share/icons/hicolor/scalable/apps/pegpu-performance.svg"
-fi
-if [ -f "$ROOT/share/icons/source/pegpu-performance.png" ]; then
-  install_file 0644 "$ROOT/share/icons/source/pegpu-performance.png" "$PREFIX/share/pegpu-performance/pegpu-performance.png"
-fi
+source="$ROOT/share/icons/hicolor/512x512/apps/pegpu-performance.png"
+[ -f "$source" ] && install_file 0644 "$source" "$PREFIX/share/icons/hicolor/512x512/apps/pegpu-performance.png"
 
 install -d /etc/sudoers.d
 cat >/etc/sudoers.d/90-pegpu-performance <<'SUDOERS'

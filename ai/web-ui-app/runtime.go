@@ -17,7 +17,10 @@ import (
 )
 
 const deviceProbeTimeout = 3 * time.Second
-const bridgeDeviceProbeTimeout = 8 * time.Second
+
+// CUDA backend initialization on passed-through eGPUs can take longer than the
+// local probes; keep this above the Swift-side list-devices timeout.
+const bridgeDeviceProbeTimeout = 30 * time.Second
 const deviceProbeCacheTTL = 5 * time.Minute
 const deviceProbeCoalesceWindow = 2 * time.Second
 

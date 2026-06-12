@@ -301,10 +301,7 @@ final class DisplayControlService: @unchecked Sendable {
             ("bin/pegpu-performance", "0755"),
             ("src/pegpu_performance.py", "0644"),
             ("share/applications/pegpu-performance.desktop", "0644"),
-            ("share/icons/source/pegpu-performance.png", "0644"),
-            ("share/icons/hicolor/256x256/apps/pegpu-performance.png", "0644"),
-            ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644"),
-            ("share/icons/hicolor/1024x1024/apps/pegpu-performance.png", "0644")
+            ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644")
         ]
         guard FileManager.default.fileExists(atPath: root.appendingPathComponent("install.sh").path) else { return }
         _ = try await ssh.ssh("sudo -n rm -rf /usr/local/libexec/pegpu/performance-app && sudo -n install -d /usr/local/libexec/pegpu/performance-app", timeout: 10)

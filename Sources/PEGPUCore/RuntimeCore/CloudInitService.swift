@@ -207,10 +207,7 @@ public final class CloudInitService: @unchecked Sendable {
             ("bin/pegpu-performance", "0755"),
             ("src/pegpu_performance.py", "0644"),
             ("share/applications/pegpu-performance.desktop", "0644"),
-            ("share/icons/source/pegpu-performance.png", "0644"),
-            ("share/icons/hicolor/256x256/apps/pegpu-performance.png", "0644"),
-            ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644"),
-            ("share/icons/hicolor/1024x1024/apps/pegpu-performance.png", "0644")
+            ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644")
         ]
         var entries: [String] = try files.compactMap { relative, mode in
             let source = root.appendingPathComponent(relative)

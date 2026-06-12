@@ -136,8 +136,7 @@ OpenResearchTools/PEGPU code distributed under the MIT license. It provides a
 GTK/CLI frontend for the Machine-supplied `apple-dma-config` guest driver
 configuration helper and depends on system Python and GTK/PyGObject rather than
 bundling those dependencies. Its app icon is a user-provided generated PNG
-preserved in the source tree as
-`Resources/Guest/performance-app/share/icons/source/pegpu-performance.png`.
+installed through the standard hicolor icon theme path.
 
 ## GOST-Derived Local Proxy
 
