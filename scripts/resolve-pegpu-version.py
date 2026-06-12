@@ -82,9 +82,9 @@ def main() -> int:
 
     explicit = explicit_version_from_env(args.explicit)
     if explicit is not None:
-        version, source = explicit
+        version, _source = explicit
         selected = parse_version(version)
-        if source != "tag" and selected <= latest:
+        if selected <= latest:
             raise SystemExit(
                 f"release_version {version} is not newer than latest completed PEGPU version {format_version(latest)}"
             )
