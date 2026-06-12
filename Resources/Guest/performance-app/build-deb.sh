@@ -26,6 +26,9 @@ for size in 256 512 1024; do
   [ -f "$source" ] || continue
   install_file 0644 "$source" "$PKG_DIR/usr/share/icons/hicolor/${size}x${size}/apps/pegpu-performance.png"
 done
+if [ -f "$ROOT/share/icons/hicolor/scalable/apps/pegpu-performance.svg" ]; then
+  install_file 0644 "$ROOT/share/icons/hicolor/scalable/apps/pegpu-performance.svg" "$PKG_DIR/usr/share/icons/hicolor/scalable/apps/pegpu-performance.svg"
+fi
 install_file 0644 "$ROOT/share/icons/source/pegpu-performance.png" "$PKG_DIR/usr/share/pegpu-performance/pegpu-performance.png"
 
 install -d "$PKG_DIR/usr/share/doc/pegpu-performance"

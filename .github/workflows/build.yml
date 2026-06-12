@@ -509,6 +509,7 @@ jobs:
           test "$(dpkg-deb -f "$package" Version)" = "${RELEASE_VERSION}"
           dpkg-deb -c "$package" | grep -F './usr/bin/pegpu-performance'
           dpkg-deb -c "$package" | grep -F './usr/share/applications/pegpu-performance.desktop'
+          dpkg-deb -c "$package" | grep -F './usr/share/icons/hicolor/scalable/apps/pegpu-performance.svg'
 
       - name: Upload performance package
         uses: actions/upload-artifact@v7
