@@ -23,6 +23,11 @@ APP_ID = "com.pegpu.scaling"
 APP_ICON_NAME = "pegpu-scaling"
 TITLE_FONT_FAMILY = "Sans Bold"
 LOCK_WAIT_SECONDS = 2.0
+WINDOW_WIDTH = 528
+PANEL_WIDTH = 480
+HEADER_TEXT_WIDTH = 384
+SCALE_BUTTON_WIDTH = 150
+SCALE_BUTTON_HEIGHT = 50
 
 
 @dataclass(frozen=True)
@@ -568,8 +573,8 @@ def run_gui(args: argparse.Namespace) -> int:
               padding: 8px;
             }
             .pegpu-scale-button {
-              min-width: 64px;
-              min-height: 32px;
+              min-width: 150px;
+              min-height: 50px;
               padding: 4px 8px;
               font-weight: 700;
             }
@@ -601,6 +606,7 @@ def run_gui(args: argparse.Namespace) -> int:
             super().__init__(title="PEGPU Scaling")
             self.set_icon_name(APP_ICON_NAME)
             self.set_resizable(False)
+            self.set_default_size(WINDOW_WIDTH, -1)
             self.connect("destroy", Gtk.main_quit)
             self.get_style_context().add_class("pegpu-window")
             self.scale_buttons: dict[str, Gtk.ToggleButton] = {}
@@ -609,6 +615,7 @@ def run_gui(args: argparse.Namespace) -> int:
 
             outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             outer.set_halign(Gtk.Align.START)
+            outer.set_size_request(PANEL_WIDTH, -1)
             set_margins(outer, 16)
             self.add(outer)
 
@@ -620,6 +627,7 @@ def run_gui(args: argparse.Namespace) -> int:
 
             title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             title_box.set_halign(Gtk.Align.START)
+            title_box.set_size_request(HEADER_TEXT_WIDTH, -1)
             header.pack_start(title_box, False, False, 0)
 
             title = Gtk.Label(label="PEGPU Scaling", xalign=0)
@@ -632,6 +640,8 @@ def run_gui(args: argparse.Namespace) -> int:
 
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             card.set_halign(Gtk.Align.START)
+            card.set_hexpand(False)
+            card.set_size_request(PANEL_WIDTH, -1)
             card.get_style_context().add_class("pegpu-scale-card")
             outer.pack_start(card, False, False, 0)
 
@@ -641,22 +651,28 @@ def run_gui(args: argparse.Namespace) -> int:
 
             scale_grid = Gtk.Grid(column_spacing=6, row_spacing=6)
             scale_grid.set_halign(Gtk.Align.START)
+            scale_grid.set_hexpand(False)
             card.pack_start(scale_grid, False, False, 0)
 
             for index, scale in enumerate(SUPPORTED_SCALES):
                 button = Gtk.ToggleButton(label=f"{scale}x")
                 button.get_style_context().add_class("pegpu-scale-button")
+                button.set_size_request(SCALE_BUTTON_WIDTH, SCALE_BUTTON_HEIGHT)
                 button.connect("toggled", self.on_scale_toggled, scale)
                 self.scale_buttons[scale] = button
                 scale_grid.attach(button, index % 3, index // 3, 1, 1)
 
             footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            footer.set_halign(Gtk.Align.START)
+            footer.set_hexpand(False)
+            footer.set_size_request(PANEL_WIDTH, -1)
             footer.get_style_context().add_class("pegpu-footer")
             outer.pack_start(footer, False, False, 0)
 
             self.status = Gtk.Label(label=f"Ready on DISPLAY={require_display(args.display)}", xalign=0)
             self.status.set_ellipsize(Pango.EllipsizeMode.END)
-            self.status.set_max_width_chars(44)
+            self.status.set_size_request(PANEL_WIDTH, -1)
+            self.status.set_max_width_chars(48)
             self.status.get_style_context().add_class("pegpu-muted")
             footer.pack_start(self.status, False, False, 0)
 

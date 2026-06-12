@@ -31,6 +31,12 @@ if [ -f "$ROOT/share/icons/hicolor/scalable/apps/pegpu-performance.svg" ]; then
 fi
 install_file 0644 "$ROOT/share/icons/source/pegpu-performance.png" "$PKG_DIR/usr/share/pegpu-performance/pegpu-performance.png"
 
+install -d "$PKG_DIR/etc/sudoers.d"
+cat >"$PKG_DIR/etc/sudoers.d/90-pegpu-performance" <<'EOF'
+pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config *
+EOF
+chmod 0440 "$PKG_DIR/etc/sudoers.d/90-pegpu-performance"
+
 install -d "$PKG_DIR/usr/share/doc/pegpu-performance"
 cat >"$PKG_DIR/usr/share/doc/pegpu-performance/copyright" <<'EOF'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
@@ -70,7 +76,7 @@ Section: x11
 Priority: optional
 Architecture: $ARCH
 Maintainer: PEGPU <support@pegpu.local>
-Depends: python3, python3-gi, gir1.2-gtk-3.0, libglib2.0-bin
+Depends: python3, python3-gi, gir1.2-gtk-3.0, libglib2.0-bin, sudo
 Description: DMA coalescing performance helper for PEGPU guests
  Provides a GTK app and CLI for selecting the Apple DMA coalescing
  window used by the guest-side apple_dma driver.
@@ -79,6 +85,16 @@ EOF
 cat >"$PKG_DIR/DEBIAN/postinst" <<'EOF'
 #!/usr/bin/env bash
 set -e
+install -d /etc/sudoers.d
+if [ ! -f /etc/sudoers.d/90-pegpu-performance ]; then
+  cat >/etc/sudoers.d/90-pegpu-performance <<'SUDOERS'
+pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config *
+SUDOERS
+fi
+chmod 0440 /etc/sudoers.d/90-pegpu-performance
+if command -v visudo >/dev/null 2>&1; then
+  visudo -cf /etc/sudoers.d/90-pegpu-performance >/dev/null 2>&1 || rm -f /etc/sudoers.d/90-pegpu-performance
+fi
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 fi

@@ -508,6 +508,7 @@ jobs:
           (cd "$OUT" && sha512sum -c SHA512SUMS)
           test "$(dpkg-deb -f "$package" Version)" = "${RELEASE_VERSION}"
           dpkg-deb -c "$package" | grep -F './usr/bin/pegpu-performance'
+          dpkg-deb -c "$package" | grep -F './etc/sudoers.d/90-pegpu-performance'
           dpkg-deb -c "$package" | grep -F './usr/share/applications/pegpu-performance.desktop'
           dpkg-deb -c "$package" | grep -F './usr/share/icons/hicolor/scalable/apps/pegpu-performance.svg'
 

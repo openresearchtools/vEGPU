@@ -48,6 +48,7 @@ if [ "${PEGPU_PERFORMANCE_SKIP_DEPS:-0}" != "1" ] && command -v apt-get >/dev/nu
   apt-get install -y \
     gir1.2-gtk-3.0 \
     libglib2.0-bin \
+    sudo \
     python3 \
     python3-gi
 fi
@@ -66,6 +67,15 @@ if [ -f "$ROOT/share/icons/hicolor/scalable/apps/pegpu-performance.svg" ]; then
 fi
 if [ -f "$ROOT/share/icons/source/pegpu-performance.png" ]; then
   install_file 0644 "$ROOT/share/icons/source/pegpu-performance.png" "$PREFIX/share/pegpu-performance/pegpu-performance.png"
+fi
+
+install -d /etc/sudoers.d
+cat >/etc/sudoers.d/90-pegpu-performance <<'SUDOERS'
+pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config *
+SUDOERS
+chmod 0440 /etc/sudoers.d/90-pegpu-performance
+if command -v visudo >/dev/null 2>&1; then
+  visudo -cf /etc/sudoers.d/90-pegpu-performance >/dev/null 2>&1 || rm -f /etc/sudoers.d/90-pegpu-performance
 fi
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then

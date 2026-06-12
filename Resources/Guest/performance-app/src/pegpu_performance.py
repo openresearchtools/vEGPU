@@ -15,6 +15,11 @@ APP_ICON_NAME = "pegpu-performance"
 HELPER = os.environ.get("PEGPU_DMA_CONFIG", "/usr/sbin/apple-dma-config")
 APPLY_NOTE = "Saved. To apply cleanly, stop the PEGPU server, shut down the VM, unplug the eGPU, plug it back in, then start PEGPU again."
 EXPLANATION = "Controls the Apple DMA coalescing window. Larger windows can reduce DMA mapping overhead, while smaller windows favor stability."
+WINDOW_WIDTH = 520
+PANEL_WIDTH = 476
+HEADER_TEXT_WIDTH = 380
+PRESET_WIDTH = 220
+PRESET_HEIGHT = 78
 
 
 @dataclass(frozen=True)
@@ -83,13 +88,13 @@ def helper_base_args(privileged: bool = False) -> list[str]:
         raise RuntimeError("apple-dma-config is not installed yet. Refresh PEGPU guest tools, then try again.")
     if not privileged or os.geteuid() == 0:
         return [HELPER]
-    pkexec = shutil.which("pkexec")
-    if pkexec:
-        return [pkexec, HELPER]
     sudo = shutil.which("sudo")
     if sudo:
         return [sudo, "-n", HELPER]
-    raise RuntimeError("Saving this setting requires root access, but neither pkexec nor sudo is available.")
+    pkexec = shutil.which("pkexec")
+    if pkexec:
+        return [pkexec, HELPER]
+    raise RuntimeError("Saving this setting requires root access, but no supported privilege helper is available.")
 
 
 def run_helper(args: list[str], privileged: bool = False) -> str:
@@ -97,6 +102,8 @@ def run_helper(args: list[str], privileged: bool = False) -> str:
     result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     if result.returncode != 0:
         message = (result.stderr or result.stdout).strip()
+        if "a password is required" in message.lower():
+            message = "PEGPU Performance is missing its root permission rule. Refresh PEGPU guest tools, then try again."
         raise RuntimeError(message or f"apple-dma-config exited with status {result.returncode}")
     return result.stdout
 
@@ -207,8 +214,8 @@ def run_gui(args: argparse.Namespace) -> int:
               padding: 10px;
             }
             .pegpu-mode-button {
-              min-width: 198px;
-              min-height: 74px;
+              min-width: 220px;
+              min-height: 78px;
               padding: 8px;
             }
             .pegpu-mode-button:checked {
@@ -238,6 +245,7 @@ def run_gui(args: argparse.Namespace) -> int:
     def mode_button(mode: PerformanceMode) -> Any:
         button = Gtk.ToggleButton()
         button.get_style_context().add_class("pegpu-mode-button")
+        button.set_size_request(PRESET_WIDTH, PRESET_HEIGHT)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.set_halign(Gtk.Align.START)
         title = Gtk.Label(label=mode.label, xalign=0)
@@ -257,6 +265,7 @@ def run_gui(args: argparse.Namespace) -> int:
             super().__init__(title="PEGPU Performance")
             self.set_icon_name(APP_ICON_NAME)
             self.set_resizable(False)
+            self.set_default_size(WINDOW_WIDTH, -1)
             self.connect("destroy", Gtk.main_quit)
             self.get_style_context().add_class("pegpu-window")
             self.mode_buttons: dict[str, Any] = {}
@@ -265,6 +274,7 @@ def run_gui(args: argparse.Namespace) -> int:
 
             outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             outer.set_halign(Gtk.Align.START)
+            outer.set_size_request(PANEL_WIDTH, -1)
             set_margins(outer, 16)
             self.add(outer)
 
@@ -276,6 +286,7 @@ def run_gui(args: argparse.Namespace) -> int:
 
             title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
             title_box.set_halign(Gtk.Align.START)
+            title_box.set_size_request(HEADER_TEXT_WIDTH, -1)
             header.pack_start(title_box, False, False, 0)
 
             title = Gtk.Label(label="PEGPU Performance", xalign=0)
@@ -286,16 +297,20 @@ def run_gui(args: argparse.Namespace) -> int:
             explanation.get_style_context().add_class("pegpu-muted")
             explanation.set_line_wrap(True)
             explanation.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            explanation.set_max_width_chars(66)
+            explanation.set_size_request(HEADER_TEXT_WIDTH, -1)
+            explanation.set_max_width_chars(46)
             title_box.pack_start(explanation, False, False, 0)
 
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
             card.set_halign(Gtk.Align.START)
+            card.set_hexpand(False)
+            card.set_size_request(PANEL_WIDTH, -1)
             card.get_style_context().add_class("pegpu-card")
             outer.pack_start(card, False, False, 0)
 
             grid = Gtk.Grid(column_spacing=8, row_spacing=8)
             grid.set_halign(Gtk.Align.START)
+            grid.set_hexpand(False)
             card.pack_start(grid, False, False, 0)
             for index, mode in enumerate(MODES):
                 button = mode_button(mode)
@@ -304,19 +319,24 @@ def run_gui(args: argparse.Namespace) -> int:
                 grid.attach(button, index % 2, index // 2, 1, 1)
 
             footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            footer.set_halign(Gtk.Align.START)
+            footer.set_hexpand(False)
+            footer.set_size_request(PANEL_WIDTH, -1)
             footer.get_style_context().add_class("pegpu-footer")
             outer.pack_start(footer, False, False, 0)
 
             self.status = Gtk.Label(label="", xalign=0)
             self.status.set_ellipsize(Pango.EllipsizeMode.END)
-            self.status.set_max_width_chars(66)
+            self.status.set_size_request(PANEL_WIDTH, -1)
+            self.status.set_max_width_chars(48)
             self.status.get_style_context().add_class("pegpu-muted")
             footer.pack_start(self.status, False, False, 0)
 
             self.note = Gtk.Label(label="", xalign=0)
             self.note.set_line_wrap(True)
             self.note.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
-            self.note.set_max_width_chars(66)
+            self.note.set_size_request(PANEL_WIDTH, -1)
+            self.note.set_max_width_chars(48)
             self.note.get_style_context().add_class("pegpu-muted")
             footer.pack_start(self.note, False, False, 0)
 
@@ -381,6 +401,7 @@ def run_gui(args: argparse.Namespace) -> int:
                 return
             mode = self.selected_mode
             self.set_busy(True)
+            self.note.set_text("")
             self.status.set_text(f"Saving {mode.label}...")
 
             def worker() -> None:
@@ -400,7 +421,6 @@ def run_gui(args: argparse.Namespace) -> int:
                     else:
                         self.status.set_text(f"Saved {mode.label}.")
                         self.note.set_text(APPLY_NOTE)
-                        self.refresh_status()
                     return False
 
                 GLib.idle_add(finish)
