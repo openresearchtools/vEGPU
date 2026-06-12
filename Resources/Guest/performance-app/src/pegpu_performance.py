@@ -91,10 +91,7 @@ def helper_base_args(privileged: bool = False) -> list[str]:
     sudo = shutil.which("sudo")
     if sudo:
         return [sudo, "-n", HELPER]
-    pkexec = shutil.which("pkexec")
-    if pkexec:
-        return [pkexec, HELPER]
-    raise RuntimeError("Saving this setting requires root access, but no supported privilege helper is available.")
+    raise RuntimeError("PEGPU Performance is missing its root permission rule. Refresh PEGPU guest tools, then try again.")
 
 
 def run_helper(args: list[str], privileged: bool = False) -> str:

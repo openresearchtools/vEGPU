@@ -71,7 +71,7 @@ fi
 
 install -d /etc/sudoers.d
 cat >/etc/sudoers.d/90-pegpu-performance <<'SUDOERS'
-pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config *
+pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config set --coalescing *, /usr/sbin/apple-dma-config reset
 SUDOERS
 chmod 0440 /etc/sudoers.d/90-pegpu-performance
 if command -v visudo >/dev/null 2>&1; then

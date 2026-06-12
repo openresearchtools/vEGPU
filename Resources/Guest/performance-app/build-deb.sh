@@ -33,7 +33,7 @@ install_file 0644 "$ROOT/share/icons/source/pegpu-performance.png" "$PKG_DIR/usr
 
 install -d "$PKG_DIR/etc/sudoers.d"
 cat >"$PKG_DIR/etc/sudoers.d/90-pegpu-performance" <<'EOF'
-pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config *
+pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config set --coalescing *, /usr/sbin/apple-dma-config reset
 EOF
 chmod 0440 "$PKG_DIR/etc/sudoers.d/90-pegpu-performance"
 
@@ -88,7 +88,7 @@ set -e
 install -d /etc/sudoers.d
 if [ ! -f /etc/sudoers.d/90-pegpu-performance ]; then
   cat >/etc/sudoers.d/90-pegpu-performance <<'SUDOERS'
-pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config *
+pegpu ALL=(root) NOPASSWD: /usr/sbin/apple-dma-config set --coalescing *, /usr/sbin/apple-dma-config reset
 SUDOERS
 fi
 chmod 0440 /etc/sudoers.d/90-pegpu-performance
