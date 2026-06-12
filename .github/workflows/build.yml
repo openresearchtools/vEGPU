@@ -1012,7 +1012,8 @@ jobs:
     runs-on: macos-26
     needs:
       - version
-    if: ${{ always() && needs.version.result == 'success' && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) }}
+      - machine-build
+    if: ${{ always() && needs.version.result == 'success' && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
     env:
       RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
       BUILD_NUMBER: ${{ needs.version.outputs.build_number }}
@@ -1068,10 +1069,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Download Machine artifacts from reusable workflow
+        if: ${{ env.MACHINE_MODE == 'trigger' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: PEGPU-Machine-*-build-output
+          path: ${{ runner.temp }}/pegpu-input/machine-reusable
+          merge-multiple: true
+
       - name: Normalize Machine artifacts
         run: |
           if [ "${MACHINE_MODE}" = "app-run" ]; then
             export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-app-run"
+          elif [ "${MACHINE_MODE}" = "trigger" ]; then
+            export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-reusable"
           fi
           scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/pegpu-artifacts/machine"
         env:
@@ -1079,7 +1090,7 @@ jobs:
           PEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/PEGPU-machine' }}
           PEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
           PEGPU_MACHINE_RUN_ID: ${{ env.MACHINE_MODE == 'download-run' && inputs.machine_run_id || '' }}
-          PEGPU_TRIGGER_MACHINE_BUILD: ${{ env.MACHINE_MODE == 'trigger' && '1' || '0' }}
+          PEGPU_TRIGGER_MACHINE_BUILD: "0"
           PEGPU_REQUIRE_MACHINE_SOURCE: "1"
           PEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
           PEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
@@ -1123,6 +1134,21 @@ jobs:
           path: ${{ runner.temp }}/pegpu-artifacts/machine
           if-no-files-found: error
           retention-days: 90
+
+  machine-build:
+    name: Build PEGPU Machine
+    needs:
+      - version
+    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'trigger' }}
+    uses: openresearchtools/PEGPU-machine/.github/workflows/build-nosip.yml@main
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      release_version: ${{ needs.version.outputs.release_version }}
+      build_number: ${{ needs.version.outputs.build_number }}
+      publish_release: false
+      prerelease: ${{ inputs.prerelease || false }}
 
   package:
     name: Package installer
