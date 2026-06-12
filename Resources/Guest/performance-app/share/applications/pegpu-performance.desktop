@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PEGPU Performance
+Comment=Adjust PEGPU DMA performance mode
+Exec=pegpu-performance --gui
+Icon=pegpu-performance
+Terminal=false
+Categories=Settings;HardwareSettings;GTK;
+StartupNotify=false

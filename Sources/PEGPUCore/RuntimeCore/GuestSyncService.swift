@@ -35,6 +35,7 @@ public final class GuestSyncService: @unchecked Sendable {
         await growRootFilesystem()
         try await syncGuiAssets()
         try await syncScalingApp()
+        try await syncPerformanceApp()
         try await syncBundledLlamaRuntimeSeed()
         if !force, let runtimePid, markerMatches(runtimePid: runtimePid, fingerprint: fingerprint) {
             if await guestDriverReady() {
@@ -177,6 +178,32 @@ public final class GuestSyncService: @unchecked Sendable {
             .last
     }
 
+    private func syncPerformanceApp() async throws {
+        let root = paths.resources.appendingPathComponent("Guest/performance-app", isDirectory: true)
+        let files: [(String, String)] = [
+            ("install.sh", "0755"),
+            ("bin/pegpu-performance", "0755"),
+            ("src/pegpu_performance.py", "0644"),
+            ("share/applications/pegpu-performance.desktop", "0644"),
+            ("share/icons/source/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/256x256/apps/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/1024x1024/apps/pegpu-performance.png", "0644")
+        ]
+        guard FileManager.default.fileExists(atPath: root.appendingPathComponent("install.sh").path) else { return }
+        _ = try await ssh.ssh("sudo -n rm -rf /usr/local/libexec/pegpu/performance-app && sudo -n install -d /usr/local/libexec/pegpu/performance-app")
+        for (relative, mode) in files {
+            let source = root.appendingPathComponent(relative).path
+            guard FileManager.default.fileExists(atPath: source) else { continue }
+            let remote = "/tmp/pegpu-sync/performance-app/\(relative)"
+            let destination = "/usr/local/libexec/pegpu/performance-app/\(relative)"
+            _ = try await ssh.ssh("mkdir -p \(shellQuote(URL(fileURLWithPath: remote).deletingLastPathComponent().path))")
+            try await ssh.scpToGuest(localPath: source, remotePath: remote)
+            _ = try await ssh.ssh("sudo -n install -D -m \(mode) \(shellQuote(remote)) \(shellQuote(destination))")
+        }
+        _ = try await ssh.ssh("sudo -n env PEGPU_PERFORMANCE_SKIP_DEPS=1 /usr/local/libexec/pegpu/performance-app/install.sh")
+    }
+
     private func aptInstallLocalDebCommand(remote: String, aptOptions: String) -> String {
         let remoteURL = URL(fileURLWithPath: remote)
         let remoteDir = remoteURL.deletingLastPathComponent().path
@@ -275,6 +302,24 @@ public final class GuestSyncService: @unchecked Sendable {
             hasher.update(data: Data([0]))
             hasher.update(data: Data("scaling-app/\(relative)".utf8))
             if let data = try? Data(contentsOf: scalingAppDir.appendingPathComponent(relative)) {
+                hasher.update(data: Data([0]))
+                hasher.update(data: data)
+            }
+        }
+        let performanceAppDir = guestDir.appendingPathComponent("performance-app", isDirectory: true)
+        for relative in [
+            "install.sh",
+            "bin/pegpu-performance",
+            "src/pegpu_performance.py",
+            "share/applications/pegpu-performance.desktop",
+            "share/icons/source/pegpu-performance.png",
+            "share/icons/hicolor/256x256/apps/pegpu-performance.png",
+            "share/icons/hicolor/512x512/apps/pegpu-performance.png",
+            "share/icons/hicolor/1024x1024/apps/pegpu-performance.png"
+        ] {
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data("performance-app/\(relative)".utf8))
+            if let data = try? Data(contentsOf: performanceAppDir.appendingPathComponent(relative)) {
                 hasher.update(data: Data([0]))
                 hasher.update(data: data)
             }

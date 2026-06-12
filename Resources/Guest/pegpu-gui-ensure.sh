@@ -9,6 +9,7 @@ HUMAN_USER=pegpu
 XORG_CHANGED=0
 CUSTOMIZATION_SCRIPT=/usr/local/libexec/pegpu/customization.sh
 SCALING_APP_DIR=/usr/local/libexec/pegpu/scaling-app
+PERFORMANCE_APP_DIR=/usr/local/libexec/pegpu/performance-app
 
 apt_get() {
   local attempt output code
@@ -82,6 +83,20 @@ install_scaling_app() {
   fi
   if [ -x "$SCALING_APP_DIR/install.sh" ]; then
     PEGPU_SCALING_SKIP_DEPS=1 "$SCALING_APP_DIR/install.sh" >/dev/null 2>&1 || true
+  fi
+}
+
+install_performance_app() {
+  local script_dir source_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  source_dir="${PEGPU_PERFORMANCE_APP_SOURCE:-$script_dir/performance-app}"
+  if [ -f "$source_dir/install.sh" ]; then
+    rm -rf "$PERFORMANCE_APP_DIR"
+    install -d "$PERFORMANCE_APP_DIR"
+    cp -a "$source_dir"/. "$PERFORMANCE_APP_DIR"/
+  fi
+  if [ -x "$PERFORMANCE_APP_DIR/install.sh" ]; then
+    PEGPU_PERFORMANCE_SKIP_DEPS=1 "$PERFORMANCE_APP_DIR/install.sh" >/dev/null 2>&1 || true
   fi
 }
 
@@ -1922,6 +1937,7 @@ restart_lightdm_for_display_config() {
 if [ "${1:-}" = "--install-display-control-only" ]; then
   install_customization_script
   install_scaling_app
+  install_performance_app
   run_customization write-prefs
   run_customization disable-idle
   install_display_control
@@ -1956,6 +1972,7 @@ repair_desktop_links
 install_desktop_mount_policy
 install_customization_script
 install_scaling_app
+install_performance_app
 run_customization write-prefs
 install_display_control
 repair_spice_agent_session

@@ -30,6 +30,10 @@ bad_artifacts="$(
     -path './Resources/Assets/PEGPU.icns' -o \
     -path './Resources/Assets/PEGPU-logo-transparent.png' -o \
     -path './Resources/Assets/PEGPU-tray.png' -o \
+    -path './Resources/Guest/performance-app/share/icons/source/pegpu-performance.png' -o \
+    -path './Resources/Guest/performance-app/share/icons/hicolor/256x256/apps/pegpu-performance.png' -o \
+    -path './Resources/Guest/performance-app/share/icons/hicolor/512x512/apps/pegpu-performance.png' -o \
+    -path './Resources/Guest/performance-app/share/icons/hicolor/1024x1024/apps/pegpu-performance.png' -o \
     -path './website/assets/pegpu-logo.png' -o \
     -path './website/assets/setup/pegpu-logo.png' \
   \) -prune -o -type f \( \
@@ -69,6 +73,10 @@ binary_payloads="$(
       -path './Resources/Assets/PEGPU.icns' -o \
       -path './Resources/Assets/PEGPU-logo-transparent.png' -o \
       -path './Resources/Assets/PEGPU-tray.png' -o \
+      -path './Resources/Guest/performance-app/share/icons/source/pegpu-performance.png' -o \
+      -path './Resources/Guest/performance-app/share/icons/hicolor/256x256/apps/pegpu-performance.png' -o \
+      -path './Resources/Guest/performance-app/share/icons/hicolor/512x512/apps/pegpu-performance.png' -o \
+      -path './Resources/Guest/performance-app/share/icons/hicolor/1024x1024/apps/pegpu-performance.png' -o \
       -path './website/assets/pegpu-logo.png' -o \
       -path './website/assets/setup/pegpu-logo.png' \
     \) -prune -o -type f -print0 |
@@ -103,6 +111,7 @@ test -f legal/LICENSES/llama-swap-MIT.txt
 test -f legal/LICENSES/llama.cpp-MIT.txt
 test -f legal/LICENSES/UTM-Apache-2.0.txt
 test -f legal/LICENSES/pegpu-scaling-MIT.txt
+test -f legal/LICENSES/pegpu-performance-MIT.txt
 test -f releases/releases-manifest.json
 test -f releases/pre-releases-manifest.json
 test -f third_party/angle/LICENSE

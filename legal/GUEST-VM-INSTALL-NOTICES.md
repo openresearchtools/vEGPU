@@ -143,6 +143,14 @@ The package installs its own copyright file at:
 /usr/share/doc/pegpu-scaling/copyright
 ```
 
+## PEGPU Performance Helper
+
+PEGPU may install the local `pegpu-performance` helper inside the VM. This is
+PEGPU-owned MIT-licensed code used to expose a small GTK app and CLI for Apple
+DMA coalescing presets. It calls the Machine-provided `apple-dma-config` helper
+installed by the `apple-dma-dkms` package and does not bundle Python, GTK, or
+PyGObject.
+
 ## Guest DMA Driver Package
 
 PEGPU Machine supplies the guest DMA driver package that is installed inside the
@@ -151,8 +159,10 @@ VM. Current guest scripts look for Machine-provided packages named like:
 - `apple-dma-dkms_*.deb`
 
 The package builds and installs the guest DMA kernel module through DKMS for the
-VM kernel. PEGPU may install Debian DKMS/build/header packages listed above so
-the module can build against the running guest kernel.
+VM kernel. It also installs `/usr/sbin/apple-dma-config`, which persists the
+Apple DMA coalescing preset in `/etc/modprobe.d/apple-dma-options.conf`. PEGPU
+may install Debian DKMS/build/header packages listed above so the module can
+build against the running guest kernel.
 
 The DMA driver package is a PEGPU Machine guest artifact, not a Debian package
 downloaded from APT and not an app-side PEGPU notice. PEGPU Machine carries its
@@ -224,7 +234,8 @@ as:
 ```sh
 apt list --installed
 dpkg-query -W
-apt-cache policy nvidia-open cuda-toolkit-13-2 pegpu-scaling
+apt-cache policy nvidia-open cuda-toolkit-13-2 pegpu-scaling apple-dma-dkms
+command -v pegpu-performance apple-dma-config
 ls /etc/apt/sources.list.d/
 ls /etc/apt/preferences.d/
 find /usr/share/doc -maxdepth 2 -name copyright

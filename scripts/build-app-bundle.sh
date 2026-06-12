@@ -125,6 +125,8 @@ rsync -a \
   --exclude='Guest/scaling-app/build/***' \
   --exclude='Guest/scaling-app/**/__pycache__/***' \
   --exclude='Guest/scaling-app/**/*.pyc' \
+  --exclude='Guest/performance-app/**/__pycache__/***' \
+  --exclude='Guest/performance-app/**/*.pyc' \
   "$ROOT/Resources" "$BUNDLED_ROOT/"
 rsync -a \
   --exclude='web-ui-app/runtimes/***' \

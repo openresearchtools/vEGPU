@@ -67,10 +67,14 @@ Guest DMA/DKMS packages are Machine artifacts, not app artifacts. The combined
 installer bundles them inside `PEGPU Machine.app` and also bundles Machine
 source tarballs next to Machine resources for release compliance.
 
-The app-side Linux scaling helper is different: it is small PEGPU-owned Python
-and desktop integration code under `Resources/Guest/scaling-app`. CI packages it
-as `pegpu-scaling_*.deb` in a disposable Debian build container, bundles that
-package into `PEGPU.app`, and cloud-init/SSH install it in the guest.
+The app-side Linux desktop helpers are different: they are small PEGPU-owned
+Python and desktop integration code under `Resources/Guest/scaling-app` and
+`Resources/Guest/performance-app`. CI packages the scaling helper as
+`pegpu-scaling_*.deb` in a disposable Debian build container and bundles that
+package into `PEGPU.app`; cloud-init/SSH install the performance helper from the
+bundled source tree. The performance helper presents PEGPU DMA coalescing
+presets and delegates persistence to the Machine-supplied `apple-dma-config`
+tool from the `apple-dma-dkms` guest package.
 
 ## Model Routing
 

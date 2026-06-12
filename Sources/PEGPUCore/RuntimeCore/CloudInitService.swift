@@ -71,6 +71,7 @@ public final class CloudInitService: @unchecked Sendable {
         let guiCustomization = mode == .gui ? try String(contentsOf: paths.resources.appendingPathComponent("Guest/customization.sh"), encoding: .utf8) : nil
         let guiAssetWriteFile = mode == .gui ? try guiAssetWriteFiles() : ""
         let guiScalingAppWriteFiles = mode == .gui ? try scalingAppWriteFiles() : ""
+        let guiPerformanceAppWriteFiles = mode == .gui ? try performanceAppWriteFiles() : ""
         let guiWriteFile = guiBoot.map {
             """
               - path: /usr/local/sbin/pegpu-gui-ensure.sh
@@ -143,6 +144,7 @@ public final class CloudInitService: @unchecked Sendable {
               pegpuctl ALL=(root) NOPASSWD:ALL
         \(guiAssetWriteFile)
         \(guiScalingAppWriteFiles)
+        \(guiPerformanceAppWriteFiles)
         \(guiCustomizationWriteFile)
         \(guiWriteFile)
         runcmd:
@@ -194,6 +196,33 @@ public final class CloudInitService: @unchecked Sendable {
                 encoding: b64
                 content: \(base64(data))
             """)
+        }
+        return entries.joined(separator: "\n")
+    }
+
+    private func performanceAppWriteFiles() throws -> String {
+        let root = paths.resources.appendingPathComponent("Guest/performance-app", isDirectory: true)
+        let files: [(String, String)] = [
+            ("install.sh", "0755"),
+            ("bin/pegpu-performance", "0755"),
+            ("src/pegpu_performance.py", "0644"),
+            ("share/applications/pegpu-performance.desktop", "0644"),
+            ("share/icons/source/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/256x256/apps/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/1024x1024/apps/pegpu-performance.png", "0644")
+        ]
+        let entries: [String] = try files.compactMap { relative, mode in
+            let source = root.appendingPathComponent(relative)
+            guard FileManager.default.fileExists(atPath: source.path) else { return nil }
+            let data = try Data(contentsOf: source).base64EncodedString()
+            return """
+              - path: /usr/local/libexec/pegpu/performance-app/\(relative)
+                owner: root:root
+                permissions: '\(mode)'
+                encoding: b64
+                content: \(data)
+            """
         }
         return entries.joined(separator: "\n")
     }

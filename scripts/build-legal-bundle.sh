@@ -770,6 +770,8 @@ def metadata_for_license_file(path: Path) -> dict[str, str]:
         meta.update({"name": "GOST/local proxy provenance", "version": "modified app-side local proxy", "license": "MIT" if "license" in lower or "mit" in lower else "Notice/Provenance", "scope": "Bundled app-side local proxy"})
     elif "pegpu-scaling" in lower:
         meta.update({"name": "PEGPU Linux scaling helper", "version": release_version, "license": "MIT", "scope": "Bundled guest-side scaling helper package"})
+    elif "pegpu-performance" in lower:
+        meta.update({"name": "PEGPU Linux performance helper", "version": release_version, "license": "MIT", "scope": "Bundled guest-side performance helper"})
     elif "utm-apache" in lower:
         meta.update({"name": "UTM app-side display provenance", "version": utm_commit, "license": "Apache-2.0", "scope": "App-side display provenance"})
     elif lower.startswith("display-runtime/"):
@@ -1035,6 +1037,7 @@ tar -czf "$OUT/source/PEGPU-app-source.tar.gz" \
   --exclude='Resources/Guest/scaling-app/build' \
   --exclude='Resources/Guest/scaling-app/package' \
   --exclude='Resources/Guest/scaling-app/**/__pycache__' \
+  --exclude='Resources/Guest/performance-app/**/__pycache__' \
   --exclude='*.pyc' \
   --exclude='*.deb' \
   --exclude='ai/web-ui-app/runtimes' \

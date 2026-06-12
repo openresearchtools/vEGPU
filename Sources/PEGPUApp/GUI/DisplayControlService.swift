@@ -239,6 +239,7 @@ final class DisplayControlService: @unchecked Sendable {
         try await ssh.scpToGuest(localPath: source.path, remotePath: remote)
         try await ssh.scpToGuest(localPath: customizationSource.path, remotePath: customizationRemote)
         try await uploadScalingApp()
+        try await uploadPerformanceApp()
         let config = MachineConfigStore(paths: paths).load()
         let guiPrefs = [
             "PEGPU_GUI_RETINA=\(config.guiRetina ? "1" : "0")",
@@ -284,6 +285,31 @@ final class DisplayControlService: @unchecked Sendable {
             _ = try await ssh.ssh("sudo -n install -D -m \(mode) \(shellQuote(remote)) \(shellQuote(destination)) && rm -f \(shellQuote(remote))", timeout: 10)
         }
         _ = try await ssh.ssh("sudo -n env PEGPU_SCALING_SKIP_DEPS=1 /usr/local/libexec/pegpu/scaling-app/install.sh", timeout: 20)
+    }
+
+    private func uploadPerformanceApp() async throws {
+        let root = paths.resources.appendingPathComponent("Guest/performance-app", isDirectory: true)
+        let files: [(String, String)] = [
+            ("install.sh", "0755"),
+            ("bin/pegpu-performance", "0755"),
+            ("src/pegpu_performance.py", "0644"),
+            ("share/applications/pegpu-performance.desktop", "0644"),
+            ("share/icons/source/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/256x256/apps/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644"),
+            ("share/icons/hicolor/1024x1024/apps/pegpu-performance.png", "0644")
+        ]
+        guard FileManager.default.fileExists(atPath: root.appendingPathComponent("install.sh").path) else { return }
+        _ = try await ssh.ssh("sudo -n rm -rf /usr/local/libexec/pegpu/performance-app && sudo -n install -d /usr/local/libexec/pegpu/performance-app", timeout: 10)
+        for (relative, mode) in files {
+            let source = root.appendingPathComponent(relative).path
+            guard FileManager.default.fileExists(atPath: source) else { continue }
+            let remote = "/tmp/pegpu-performance-app-\(UUID().uuidString)-\(URL(fileURLWithPath: relative).lastPathComponent)"
+            let destination = "/usr/local/libexec/pegpu/performance-app/\(relative)"
+            try await ssh.scpToGuest(localPath: source, remotePath: remote)
+            _ = try await ssh.ssh("sudo -n install -D -m \(mode) \(shellQuote(remote)) \(shellQuote(destination)) && rm -f \(shellQuote(remote))", timeout: 10)
+        }
+        _ = try await ssh.ssh("sudo -n env PEGPU_PERFORMANCE_SKIP_DEPS=1 /usr/local/libexec/pegpu/performance-app/install.sh", timeout: 20)
     }
 
     private func scalingAppPackage(in root: URL) -> URL? {
