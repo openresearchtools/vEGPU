@@ -16,6 +16,7 @@ bad_paths="$(
       -path './UTM-Derived' -o \
       -path './Resources/Guest/scaling-app/build' -o \
       -path './Resources/Guest/scaling-app/package' -o \
+      -path './Resources/Guest/performance-app/package' -o \
       -path './ai/web-ui-app/.runtime-downloads' -o \
       -path './ai/web-ui-app/runtimes' \
     \) -print
@@ -125,6 +126,7 @@ scripts/apply-utm-patches.sh
 scripts/build-app-bundle.sh
 scripts/build-display-runtime-from-source.sh
 scripts/build-legal-bundle.sh
+scripts/build-performance-app-package.sh
 scripts/build-release-pkg.sh
 scripts/build-scaling-app-package.sh
 scripts/fetch-machine-artifacts.sh

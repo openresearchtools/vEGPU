@@ -65,7 +65,7 @@ install_scaling_app() {
   package=""
   for dir in /var/lib/pegpu/packages "$source_dir/package" "$SCALING_APP_DIR/package"; do
     [ -d "$dir" ] || continue
-    candidate="$(find "$dir" -maxdepth 1 -type f -name 'pegpu-scaling_*.deb' 2>/dev/null | sort | tail -n 1 || true)"
+    candidate="$(find "$dir" -maxdepth 1 -type f -name 'pegpu-scaling_*.deb' 2>/dev/null | sort -V | tail -n 1 || true)"
     [ -n "$candidate" ] || continue
     package="$candidate"
   done
@@ -87,9 +87,23 @@ install_scaling_app() {
 }
 
 install_performance_app() {
-  local script_dir source_dir
+  local script_dir source_dir package dir candidate
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   source_dir="${PEGPU_PERFORMANCE_APP_SOURCE:-$script_dir/performance-app}"
+  package=""
+  for dir in /var/lib/pegpu/packages "$source_dir/package" "$PERFORMANCE_APP_DIR/package"; do
+    [ -d "$dir" ] || continue
+    candidate="$(find "$dir" -maxdepth 1 -type f -name 'pegpu-performance_*.deb' 2>/dev/null | sort -V | tail -n 1 || true)"
+    [ -n "$candidate" ] || continue
+    package="$candidate"
+  done
+  if [ -n "$package" ] && [ -f "$package" ]; then
+    if ! dpkg -i "$package" >/dev/null 2>&1; then
+      apt_get install -y -f >/dev/null 2>&1 || true
+      dpkg -i "$package" >/dev/null 2>&1 || true
+    fi
+    return 0
+  fi
   if [ -f "$source_dir/install.sh" ]; then
     rm -rf "$PERFORMANCE_APP_DIR"
     install -d "$PERFORMANCE_APP_DIR"

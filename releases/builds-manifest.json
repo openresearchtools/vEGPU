@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-06-12T00:00:00Z",
+  "seedVersion": "0.1.100",
+  "latest": {
+    "version": "0.1.100",
+    "mode": "seed",
+    "packageName": "",
+    "runId": "",
+    "sourceRevision": "",
+    "createdAt": "2026-06-12T00:00:00Z"
+  },
+  "items": [
+    {
+      "version": "0.1.100",
+      "mode": "seed",
+      "packageName": "",
+      "runId": "",
+      "sourceRevision": "",
+      "createdAt": "2026-06-12T00:00:00Z"
+    }
+  ]
+}

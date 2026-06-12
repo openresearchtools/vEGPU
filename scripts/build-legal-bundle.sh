@@ -1037,6 +1037,7 @@ tar -czf "$OUT/source/PEGPU-app-source.tar.gz" \
   --exclude='Resources/Guest/scaling-app/build' \
   --exclude='Resources/Guest/scaling-app/package' \
   --exclude='Resources/Guest/scaling-app/**/__pycache__' \
+  --exclude='Resources/Guest/performance-app/package' \
   --exclude='Resources/Guest/performance-app/**/__pycache__' \
   --exclude='*.pyc' \
   --exclude='*.deb' \

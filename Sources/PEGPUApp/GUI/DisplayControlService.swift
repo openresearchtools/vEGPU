@@ -289,6 +289,13 @@ final class DisplayControlService: @unchecked Sendable {
 
     private func uploadPerformanceApp() async throws {
         let root = paths.resources.appendingPathComponent("Guest/performance-app", isDirectory: true)
+        if let package = performanceAppPackage(in: root) {
+            let remote = "/tmp/pegpu-performance-app-\(UUID().uuidString)-\(package.lastPathComponent)"
+            try await ssh.scpToGuest(localPath: package.path, remotePath: remote)
+            let aptOptions = "-o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600"
+            _ = try await ssh.ssh("\(aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions)) && rm -f \(shellQuote(remote))", timeout: 60)
+            return
+        }
         let files: [(String, String)] = [
             ("install.sh", "0755"),
             ("bin/pegpu-performance", "0755"),
@@ -319,6 +326,17 @@ final class DisplayControlService: @unchecked Sendable {
         }
         return items
             .filter { $0.lastPathComponent.hasPrefix("pegpu-scaling_") && $0.pathExtension == "deb" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .last
+    }
+
+    private func performanceAppPackage(in root: URL) -> URL? {
+        let packageDir = root.appendingPathComponent("package", isDirectory: true)
+        guard let items = try? FileManager.default.contentsOfDirectory(at: packageDir, includingPropertiesForKeys: nil) else {
+            return nil
+        }
+        return items
+            .filter { $0.lastPathComponent.hasPrefix("pegpu-performance_") && $0.pathExtension == "deb" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .last
     }

@@ -272,6 +272,33 @@ driver_dkms_package_names() {
   done | sort -u
 }
 
+deb_package_version() {
+  dpkg-deb -f "$1" Version 2>/dev/null || true
+}
+
+installed_deb_version() {
+  dpkg-query -W -f='${Version}' "$1" 2>/dev/null || true
+}
+
+driver_dkms_latest_package() {
+  local package name version best best_version
+  best=""
+  best_version=""
+  while IFS= read -r package; do
+    [ -n "$package" ] || continue
+    name="$(dpkg-deb -f "$package" Package 2>/dev/null || true)"
+    [ "$name" = "apple-dma-dkms" ] || continue
+    version="$(deb_package_version "$package")"
+    [ -n "$version" ] || continue
+    if [ -z "$best" ] || dpkg --compare-versions "$version" gt "$best_version"; then
+      best="$package"
+      best_version="$version"
+    fi
+  done < <(driver_dkms_package_files)
+  [ -n "$best" ] || return 1
+  printf '%s\n' "$best"
+}
+
 driver_dkms_installed() {
   local package status found
   found=1
@@ -286,19 +313,30 @@ driver_dkms_installed() {
 }
 
 install_driver_dkms_packages() {
-  local packages=()
-  local package_names=()
-  mapfile -t packages < <(driver_dkms_package_files)
-  [ "${#packages[@]}" -gt 0 ] || return 1
-  mapfile -t package_names < <(driver_dkms_package_names "${packages[@]}")
-  if [ "${#package_names[@]}" -eq 0 ]; then
+  local package package_name package_version installed_version
+  package="$(driver_dkms_latest_package || true)"
+  [ -n "$package" ] || return 1
+  package_name="$(dpkg-deb -f "$package" Package 2>/dev/null || true)"
+  package_version="$(deb_package_version "$package")"
+  if [ -z "$package_name" ] || [ -z "$package_version" ]; then
     log "cached driver DKMS package is missing Debian Package metadata"
     return 1
   fi
+  installed_version="$(installed_deb_version "$package_name")"
+  if [ -n "$installed_version" ] && dpkg --compare-versions "$installed_version" ge "$package_version"; then
+    log "driver DKMS package $package_name $installed_version is already installed; cached newest is $package_version"
+    driver_dkms_installed "$package_name"
+    return $?
+  fi
+  if [ -n "$installed_version" ]; then
+    log "upgrading driver DKMS package $package_name from $installed_version to $package_version"
+  else
+    log "installing driver DKMS package $package_name $package_version"
+  fi
   repair_dpkg_state || true
-  dpkg_install "${packages[@]}" || apt_get -f install -y
+  dpkg_install "$package" || apt_get -f install -y
   repair_dpkg_state || true
-  driver_dkms_installed "${package_names[@]}"
+  driver_dkms_installed "$package_name"
 }
 
 dkms_autoinstall_for_installed_kernels() {

@@ -270,10 +270,7 @@ final class AppUpdateService: ObservableObject {
     }
 
     private static func compareBuild(_ lhs: String, _ rhs: String) -> ComparisonResult {
-        let left = Int(lhs.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-        let right = Int(rhs.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-        if left == right { return .orderedSame }
-        return left < right ? .orderedAscending : .orderedDescending
+        compareVersion(lhs, rhs)
     }
 
     private static func compareVersion(_ lhs: String, _ rhs: String) -> ComparisonResult {

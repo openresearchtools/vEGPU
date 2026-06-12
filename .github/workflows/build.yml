@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Release version, for example 0.1.0"
+        description: "Explicit semantic version, for example 0.1.101. Leave empty to auto-increment from the build ledger."
         required: false
         type: string
       build_number:
-        description: "Build number. Defaults to GitHub run number."
+        description: "Deprecated; public build number follows the semantic version."
         required: false
         type: string
       mode:
@@ -119,10 +119,12 @@ permissions:
   contents: write
   actions: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' && 'package-version-ledger' || github.ref }}
+  cancel-in-progress: false
+
 env:
   CONFIGURATION: release
-  RELEASE_VERSION: ${{ inputs.release_version || '0.1.0' }}
-  BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
   DISPLAY_SOURCE_REQUIRED: true
   MACOS_ARTIFACT_ABI: macos26-arm64
 
@@ -142,6 +144,24 @@ jobs:
 
       - name: Verify no generated/local payloads
         run: scripts/verify-clean-repo.sh
+
+  version:
+    name: Resolve PEGPU version
+    runs-on: ubuntu-24.04
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    outputs:
+      release_version: ${{ steps.resolve.outputs.release_version }}
+      build_number: ${{ steps.resolve.outputs.build_number }}
+
+    steps:
+      - name: Check out PEGPU
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve semantic version
+        id: resolve
+        run: python3 scripts/resolve-pegpu-version.py --explicit "${{ inputs.release_version || '' }}"
 
   display-runtime:
     name: Build display runtime from source
@@ -335,8 +355,11 @@ jobs:
   scaling-package:
     name: Build Linux scaling helper package
     runs-on: ubuntu-24.04
+    needs:
+      - version
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
     env:
+      RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
       SCALING_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.scaling_mode || 'app-run') || 'app-run' }}
       SCALING_ARTIFACT_RUN_ID: ${{ inputs.scaling_artifact_run_id || vars.PEGPU_SCALING_ARTIFACT_RUN_ID || '' }}
 
@@ -391,13 +414,14 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/pegpu-artifacts/scaling-package
-          key: ${{ runner.os }}-scaling-package-v2-${{ hashFiles('scripts/build-scaling-app-package.sh', 'Resources/Guest/scaling-app/**') }}
+          key: ${{ runner.os }}-scaling-package-v3-${{ needs.version.outputs.release_version }}-${{ hashFiles('scripts/build-scaling-app-package.sh', 'Resources/Guest/scaling-app/**') }}
 
       - name: Build Debian package in disposable Debian
         if: ${{ env.SCALING_MODE == 'build' && steps.scaling-package-cache.outputs.cache-hit != 'true' }}
         run: |
           mkdir -p "$RUNNER_TEMP/pegpu-artifacts/scaling-package" "$RUNNER_TEMP/pegpu-build/scaling-app-deb"
           docker run --rm \
+            -e RELEASE_VERSION="$RELEASE_VERSION" \
             -v "$PWD:/workspace:ro" \
             -v "$RUNNER_TEMP:/runner-temp" \
             -w /workspace \
@@ -407,6 +431,7 @@ jobs:
               apt-get update
               apt-get install -y --no-install-recommends ca-certificates coreutils dpkg-dev findutils
               PEGPU_SCALING_ARCH=arm64 \
+              PEGPU_SCALING_VERSION="${RELEASE_VERSION}" \
               PEGPU_SCALING_PACKAGE_OUT=/runner-temp/pegpu-artifacts/scaling-package \
               PEGPU_SCALING_BUILD_DIR=/runner-temp/pegpu-build/scaling-app-deb \
               scripts/build-scaling-app-package.sh
@@ -419,6 +444,9 @@ jobs:
           package="$(find "$OUT" -maxdepth 1 -type f -name 'pegpu-scaling_*.deb' -print -quit)"
           test -n "$package"
           (cd "$OUT" && sha512sum -c SHA512SUMS)
+          if [ "${SCALING_MODE}" = "build" ]; then
+            test "$(dpkg-deb -f "$package" Version)" = "${RELEASE_VERSION}"
+          fi
           dpkg-deb -c "$package" | grep -F './usr/share/doc/pegpu-scaling/copyright'
 
       - name: Upload scaling package
@@ -426,6 +454,75 @@ jobs:
         with:
           name: PEGPU-scaling-package
           path: ${{ runner.temp }}/pegpu-artifacts/scaling-package
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload versioned scaling package
+        if: ${{ env.SCALING_MODE == 'build' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: PEGPU-scaling-package-v${{ needs.version.outputs.release_version }}
+          path: ${{ runner.temp }}/pegpu-artifacts/scaling-package
+          if-no-files-found: error
+          retention-days: 90
+
+  performance-package:
+    name: Build Linux performance helper package
+    runs-on: ubuntu-24.04
+    needs:
+      - version
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
+
+    steps:
+      - name: Check out PEGPU
+        uses: actions/checkout@v6
+
+      - name: Build Debian package in disposable Debian
+        run: |
+          mkdir -p "$RUNNER_TEMP/pegpu-artifacts/performance-package" "$RUNNER_TEMP/pegpu-build/performance-app-deb"
+          docker run --rm \
+            -e RELEASE_VERSION="$RELEASE_VERSION" \
+            -v "$PWD:/workspace:ro" \
+            -v "$RUNNER_TEMP:/runner-temp" \
+            -w /workspace \
+            debian:trixie-slim \
+            bash -lc '
+              set -euo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates coreutils dpkg-dev findutils
+              PEGPU_PERFORMANCE_ARCH=arm64 \
+              PEGPU_PERFORMANCE_VERSION="${RELEASE_VERSION}" \
+              PEGPU_PERFORMANCE_PACKAGE_OUT=/runner-temp/pegpu-artifacts/performance-package \
+              PEGPU_PERFORMANCE_BUILD_DIR=/runner-temp/pegpu-build/performance-app-deb \
+              scripts/build-performance-app-package.sh
+            '
+
+      - name: Validate Debian package
+        run: |
+          OUT="$RUNNER_TEMP/pegpu-artifacts/performance-package"
+          test -f "$OUT/SHA512SUMS"
+          package="$(find "$OUT" -maxdepth 1 -type f -name 'pegpu-performance_*.deb' -print -quit)"
+          test -n "$package"
+          (cd "$OUT" && sha512sum -c SHA512SUMS)
+          test "$(dpkg-deb -f "$package" Version)" = "${RELEASE_VERSION}"
+          dpkg-deb -c "$package" | grep -F './usr/bin/pegpu-performance'
+          dpkg-deb -c "$package" | grep -F './usr/share/applications/pegpu-performance.desktop'
+
+      - name: Upload performance package
+        uses: actions/upload-artifact@v7
+        with:
+          name: PEGPU-performance-package
+          path: ${{ runner.temp }}/pegpu-artifacts/performance-package
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload versioned performance package
+        uses: actions/upload-artifact@v7
+        with:
+          name: PEGPU-performance-package-v${{ needs.version.outputs.release_version }}
+          path: ${{ runner.temp }}/pegpu-artifacts/performance-package
           if-no-files-found: error
           retention-days: 90
 
@@ -544,11 +641,15 @@ jobs:
     name: Build PEGPU.app
     runs-on: macos-26
     needs:
+      - version
       - display-runtime
       - scaling-package
+      - performance-package
       - llama-runtime
-    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' && needs.llama-runtime.result == 'success' }}
+    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && needs.version.result == 'success' && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' && needs.performance-package.result == 'success' && needs.llama-runtime.result == 'success' }}
     env:
+      RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
+      BUILD_NUMBER: ${{ needs.version.outputs.build_number }}
       DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
       DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.PEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
 
@@ -563,7 +664,7 @@ jobs:
           path: |
             ${{ runner.temp }}/pegpu-artifacts/app/PEGPU.app
             ${{ runner.temp }}/pegpu-artifacts/legal/generated
-          key: ${{ env.MACOS_ARTIFACT_ABI }}-pegpu-app-v3-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-pegpu-app-v4-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'scripts/build-performance-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
 
       - name: Download display runtime artifacts from prior PEGPU workflow run
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' }}
@@ -606,6 +707,13 @@ jobs:
         with:
           name: PEGPU-scaling-package
           path: ${{ runner.temp }}/pegpu-input/scaling-package
+
+      - name: Download Linux performance helper package
+        if: steps.app-artifact-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: PEGPU-performance-package
+          path: ${{ runner.temp }}/pegpu-input/performance-package
 
       - name: Download bundled llama.cpp runtime
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
@@ -656,6 +764,7 @@ jobs:
           PEGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/pegpu-input/display-runtime-source/display-runtime-source.tar.gz
           PEGPU_LEGAL_BUILD_DIR: ${{ runner.temp }}/pegpu-artifacts/legal/generated
           PEGPU_SCALING_PACKAGE_DIR: ${{ runner.temp }}/pegpu-input/scaling-package
+          PEGPU_PERFORMANCE_PACKAGE_DIR: ${{ runner.temp }}/pegpu-input/performance-package
           PEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR: ${{ runner.temp }}/pegpu-input/llama-runtime
           PEGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/pegpu-build/utm-patched
 
@@ -723,6 +832,7 @@ jobs:
           test -f "$APP/Contents/Resources/PEGPURoot/legal/generated/source/display-runtime-source.manifest.json"
           test -f "$APP/Contents/Resources/PEGPURoot/Resources/Guest/reconcile-llama-runtimes.sh"
           find "$APP/Contents/Resources/PEGPURoot/Resources/Guest/scaling-app/package" -maxdepth 1 -type f -name 'pegpu-scaling_*.deb' -print -quit | grep -q .
+          find "$APP/Contents/Resources/PEGPURoot/Resources/Guest/performance-app/package" -maxdepth 1 -type f -name 'pegpu-performance_*.deb' -print -quit | grep -q .
           test -f "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama/llama-runtime-manifest.json"
           find "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-macos-arm64.tar.gz' -print -quit | grep -q .
           find "$APP/Contents/Resources/PEGPURoot/ai/bootstrap-runtimes/llama/archives" -maxdepth 1 -type f -name '*-bin-debian-trixie-cuda13-arm64.tar.gz' -print -quit | grep -q .
@@ -773,8 +883,8 @@ jobs:
           if not any(path.is_file() for path in license_root.rglob("*")):
               raise SystemExit("llama runtime license files missing")
           PY
-          if tar -tzf "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/scaling-app/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
-            echo "generated app source tarball must not include scaling helper build artifacts" >&2
+          if tar -tzf "$APP/Contents/Resources/PEGPURoot/legal/generated/source/PEGPU-app-source.tar.gz" | grep -E 'Resources/Guest/(scaling-app|performance-app)/(build|package)/|[.]deb$|__pycache__|[.]pyc$'; then
+            echo "generated app source tarball must not include helper build artifacts" >&2
             exit 1
           fi
           if find "$APP/Contents/Resources/PEGPURoot" -maxdepth 2 -name 'THIRD_PARTY_*' -print -quit | grep -q .; then
@@ -881,6 +991,14 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Upload versioned PEGPU.app archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: PEGPU-app-v${{ env.RELEASE_VERSION }}
+          path: ${{ runner.temp }}/pegpu-artifacts/app-archive/PEGPU-app.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Upload generated PEGPU notices and source
         uses: actions/upload-artifact@v7
         with:
@@ -893,9 +1011,11 @@ jobs:
     name: Build/fetch PEGPU Machine and DKMS guest tools
     runs-on: macos-26
     needs:
-      - machine-build
-    if: ${{ always() && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
+      - version
+    if: ${{ always() && needs.version.result == 'success' && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) }}
     env:
+      RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
+      BUILD_NUMBER: ${{ needs.version.outputs.build_number }}
       MACHINE_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run' }}
       MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || vars.PEGPU_MACHINE_APP_RUN_ID || '' }}
       MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
@@ -948,20 +1068,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Download Machine artifacts from reusable workflow
-        if: ${{ env.MACHINE_MODE == 'trigger' }}
-        uses: actions/download-artifact@v8
-        with:
-          pattern: PEGPU-Machine-*-build-output
-          path: ${{ runner.temp }}/pegpu-input/machine-reusable
-          merge-multiple: true
-
       - name: Normalize Machine artifacts
         run: |
           if [ "${MACHINE_MODE}" = "app-run" ]; then
             export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-app-run"
-          elif [ "${MACHINE_MODE}" = "trigger" ]; then
-            export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-reusable"
           fi
           scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/pegpu-artifacts/machine"
         env:
@@ -969,7 +1079,7 @@ jobs:
           PEGPU_MACHINE_REPOSITORY: ${{ inputs.machine_repository || 'openresearchtools/PEGPU-machine' }}
           PEGPU_MACHINE_REF: ${{ inputs.machine_ref || 'main' }}
           PEGPU_MACHINE_RUN_ID: ${{ env.MACHINE_MODE == 'download-run' && inputs.machine_run_id || '' }}
-          PEGPU_TRIGGER_MACHINE_BUILD: "0"
+          PEGPU_TRIGGER_MACHINE_BUILD: ${{ env.MACHINE_MODE == 'trigger' && '1' || '0' }}
           PEGPU_REQUIRE_MACHINE_SOURCE: "1"
           PEGPU_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
           PEGPU_BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
@@ -1005,26 +1115,26 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  machine-build:
-    name: Build PEGPU Machine
-    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'trigger' }}
-    uses: openresearchtools/PEGPU-machine/.github/workflows/build-nosip.yml@main
-    permissions:
-      contents: write
-    secrets: inherit
-    with:
-      release_version: ${{ inputs.release_version || '0.1.0' }}
-      build_number: ${{ inputs.build_number || github.run_number }}
-      publish_release: false
-      prerelease: ${{ inputs.prerelease || false }}
+      - name: Upload versioned Machine artifacts
+        if: ${{ env.MACHINE_MODE == 'trigger' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: PEGPU-machine-artifacts-v${{ env.RELEASE_VERSION }}
+          path: ${{ runner.temp }}/pegpu-artifacts/machine
+          if-no-files-found: error
+          retention-days: 90
 
   package:
     name: Package installer
     runs-on: macos-26
     needs:
+      - version
       - build-app
       - machine-artifacts
-    if: ${{ always() && needs.build-app.result == 'success' && needs.machine-artifacts.result == 'success' }}
+    if: ${{ always() && needs.version.result == 'success' && needs.build-app.result == 'success' && needs.machine-artifacts.result == 'success' }}
+    env:
+      RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
+      BUILD_NUMBER: ${{ needs.version.outputs.build_number }}
 
     steps:
       - name: Check out PEGPU
@@ -1072,7 +1182,7 @@ jobs:
           case "${BUILD_MODE}" in
             pre-release)
               PACKAGE_CHANNEL="pre-release"
-              PKG_NAME="PEGPU-v${VERSION}-pre-release.pkg"
+              PKG_NAME="PEGPU-v${VERSION}.pkg"
               ;;
             full-release)
               PACKAGE_CHANNEL="release"
@@ -1082,14 +1192,14 @@ jobs:
               if [ "${PUBLISH_RELEASE}" = "true" ]; then
                 if [ "${PRERELEASE_INPUT}" = "true" ]; then
                   PACKAGE_CHANNEL="pre-release"
-                  PKG_NAME="PEGPU-v${VERSION}-pre-release.pkg"
+                  PKG_NAME="PEGPU-v${VERSION}.pkg"
                 else
                   PACKAGE_CHANNEL="release"
                   PKG_NAME="PEGPU-v${VERSION}.pkg"
                 fi
               else
                 PACKAGE_CHANNEL="artifact"
-                PKG_NAME="PEGPU-v${VERSION}-artifact.pkg"
+                PKG_NAME="PEGPU-v${VERSION}.pkg"
               fi
               ;;
           esac
@@ -1150,6 +1260,14 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Upload versioned package assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: PEGPU-package-assets-v${{ env.RELEASE_VERSION }}
+          path: ${{ runner.temp }}/pegpu-artifacts/release-assets
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Publish GitHub release
         if: ${{ inputs.publish_release == true || inputs.mode == 'pre-release' || inputs.mode == 'full-release' || startsWith(github.ref, 'refs/tags/') }}
         env:
@@ -1161,7 +1279,7 @@ jobs:
           VERSION="${RELEASE_VERSION}"
           case "${BUILD_MODE}" in
             pre-release)
-              TAG="v${VERSION}-pre-release"
+              TAG="v${VERSION}"
               TITLE="PEGPU ${VERSION} Pre-release"
               PRERELEASE="true"
               ;;
@@ -1176,7 +1294,7 @@ jobs:
                 TITLE="PEGPU ${VERSION}"
                 PRERELEASE="false"
               elif [ "$PRERELEASE_INPUT" = "true" ]; then
-                TAG="v${VERSION}-pre-release"
+                TAG="v${VERSION}"
                 TITLE="PEGPU ${VERSION} Pre-release"
                 PRERELEASE="true"
               else
@@ -1218,7 +1336,7 @@ jobs:
             pre-release)
               CHANNEL="pre-release"
               MANIFEST="releases/pre-releases-manifest.json"
-              TAG="v${VERSION}-pre-release"
+              TAG="v${VERSION}"
               PRERELEASE="true"
               ;;
             full-release)
@@ -1296,5 +1414,44 @@ jobs:
           else
             git add "$MANIFEST"
             git commit -m "Update ${CHANNEL} release manifest for ${TAG}"
+            git push origin main
+          fi
+
+      - name: Update package build ledger
+        if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/') }}
+        env:
+          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
+          DISPLAY_MODE: ${{ inputs.display_mode || 'app-run' }}
+          SCALING_MODE: ${{ inputs.scaling_mode || 'app-run' }}
+          MACHINE_MODE: ${{ inputs.machine_mode || 'app-run' }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_VERSION}"
+          pkg="$(find "$RUNNER_TEMP/pegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' -print -quit)"
+          test -n "$pkg"
+          PKG_NAME="$(basename "$pkg")"
+          PKG_SIZE="$(stat -f%z "$pkg" 2>/dev/null || stat -c%s "$pkg")"
+          PKG_SHA256="$(shasum -a 256 "$pkg" | awk '{print $1}')"
+
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          python3 scripts/update-build-ledger.py \
+            --version "$VERSION" \
+            --mode "$BUILD_MODE" \
+            --package-name "$PKG_NAME" \
+            --package-size "$PKG_SIZE" \
+            --package-sha256 "$PKG_SHA256" \
+            --display-mode "$DISPLAY_MODE" \
+            --scaling-mode "$SCALING_MODE" \
+            --performance-mode build \
+            --machine-mode "$MACHINE_MODE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- releases/builds-manifest.json; then
+            echo "Package build ledger already current."
+          else
+            git add releases/builds-manifest.json
+            git commit -m "Record PEGPU ${VERSION} package build [skip ci]"
             git push origin main
           fi

@@ -180,6 +180,20 @@ public final class GuestSyncService: @unchecked Sendable {
 
     private func syncPerformanceApp() async throws {
         let root = paths.resources.appendingPathComponent("Guest/performance-app", isDirectory: true)
+        if let package = performanceAppPackage(in: root) {
+            let remote = "/tmp/pegpu-sync/\(package.lastPathComponent)"
+            try await ssh.scpToGuest(localPath: package.path, remotePath: remote)
+            let aptOptions = "-o DPkg::Lock::Timeout=600 -o APT::Get::Lock-Timeout=600"
+            let command = [
+                "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) -f install -y",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive dpkg --configure -a",
+                aptInstallLocalDebCommand(remote: remote, aptOptions: aptOptions),
+                "rm -f \(shellQuote(remote))"
+            ].joined(separator: " && ")
+            _ = try await ssh.ssh(command)
+            return
+        }
         let files: [(String, String)] = [
             ("install.sh", "0755"),
             ("bin/pegpu-performance", "0755"),
@@ -209,6 +223,17 @@ public final class GuestSyncService: @unchecked Sendable {
         let remoteDir = remoteURL.deletingLastPathComponent().path
         let relativeDeb = "./\(remoteURL.lastPathComponent)"
         return "cd \(shellQuote(remoteDir)) && sudo -n env DEBIAN_FRONTEND=noninteractive apt-get \(aptOptions) install -y \(shellQuote(relativeDeb))"
+    }
+
+    private func performanceAppPackage(in root: URL) -> URL? {
+        let packageDir = root.appendingPathComponent("package", isDirectory: true)
+        guard let items = try? FileManager.default.contentsOfDirectory(at: packageDir, includingPropertiesForKeys: nil) else {
+            return nil
+        }
+        return items
+            .filter { $0.lastPathComponent.hasPrefix("pegpu-performance_") && $0.pathExtension == "deb" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .last
     }
 
     private func syncPackages(kind: String, packages: [ManifestPackage]) async throws {
@@ -306,6 +331,12 @@ public final class GuestSyncService: @unchecked Sendable {
                 hasher.update(data: data)
             }
         }
+        if let package = scalingAppPackage(in: scalingAppDir) {
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data("scaling-app/package/\(package.lastPathComponent)".utf8))
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data(try sha512Hex(of: package).utf8))
+        }
         let performanceAppDir = guestDir.appendingPathComponent("performance-app", isDirectory: true)
         for relative in [
             "install.sh",
@@ -323,6 +354,12 @@ public final class GuestSyncService: @unchecked Sendable {
                 hasher.update(data: Data([0]))
                 hasher.update(data: data)
             }
+        }
+        if let package = performanceAppPackage(in: performanceAppDir) {
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data("performance-app/package/\(package.lastPathComponent)".utf8))
+            hasher.update(data: Data([0]))
+            hasher.update(data: Data(try sha512Hex(of: package).utf8))
         }
         for package in bundledDriverPackages {
             hasher.update(data: Data([0]))

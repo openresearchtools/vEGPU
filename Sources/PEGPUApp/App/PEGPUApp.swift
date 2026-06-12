@@ -18,7 +18,10 @@ struct PEGPUApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About PEGPU") {
-                    NSApplication.shared.orderFrontStandardAboutPanel()
+                    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+                    NSApplication.shared.orderFrontStandardAboutPanel(options: [
+                        .applicationVersion: "Version \(version)"
+                    ])
                 }
             }
             CommandGroup(replacing: .newItem) {

@@ -600,7 +600,6 @@ def run_gui(args: argparse.Namespace) -> int:
         def __init__(self) -> None:
             super().__init__(title="PEGPU Scaling")
             self.set_icon_name(APP_ICON_NAME)
-            self.set_default_size(420, 300)
             self.set_resizable(False)
             self.connect("destroy", Gtk.main_quit)
             self.get_style_context().add_class("pegpu-window")
@@ -609,6 +608,7 @@ def run_gui(args: argparse.Namespace) -> int:
             self.busy = False
 
             outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            outer.set_halign(Gtk.Align.START)
             set_margins(outer, 16)
             self.add(outer)
 
@@ -619,7 +619,8 @@ def run_gui(args: argparse.Namespace) -> int:
             header.pack_start(icon, False, False, 0)
 
             title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-            header.pack_start(title_box, True, True, 0)
+            title_box.set_halign(Gtk.Align.START)
+            header.pack_start(title_box, False, False, 0)
 
             title = Gtk.Label(label="PEGPU Scaling", xalign=0)
             title.get_style_context().add_class("pegpu-title")
@@ -630,6 +631,7 @@ def run_gui(args: argparse.Namespace) -> int:
             title_box.pack_start(display_label, False, False, 0)
 
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            card.set_halign(Gtk.Align.START)
             card.get_style_context().add_class("pegpu-scale-card")
             outer.pack_start(card, False, False, 0)
 
@@ -638,6 +640,7 @@ def run_gui(args: argparse.Namespace) -> int:
             card.pack_start(scale_label, False, False, 0)
 
             scale_grid = Gtk.Grid(column_spacing=6, row_spacing=6)
+            scale_grid.set_halign(Gtk.Align.START)
             card.pack_start(scale_grid, False, False, 0)
 
             for index, scale in enumerate(SUPPORTED_SCALES):
@@ -653,6 +656,7 @@ def run_gui(args: argparse.Namespace) -> int:
 
             self.status = Gtk.Label(label=f"Ready on DISPLAY={require_display(args.display)}", xalign=0)
             self.status.set_ellipsize(Pango.EllipsizeMode.END)
+            self.status.set_max_width_chars(44)
             self.status.get_style_context().add_class("pegpu-muted")
             footer.pack_start(self.status, False, False, 0)
 

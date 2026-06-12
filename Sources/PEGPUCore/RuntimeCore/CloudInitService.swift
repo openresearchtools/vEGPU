@@ -212,7 +212,7 @@ public final class CloudInitService: @unchecked Sendable {
             ("share/icons/hicolor/512x512/apps/pegpu-performance.png", "0644"),
             ("share/icons/hicolor/1024x1024/apps/pegpu-performance.png", "0644")
         ]
-        let entries: [String] = try files.compactMap { relative, mode in
+        var entries: [String] = try files.compactMap { relative, mode in
             let source = root.appendingPathComponent(relative)
             guard FileManager.default.fileExists(atPath: source.path) else { return nil }
             let data = try Data(contentsOf: source).base64EncodedString()
@@ -224,6 +224,16 @@ public final class CloudInitService: @unchecked Sendable {
                 content: \(data)
             """
         }
+        if let package = performanceAppPackage(in: root) {
+            let data = try Data(contentsOf: package)
+            entries.append("""
+              - path: /var/lib/pegpu/packages/\(package.lastPathComponent)
+                owner: root:root
+                permissions: '0644'
+                encoding: b64
+                content: \(base64(data))
+            """)
+        }
         return entries.joined(separator: "\n")
     }
 
@@ -234,6 +244,17 @@ public final class CloudInitService: @unchecked Sendable {
         }
         return items
             .filter { $0.lastPathComponent.hasPrefix("pegpu-scaling_") && $0.pathExtension == "deb" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .last
+    }
+
+    private func performanceAppPackage(in root: URL) -> URL? {
+        let packageDir = root.appendingPathComponent("package", isDirectory: true)
+        guard let items = try? FileManager.default.contentsOfDirectory(at: packageDir, includingPropertiesForKeys: nil) else {
+            return nil
+        }
+        return items
+            .filter { $0.lastPathComponent.hasPrefix("pegpu-performance_") && $0.pathExtension == "deb" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .last
     }

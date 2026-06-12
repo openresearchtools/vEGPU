@@ -207,7 +207,7 @@ def run_gui(args: argparse.Namespace) -> int:
               padding: 10px;
             }
             .pegpu-mode-button {
-              min-width: 210px;
+              min-width: 198px;
               min-height: 74px;
               padding: 8px;
             }
@@ -256,7 +256,6 @@ def run_gui(args: argparse.Namespace) -> int:
         def __init__(self) -> None:
             super().__init__(title="PEGPU Performance")
             self.set_icon_name(APP_ICON_NAME)
-            self.set_default_size(520, 390)
             self.set_resizable(False)
             self.connect("destroy", Gtk.main_quit)
             self.get_style_context().add_class("pegpu-window")
@@ -265,6 +264,7 @@ def run_gui(args: argparse.Namespace) -> int:
             self.busy = False
 
             outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+            outer.set_halign(Gtk.Align.START)
             set_margins(outer, 16)
             self.add(outer)
 
@@ -275,7 +275,8 @@ def run_gui(args: argparse.Namespace) -> int:
             header.pack_start(icon, False, False, 0)
 
             title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
-            header.pack_start(title_box, True, True, 0)
+            title_box.set_halign(Gtk.Align.START)
+            header.pack_start(title_box, False, False, 0)
 
             title = Gtk.Label(label="PEGPU Performance", xalign=0)
             title.get_style_context().add_class("pegpu-title")
@@ -284,13 +285,17 @@ def run_gui(args: argparse.Namespace) -> int:
             explanation = Gtk.Label(label=EXPLANATION, xalign=0)
             explanation.get_style_context().add_class("pegpu-muted")
             explanation.set_line_wrap(True)
+            explanation.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            explanation.set_max_width_chars(66)
             title_box.pack_start(explanation, False, False, 0)
 
             card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            card.set_halign(Gtk.Align.START)
             card.get_style_context().add_class("pegpu-card")
             outer.pack_start(card, False, False, 0)
 
             grid = Gtk.Grid(column_spacing=8, row_spacing=8)
+            grid.set_halign(Gtk.Align.START)
             card.pack_start(grid, False, False, 0)
             for index, mode in enumerate(MODES):
                 button = mode_button(mode)
@@ -304,11 +309,14 @@ def run_gui(args: argparse.Namespace) -> int:
 
             self.status = Gtk.Label(label="", xalign=0)
             self.status.set_ellipsize(Pango.EllipsizeMode.END)
+            self.status.set_max_width_chars(66)
             self.status.get_style_context().add_class("pegpu-muted")
             footer.pack_start(self.status, False, False, 0)
 
             self.note = Gtk.Label(label=APPLY_NOTE, xalign=0)
             self.note.set_line_wrap(True)
+            self.note.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            self.note.set_max_width_chars(66)
             self.note.get_style_context().add_class("pegpu-muted")
             footer.pack_start(self.note, False, False, 0)
 

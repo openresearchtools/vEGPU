@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${CONFIGURATION:-release}"
 VERSION="${VERSION:-${RELEASE_VERSION:-0.1.0}}"
-BUILD_NUMBER="${BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-1}}"
+BUILD_NUMBER="${BUILD_NUMBER:-$VERSION}"
 DEFAULT_BUILD_ROOT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pegpu-build"
 BUILD_ROOT="${PEGPU_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 APP_BUILD_DIR="${PEGPU_APP_BUILD_DIR:-$BUILD_ROOT/app-build}"
@@ -19,6 +19,7 @@ DISPLAY_FRAMEWORKS="${PEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-framewor
 ANGLE_NOTICE_DIR="${PEGPU_ANGLE_NOTICE_DIR:-$ROOT/third_party/angle}"
 LEGAL_BUILD_DIR="${PEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}"
 SCALING_PACKAGE_DIR="${PEGPU_SCALING_PACKAGE_DIR:-}"
+PERFORMANCE_PACKAGE_DIR="${PEGPU_PERFORMANCE_PACKAGE_DIR:-}"
 BOOTSTRAP_LLAMA_RUNTIME_DIR="${PEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR:-}"
 WEB_UI_BIN="$APP_BUILD_DIR/web-ui-app"
 GOST_BIN="$APP_BUILD_DIR/gost-local-proxy"
@@ -144,6 +145,10 @@ cp "$GOST_BIN" "$BUNDLED_ROOT/ai/gost-local-proxy/gost-local-proxy"
 if [ -n "$SCALING_PACKAGE_DIR" ]; then
   mkdir -p "$BUNDLED_ROOT/Resources/Guest/scaling-app/package"
   rsync -a --delete "$SCALING_PACKAGE_DIR/" "$BUNDLED_ROOT/Resources/Guest/scaling-app/package/"
+fi
+if [ -n "$PERFORMANCE_PACKAGE_DIR" ]; then
+  mkdir -p "$BUNDLED_ROOT/Resources/Guest/performance-app/package"
+  rsync -a --delete "$PERFORMANCE_PACKAGE_DIR/" "$BUNDLED_ROOT/Resources/Guest/performance-app/package/"
 fi
 if [ -n "$BOOTSTRAP_LLAMA_RUNTIME_DIR" ]; then
   if [ ! -f "$BOOTSTRAP_LLAMA_RUNTIME_DIR/llama-runtime-manifest.json" ]; then
