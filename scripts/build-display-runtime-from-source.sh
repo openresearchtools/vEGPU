@@ -146,15 +146,15 @@ if [ "${PEGPU_ENABLE_CCACHE:-1}" != "0" ] && command -v ccache >/dev/null 2>&1; 
   mkdir -p "$CCACHE_DIR"
 fi
 if [ -n "$CCACHE_BIN" ]; then
-  CC="$CCACHE_BIN $CLANG $CFLAGS_TARGET"
-  CXX="$CCACHE_BIN $CLANGXX $CFLAGS_TARGET"
-  OBJCC="$CCACHE_BIN $CLANG $CFLAGS_TARGET"
+  CC="$CCACHE_BIN $CLANG $CFLAGS_TARGET -isysroot $SDKROOT"
+  CXX="$CCACHE_BIN $CLANGXX $CFLAGS_TARGET -isysroot $SDKROOT"
+  OBJCC="$CCACHE_BIN $CLANG $CFLAGS_TARGET -isysroot $SDKROOT"
 else
-  CC="$CLANG $CFLAGS_TARGET"
-  CXX="$CLANGXX $CFLAGS_TARGET"
-  OBJCC="$CLANG $CFLAGS_TARGET"
+  CC="$CLANG $CFLAGS_TARGET -isysroot $SDKROOT"
+  CXX="$CLANGXX $CFLAGS_TARGET -isysroot $SDKROOT"
+  OBJCC="$CLANG $CFLAGS_TARGET -isysroot $SDKROOT"
 fi
-CPP="$CLANG -E $CFLAGS_TARGET"
+CPP="$CLANG -E $CFLAGS_TARGET -isysroot $SDKROOT"
 LD="$(xcrun --sdk "$SDK" --find ld)"
 AR="$(xcrun --sdk "$SDK" --find ar)"
 NM="$(xcrun --sdk "$SDK" --find nm)"
