@@ -48,7 +48,9 @@ $RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64
 ```
 
 That directory is generated during CI from the pinned UTM/WebKit/ANGLE source
-recipes, uploaded as an artifact, and is not written into the checkout.
+recipes, uploaded in this branch as
+`PEGPU-display-frameworks-legacy-macos13_5-arm64`, and is not written into the
+checkout.
 
 ## Runtime Image
 

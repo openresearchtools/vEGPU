@@ -6,7 +6,7 @@ PEGPU imports ANGLE runtime artifacts on the app side only. The source of truth 
 - Pinned commit: `ed78ab6e1a37f4f11583a0bd038f22ec91f3ff10`
 - Subtree: `Source/ThirdParty/ANGLE`
 - Build scheme: `ANGLE`
-- Output boundary: the CI `PEGPU-display-frameworks-macos-arm64` artifact, normally staged under `$RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64`.
+- Output boundary: the CI `PEGPU-display-frameworks-legacy-macos13_5-arm64` artifact in this branch, normally staged under `$RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64`.
 - Machine boundary: PEGPU Machine/QEMU consumes these at runtime through an app-provided framework directory; it must not vendor WebKit, ANGLE source, or these frameworks.
 
 The upstream `ANGLE.plist` records:

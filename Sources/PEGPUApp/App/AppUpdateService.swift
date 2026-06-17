@@ -78,7 +78,7 @@ final class AppUpdateService: ObservableObject {
             packageName = try values.decode(String.self, forKey: .packageName)
             packageSize = try values.decodeIfPresent(Int64.self, forKey: .packageSize) ?? 0
             packageSHA256 = try values.decodeIfPresent(String.self, forKey: .packageSHA256) ?? ""
-            minimumMacOS = try values.decodeIfPresent(String.self, forKey: .minimumMacOS) ?? "14.0"
+            minimumMacOS = try values.decodeIfPresent(String.self, forKey: .minimumMacOS) ?? "13.5"
         }
     }
 

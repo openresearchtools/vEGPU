@@ -105,20 +105,30 @@ $RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64
 $RUNNER_TEMP/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
 ```
 
+Uploaded artifact names in this branch:
+
+```text
+PEGPU-display-frameworks-legacy-macos13_5-arm64
+PEGPU-display-runtime-source-legacy-macos13_5-arm64
+```
+
 ## GitHub Actions
 
-`.github/workflows/build.yml` supports three release modes:
+This branch's `.github/workflows/build.yml` is a legacy macOS 13.5 ARM
+artifact workflow. GitHub no longer provides macOS 13 hosted runners, so the
+workflow runs macOS jobs on the supported Apple Silicon `macos-14` runner and
+builds with `MACOSX_DEPLOYMENT_TARGET=13.5`.
+
+The workflow supports artifact-only output in this branch:
 
 - `artifact-only`: build source-backed display frameworks, build the Linux
-  scaling helper package, build `PEGPU.app`, trigger/fetch `PEGPU Machine`
+  scaling helper package, build `PEGPU.app`, fetch pinned `PEGPU Machine`
   artifacts, and upload the combined installer as a workflow artifact only.
-- `pre-release`: does the same build, then creates or updates a prerelease with
-  one asset: the combined `.pkg`.
-- `full-release`: does the same build, then creates or updates a stable GitHub
-  release with one asset: the combined `.pkg`.
 
-Pre-release and full-release runs also update the matching app update manifest
-in `releases/`. Artifact-only runs do not update either manifest.
+This branch does not publish GitHub releases, update release manifests, or
+update the build ledger. The default workflow dispatch path is
+`build_scope=display-runtime-only` and `display_mode=build`, which produces the
+reusable legacy display stack artifacts.
 
 Workflow inputs:
 
@@ -126,22 +136,19 @@ Workflow inputs:
   commit.
 - `machine_mode=download-run`: download artifacts from an existing Machine
   workflow run id.
-- `machine_mode=trigger`: trigger the Machine workflow in `machine_repository`
-  and wait for the app/source artifacts.
+- `machine_mode=app-run`: reuse a pinned prior PEGPU workflow artifact. Prefer
+  `machine_app_run_id` or repository variable `PEGPU_LEGACY_MACHINE_APP_RUN_ID`
+  for repeatable legacy builds.
 - `release_version` / `build_number`: written into `PEGPU.app`
-  `CFBundleShortVersionString` and `CFBundleVersion`; when `machine_mode=trigger`
-  the same values are passed to the Machine workflow so a newly built
-  `PEGPU Machine.app` carries matching version metadata.
+  `CFBundleShortVersionString` and `CFBundleVersion`.
 - `llama_runtime_tag`: selects the bundled llama.cpp runtime release from
   `openresearchtools/llama-cpp-arm64-builds`; `latest` resolves to the newest
   stable llama.cpp release and bundles macOS, Debian Trixie CUDA 13, and Debian
   Trixie Vulkan ARM64 archives.
-- `publish_release=true`: manual override to publish a release from
-  `artifact-only`; release assets still contain only the combined `.pkg`.
 
-For cross-repo Machine triggering, set a repository secret named
-`PEGPU_MACHINE_TOKEN` with permission to run and read workflow artifacts from
-the Machine repository.
+Machine rebuilds are intentionally not triggered by this branch. For cross-repo
+Machine downloads, set a repository secret named `PEGPU_MACHINE_TOKEN` with
+permission to read workflow artifacts from the Machine repository.
 
 ## Cache Policy
 
@@ -151,6 +158,9 @@ not write cached build products into the checkout.
 - Display runtime: exact artifact cache keyed by UTM commit, display build
   scripts, normalization script, and PEGPU UTM patches. On a hit, the job skips
   Homebrew setup and the full SPICE/GLib/GStreamer/ANGLE rebuild.
+- Display runtime ccache: restored before display rebuilds and saved after
+  build attempts under the `legacy-macos13_5-arm64` cache prefix so repeated
+  source builds reuse C/C++ object cache across GitHub Actions runs.
 - Display runtime work tree: secondary cache for downloaded/upstream build
   state, used only when the exact display artifact cache misses.
 - Scaling package: exact package cache keyed by the scaling helper source and
@@ -163,9 +173,9 @@ not write cached build products into the checkout.
   `PEGPU.app` itself has to rebuild.
 
 Machine/QEMU/DKMS artifacts are not guessed from this repo cache. The workflow
-either downloads a specific Machine run or triggers the Machine workflow so the
-Machine repository remains the source of truth for its own cache and rebuild
-decisions.
+either downloads a specific Machine run or reuses a pinned prior PEGPU Machine
+artifact so the Machine repository remains the source of truth for its own
+legacy rebuild decisions.
 
 ## PEGPU Machine Notices
 
@@ -210,9 +220,8 @@ The app Help menu points users to both.
 
 Package names are channel-specific:
 
-- `PEGPU-v0.1.0-artifact.pkg` for artifact-only workflow runs.
-- `PEGPU-v0.1.0-pre-release.pkg` for prereleases.
-- `PEGPU-v0.1.0.pkg` for stable releases.
+- `PEGPU-v0.1.0-legacy-macos13.5-arm64.pkg` for artifact-only workflow runs in
+  this legacy branch.
 
 The package welcome/readme/license resources also state:
 

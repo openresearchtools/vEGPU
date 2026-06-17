@@ -11,6 +11,8 @@ UTM_DIR="$WORK/utm-base"
 DRIVER="$WORK/pegpu-display-driver.sh"
 SOURCE_OUT="${PEGPU_DISPLAY_SOURCE_OUT:-${PEGPU_DISPLAY_SOURCE_OUT:-$BUILD_ROOT/legal/display-runtime-source.tar.gz}}"
 FRAMEWORKS_OUT="${PEGPU_DISPLAY_FRAMEWORKS_OUT:-${PEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}}"
+MACOS_DEPLOYMENT_TARGET="${PEGPU_MACOS_DEPLOYMENT_TARGET:-${MACOSX_DEPLOYMENT_TARGET:-13.5}}"
+DISPLAY_ARTIFACT_NAME="${PEGPU_DISPLAY_ARTIFACT_NAME:-PEGPU-display-frameworks-legacy-macos13_5-arm64}"
 
 require() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -23,7 +25,7 @@ install_requirements_hint() {
   cat >&2 <<'EOF'
 Install/build requirements expected by the UTM display dependency recipe:
 
-  brew install bison pkg-config gettext glib-utils libgpg-error nasm make meson cmake llvm spirv-llvm-translator libxcb libxrandr
+  brew install bison pkg-config gettext glib-utils libgpg-error nasm make meson cmake llvm ccache spirv-llvm-translator libxcb libxrandr
   python3 -m pip install --user six pyparsing pyyaml setuptools distlib mako
 
 This builds only PEGPU's app-side SPICE/GLib/GStreamer/ANGLE framework set.
@@ -93,7 +95,7 @@ WORK="${WORK:?}"
 NCPU="${NCPU:-0}"
 ARCH=arm64
 PLATFORM=macos
-SDKMINVER="${SDKMINVER:-11.0}"
+SDKMINVER="${SDKMINVER:-${PEGPU_MACOS_DEPLOYMENT_TARGET:-${MACOSX_DEPLOYMENT_TARGET:-13.5}}}"
 SDK=macosx
 CPU=aarch64
 CHOST="$CPU-apple-darwin"
@@ -125,16 +127,34 @@ SDKNAME=$(basename "$(xcrun --sdk "$SDK" --show-sdk-platform-path)" .platform)
 SDKVERSION=$(xcrun --sdk "$SDK" --show-sdk-version)
 SDKROOT=$(xcrun --sdk "$SDK" --show-sdk-path)
 CFLAGS_TARGET="-target $ARCH-apple-macos$SDKMINVER"
+export MACOSX_DEPLOYMENT_TARGET="$SDKMINVER"
 if [ -z "$NCPU" ] || [ "$NCPU" -eq 0 ]; then
   NCPU="$(sysctl -n hw.ncpu)"
 fi
 
 mkdir -p "$SYSROOT_DIR" "$SYSROOT_DIR/Frameworks"
 
-CC="$(xcrun --sdk "$SDK" --find gcc) $CFLAGS_TARGET"
-CPP="$(xcrun --sdk "$SDK" --find gcc) -E"
-CXX="$(xcrun --sdk "$SDK" --find g++)"
-OBJCC="$(xcrun --sdk "$SDK" --find clang)"
+CLANG="$(xcrun --sdk "$SDK" --find clang)"
+CLANGXX="$(xcrun --sdk "$SDK" --find clang++)"
+CCACHE_BIN=""
+if [ "${PEGPU_ENABLE_CCACHE:-1}" != "0" ] && command -v ccache >/dev/null 2>&1; then
+  CCACHE_BIN="$(command -v ccache)"
+  export CCACHE_DIR="${PEGPU_CCACHE_DIR:-${CCACHE_DIR:-$WORK/ccache}}"
+  export CCACHE_BASEDIR="${PEGPU_CCACHE_BASEDIR:-$WORK}"
+  export CCACHE_NOHASHDIR="${CCACHE_NOHASHDIR:-true}"
+  export CCACHE_CPP2="${CCACHE_CPP2:-yes}"
+  mkdir -p "$CCACHE_DIR"
+fi
+if [ -n "$CCACHE_BIN" ]; then
+  CC="$CCACHE_BIN $CLANG $CFLAGS_TARGET"
+  CXX="$CCACHE_BIN $CLANGXX $CFLAGS_TARGET"
+  OBJCC="$CCACHE_BIN $CLANG $CFLAGS_TARGET"
+else
+  CC="$CLANG $CFLAGS_TARGET"
+  CXX="$CLANGXX $CFLAGS_TARGET"
+  OBJCC="$CLANG $CFLAGS_TARGET"
+fi
+CPP="$CLANG -E $CFLAGS_TARGET"
 LD="$(xcrun --sdk "$SDK" --find ld)"
 AR="$(xcrun --sdk "$SDK" --find ar)"
 NM="$(xcrun --sdk "$SDK" --find nm)"
@@ -345,7 +365,7 @@ build_angle() {
       CODE_SIGNING_ALLOWED=NO \
       COMPILER_INDEX_STORE_ENABLE=NO \
       IPHONEOS_DEPLOYMENT_TARGET="14.0" \
-      MACOSX_DEPLOYMENT_TARGET="11.0" \
+      MACOSX_DEPLOYMENT_TARGET="$SDKMINVER" \
       XROS_DEPLOYMENT_TARGET="1.0" \
       WK_HAS_VERSIONED_SDK_ADDITIONS=NO \
       'WARNING_CFLAGS=$(inherited) -Wno-unnecessary-virtual-specifier -Wno-nontrivial-memcall'
@@ -409,6 +429,7 @@ DRIVER
 
 chmod +x "$DRIVER"
 UTM_DIR="$UTM_DIR" WORK="$WORK" CONFIGURATION="${CONFIGURATION:-Release}" "$DRIVER"
+export MACOSX_DEPLOYMENT_TARGET="$MACOS_DEPLOYMENT_TARGET"
 
 SYSROOT="$WORK/sysroot-macOS-arm64"
 if [ ! -d "$SYSROOT/Frameworks" ]; then
@@ -516,7 +537,7 @@ PEGPU app-side display runtime source bundle
 
 This archive accompanies the app-side display frameworks copied into:
 
-  the PEGPU-display-frameworks-macos26-arm64 workflow artifact
+  the $DISPLAY_ARTIFACT_NAME workflow artifact
 
 It records the pinned UTM dependency recipe, UTM dependency patches/sources
 file, downloaded upstream source archives, and git source bundles used to
@@ -539,6 +560,7 @@ Source builder:
 
   UTM repo: $UTM_REPO
   UTM commit: $UTM_COMMIT
+  macOS deployment target: $MACOS_DEPLOYMENT_TARGET
   PEGPU script: scripts/build-display-runtime-from-source.sh
 
 Scope:

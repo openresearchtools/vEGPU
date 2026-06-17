@@ -1,11 +1,10 @@
-name: Build PEGPU
+name: Build PEGPU Legacy macOS 13.5 Artifacts
+run-name: Legacy macOS 13.5 ARM artifact build (${{ github.ref_name }})
 
 on:
   push:
     branches:
-      - main
-    tags:
-      - "v*"
+      - codex/legacy-macos-13-artifacts
   pull_request:
   workflow_dispatch:
     inputs:
@@ -18,26 +17,24 @@ on:
         required: false
         type: string
       mode:
-        description: "artifact-only keeps workflow artifacts only; pre-release publishes a prerelease; full-release publishes a stable release."
+        description: "Legacy branch mode. Artifact-only uploads workflow artifacts and never publishes GitHub releases."
         required: true
         default: artifact-only
         type: choice
         options:
           - artifact-only
-          - pre-release
-          - full-release
       build_scope:
-        description: "What to build. display-runtime-only is for ANGLE/display debugging and does not touch Machine/QEMU."
+        description: "What to build. display-runtime-only is the default legacy path for reusable cached ANGLE/SPICE artifacts."
         required: true
-        default: package
+        default: display-runtime-only
         type: choice
         options:
           - package
           - display-runtime-only
       display_mode:
-        description: "How this workflow obtains the app display runtime. app-run reuses a prior PEGPU workflow artifact; build rebuilds ANGLE/SPICE."
+        description: "How this workflow obtains the legacy macOS 13.5 app display runtime. build uses artifact/cache/ccache; app-run reuses a prior legacy run."
         required: true
-        default: app-run
+        default: build
         type: choice
         options:
           - app-run
@@ -69,25 +66,24 @@ on:
         default: e4a4c34b671284263fc69f81b607de494d7e9b65
         type: string
       machine_mode:
-        description: "How this workflow obtains PEGPU Machine. trigger rebuilds Machine/DKMS; app-run reuses a prior PEGPU workflow artifact."
+        description: "How this workflow obtains PEGPU Machine. This legacy branch reuses pinned artifacts and does not trigger Machine rebuilds."
         required: true
         default: app-run
         type: choice
         options:
           - app-run
           - download-run
-          - trigger
       machine_app_run_id:
         description: "Existing PEGPU workflow run id containing PEGPU-machine-artifacts when machine_mode=app-run."
         required: false
         type: string
       machine_repository:
-        description: "Machine repo used for download-run/trigger."
+        description: "Machine repo used for download-run."
         required: false
         default: openresearchtools/PEGPU-machine
         type: string
       machine_ref:
-        description: "Machine branch/ref used when triggering its workflow."
+        description: "Reserved for manually coordinated Machine artifacts; rebuilds are not triggered by this branch."
         required: false
         default: main
         type: string
@@ -104,19 +100,9 @@ on:
         description: "Optional PEGPU run id containing PEGPU-display-runtime-partial to resume a failed display build."
         required: false
         type: string
-      publish_release:
-        description: "Manual override: create/update a GitHub release even when mode is artifact-only."
-        required: true
-        default: false
-        type: boolean
-      prerelease:
-        description: "Mark the GitHub release as prerelease."
-        required: true
-        default: false
-        type: boolean
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 concurrency:
@@ -126,7 +112,9 @@ concurrency:
 env:
   CONFIGURATION: release
   DISPLAY_SOURCE_REQUIRED: true
-  MACOS_ARTIFACT_ABI: macos26-arm64
+  MACOS_ARTIFACT_ABI: legacy-macos13_5-arm64
+  MACOS_ARTIFACT_LABEL: legacy-macos13.5-arm64
+  MACOS_DEPLOYMENT_TARGET: "13.5"
 
 jobs:
   source-check:
@@ -148,7 +136,7 @@ jobs:
   version:
     name: Resolve PEGPU version
     runs-on: ubuntu-24.04
-    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' }}
     outputs:
       release_version: ${{ steps.resolve.outputs.release_version }}
       build_number: ${{ steps.resolve.outputs.build_number }}
@@ -164,11 +152,11 @@ jobs:
         run: python3 scripts/resolve-pegpu-version.py --explicit "${{ inputs.release_version || '' }}"
 
   display-runtime:
-    name: Build display runtime from source
-    runs-on: macos-26
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+    name: Build legacy macOS 13.5 display runtime from source
+    runs-on: macos-14
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     env:
-      DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
+      DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'build') || 'build' }}
       DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.PEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
 
     steps:
@@ -201,11 +189,11 @@ jobs:
             "$RUNNER_TEMP/pegpu-artifacts/display-runtime-source"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name PEGPU-display-frameworks-macos26-arm64 \
+            --name "PEGPU-display-frameworks-${MACOS_ARTIFACT_ABI}" \
             --dir "$RUNNER_TEMP/pegpu-artifacts/display-frameworks/macos-arm64"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name PEGPU-display-runtime-source-macos26-arm64 \
+            --name "PEGPU-display-runtime-source-${MACOS_ARTIFACT_ABI}" \
             --dir "$RUNNER_TEMP/pegpu-artifacts/display-runtime-source"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -219,6 +207,18 @@ jobs:
             ${{ runner.temp }}/pegpu-artifacts/display-frameworks/macos-arm64
             ${{ runner.temp }}/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
           key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-artifacts-v3-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}
+
+      - name: Restore display runtime ccache
+        id: display-runtime-ccache
+        if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/pegpu-ccache/display-runtime
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-ccache-v1-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-ccache-v1-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'third_party/utm/patches/*.patch') }}-
+            ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-ccache-v1-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-
+            ${{ env.MACOS_ARTIFACT_ABI }}-display-runtime-ccache-v1-
 
       - name: Install display-runtime build requirements
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
@@ -235,6 +235,7 @@ jobs:
             meson \
             cmake \
             llvm \
+            ccache \
             spirv-llvm-translator \
             libxcb \
             libxrandr
@@ -246,6 +247,16 @@ jobs:
             distlib \
             mako
           echo "/usr/local/opt/bison/bin:/opt/homebrew/opt/bison/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare display runtime ccache
+        if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --set-config=max_size=5G
+          ccache --zero-stats || true
+          ccache --show-stats || true
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/pegpu-ccache/display-runtime
 
       - name: Cache display runtime build directory
         if: ${{ env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
@@ -283,6 +294,24 @@ jobs:
           PEGPU_DISPLAY_BUILD_DIR: ${{ runner.temp }}/pegpu-build/display-runtime-source-build
           PEGPU_DISPLAY_FRAMEWORKS_OUT: ${{ runner.temp }}/pegpu-artifacts/display-frameworks/macos-arm64
           PEGPU_DISPLAY_SOURCE_OUT: ${{ runner.temp }}/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
+          PEGPU_DISPLAY_ARTIFACT_NAME: PEGPU-display-frameworks-${{ env.MACOS_ARTIFACT_ABI }}
+          PEGPU_MACOS_DEPLOYMENT_TARGET: ${{ env.MACOS_DEPLOYMENT_TARGET }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ env.MACOS_DEPLOYMENT_TARGET }}
+          PEGPU_ENABLE_CCACHE: "1"
+          PEGPU_CCACHE_DIR: ${{ runner.temp }}/pegpu-ccache/display-runtime
+
+      - name: Show display runtime ccache stats
+        if: ${{ always() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
+        run: ccache --show-stats || true
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/pegpu-ccache/display-runtime
+
+      - name: Save display runtime ccache
+        if: ${{ always() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/pegpu-ccache/display-runtime
+          key: ${{ steps.display-runtime-ccache.outputs.cache-primary-key }}
 
       - name: Pack failed display runtime partial state
         if: ${{ failure() && env.DISPLAY_MODE == 'build' && steps.display-runtime-artifact-cache.outputs.cache-hit != 'true' }}
@@ -321,6 +350,37 @@ jobs:
           fi
           otool -D "$FRAMEWORKS/EGL.framework/Versions/A/EGL" | grep -F '@rpath/EGL.framework/Versions/A/EGL'
           otool -D "$FRAMEWORKS/GLESv2.framework/Versions/A/GLESv2" | grep -F '@rpath/GLESv2.framework/Versions/A/GLESv2'
+          python3 - "$MACOS_DEPLOYMENT_TARGET" \
+            "$FRAMEWORKS/EGL.framework/Versions/A/EGL" \
+            "$FRAMEWORKS/GLESv2.framework/Versions/A/GLESv2" \
+            "$FRAMEWORKS/spice-client-glib-2.0.8.framework/Versions/A/spice-client-glib-2.0.8" <<'PY'
+          import re
+          import subprocess
+          import sys
+
+          target_text = sys.argv[1]
+          target = tuple(int(part) for part in target_text.split("."))
+
+          def version_tuple(text):
+              parts = [int(part) for part in text.split(".")]
+              return tuple(parts + [0] * (3 - len(parts)))
+
+          bad = []
+          for binary in sys.argv[2:]:
+              text = subprocess.check_output(["otool", "-l", binary], text=True)
+              versions = [
+                  version_tuple(match.group(1))
+                  for match in re.finditer(r"\b(?:minos|version)\s+([0-9]+(?:\.[0-9]+){1,2})", text)
+              ]
+              if not versions:
+                  bad.append(f"{binary}: missing min macOS load command")
+                  continue
+              highest = max(versions)
+              if highest > version_tuple(target_text):
+                  bad.append(f"{binary}: min macOS {'.'.join(map(str, highest)).rstrip('.0')} exceeds {target_text}")
+          if bad:
+              raise SystemExit("\n".join(bad))
+          PY
           test -f "$SOURCE"
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/README'
           tar -tzf "$SOURCE" | grep -F 'display-runtime-source/utm-patches/sources'
@@ -338,7 +398,7 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' }}
         uses: actions/upload-artifact@v7
         with:
-          name: PEGPU-display-frameworks-macos26-arm64
+          name: PEGPU-display-frameworks-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-artifacts/display-frameworks/macos-arm64
           if-no-files-found: error
           retention-days: 90
@@ -347,7 +407,7 @@ jobs:
         if: ${{ env.DISPLAY_MODE == 'build' }}
         uses: actions/upload-artifact@v7
         with:
-          name: PEGPU-display-runtime-source-macos26-arm64
+          name: PEGPU-display-runtime-source-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-artifacts/display-runtime-source/display-runtime-source.tar.gz
           if-no-files-found: error
           retention-days: 90
@@ -357,7 +417,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - version
-    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' }}
     env:
       RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
       SCALING_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.scaling_mode || 'app-run') || 'app-run' }}
@@ -471,7 +531,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - version
-    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' }}
     env:
       RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
 
@@ -531,7 +591,7 @@ jobs:
   llama-runtime:
     name: Fetch bundled llama.cpp runtime
     runs-on: ubuntu-24.04
-    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' }}
     outputs:
       cache_key: ${{ steps.resolve.outputs.cache_key }}
     env:
@@ -641,18 +701,18 @@ jobs:
 
   build-app:
     name: Build PEGPU.app
-    runs-on: macos-26
+    runs-on: macos-14
     needs:
       - version
       - display-runtime
       - scaling-package
       - performance-package
       - llama-runtime
-    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && needs.version.result == 'success' && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' && needs.performance-package.result == 'success' && needs.llama-runtime.result == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' && needs.version.result == 'success' && needs.display-runtime.result == 'success' && needs.scaling-package.result == 'success' && needs.performance-package.result == 'success' && needs.llama-runtime.result == 'success' }}
     env:
       RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
       BUILD_NUMBER: ${{ needs.version.outputs.build_number }}
-      DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'app-run') || 'app-run' }}
+      DISPLAY_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.display_mode || 'build') || 'build' }}
       DISPLAY_ARTIFACT_RUN_ID: ${{ inputs.display_artifact_run_id || vars.PEGPU_DISPLAY_ARTIFACT_RUN_ID || '' }}
 
     steps:
@@ -666,7 +726,7 @@ jobs:
           path: |
             ${{ runner.temp }}/pegpu-artifacts/app/PEGPU.app
             ${{ runner.temp }}/pegpu-artifacts/legal/generated
-          key: ${{ env.MACOS_ARTIFACT_ABI }}-pegpu-app-v4-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'scripts/build-performance-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-pegpu-app-v5-${{ env.MACOS_DEPLOYMENT_TARGET }}-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}-${{ needs.llama-runtime.outputs.cache_key }}-${{ inputs.utm_commit || vars.PEGPU_UTM_COMMIT || 'e4a4c34b671284263fc69f81b607de494d7e9b65' }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift', 'Resources/**', 'Helpers/**', 'ai/**/*.go', 'ai/**/*.mod', 'ai/**/*.sum', 'ai/**/*.yaml', 'ai/**/*.yml', 'ai/web-ui-app/static/**', 'scripts/build-app-bundle.sh', 'scripts/build-legal-bundle.sh', 'scripts/apply-utm-patches.sh', 'scripts/build-display-runtime-from-source.sh', 'scripts/normalize-display-frameworks.sh', 'scripts/build-scaling-app-package.sh', 'scripts/build-performance-app-package.sh', 'third_party/**', 'legal/**', 'docs/**') }}
 
       - name: Download display runtime artifacts from prior PEGPU workflow run
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'app-run' }}
@@ -680,11 +740,11 @@ jobs:
             "$RUNNER_TEMP/pegpu-input/display-runtime-source"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name PEGPU-display-frameworks-macos26-arm64 \
+            --name "PEGPU-display-frameworks-${MACOS_ARTIFACT_ABI}" \
             --dir "$RUNNER_TEMP/pegpu-input/display-frameworks/macos-arm64"
           gh run download "$DISPLAY_ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name PEGPU-display-runtime-source-macos26-arm64 \
+            --name "PEGPU-display-runtime-source-${MACOS_ARTIFACT_ABI}" \
             --dir "$RUNNER_TEMP/pegpu-input/display-runtime-source"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -693,14 +753,14 @@ jobs:
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
         uses: actions/download-artifact@v8
         with:
-          name: PEGPU-display-frameworks-macos26-arm64
+          name: PEGPU-display-frameworks-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-input/display-frameworks/macos-arm64
 
       - name: Download display runtime source bundle
         if: ${{ steps.app-artifact-cache.outputs.cache-hit != 'true' && env.DISPLAY_MODE == 'build' }}
         uses: actions/download-artifact@v8
         with:
-          name: PEGPU-display-runtime-source-macos26-arm64
+          name: PEGPU-display-runtime-source-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-input/display-runtime-source
 
       - name: Download Linux scaling helper package
@@ -769,6 +829,8 @@ jobs:
           PEGPU_PERFORMANCE_PACKAGE_DIR: ${{ runner.temp }}/pegpu-input/performance-package
           PEGPU_BOOTSTRAP_LLAMA_RUNTIME_DIR: ${{ runner.temp }}/pegpu-input/llama-runtime
           PEGPU_UTM_PATCHED_WORKTREE: ${{ runner.temp }}/pegpu-build/utm-patched
+          PEGPU_MACOS_DEPLOYMENT_TARGET: ${{ env.MACOS_DEPLOYMENT_TARGET }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ env.MACOS_DEPLOYMENT_TARGET }}
 
       - name: Validate app bundle and notices
         run: |
@@ -779,8 +841,59 @@ jobs:
           test "$(plutil -extract CFBundleName raw -o - "$APP/Contents/Info.plist")" = "PEGPU"
           test "$(plutil -extract CFBundleExecutable raw -o - "$APP/Contents/Info.plist")" = "PEGPU"
           test "$(plutil -extract CFBundleIconFile raw -o - "$APP/Contents/Info.plist")" = "PEGPU"
+          test "$(plutil -extract LSMinimumSystemVersion raw -o - "$APP/Contents/Info.plist")" = "${MACOS_DEPLOYMENT_TARGET}"
           test "$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")" = "${RELEASE_VERSION}"
           test "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" = "${BUILD_NUMBER}"
+          python3 - "$MACOS_DEPLOYMENT_TARGET" "$APP" <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          target_text = sys.argv[1]
+          target = tuple(int(part) for part in target_text.split("."))
+          app = Path(sys.argv[2])
+          mach_o_magics = {
+              b"\xfe\xed\xfa\xce",
+              b"\xfe\xed\xfa\xcf",
+              b"\xce\xfa\xed\xfe",
+              b"\xcf\xfa\xed\xfe",
+              b"\xca\xfe\xba\xbe",
+              b"\xbe\xba\xfe\xca",
+              b"\xca\xfe\xd0\x0d",
+          }
+
+          def version_tuple(text):
+              parts = [int(part) for part in text.split(".")]
+              return tuple(parts + [0] * (3 - len(parts)))
+
+          bad = []
+          checked = 0
+          for path in sorted(item for item in app.rglob("*") if item.is_file()):
+              try:
+                  with path.open("rb") as handle:
+                      if handle.read(4) not in mach_o_magics:
+                          continue
+              except OSError:
+                  continue
+              checked += 1
+              text = subprocess.check_output(["otool", "-l", str(path)], text=True)
+              versions = [
+                  version_tuple(match.group(1))
+                  for match in re.finditer(r"\b(?:minos|version)\s+([0-9]+(?:\.[0-9]+){1,2})", text)
+              ]
+              if not versions:
+                  bad.append(f"{path}: missing min macOS load command")
+                  continue
+              highest = max(versions)
+              if highest > version_tuple(target_text):
+                  bad.append(f"{path}: min macOS {'.'.join(map(str, highest)).rstrip('.0')} exceeds {target_text}")
+          if checked == 0:
+              bad.append(f"{app}: no Mach-O files found")
+          if bad:
+              raise SystemExit("\n".join(bad))
+          PY
           test -x "$APP/Contents/MacOS/PEGPU"
           test ! -e "$APP/Contents/MacOS/PEGPUApp"
           test -f "$APP/Contents/Resources/PEGPU.icns"
@@ -988,7 +1101,7 @@ jobs:
       - name: Upload PEGPU.app archive
         uses: actions/upload-artifact@v7
         with:
-          name: PEGPU-app
+          name: PEGPU-app-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-artifacts/app-archive/PEGPU-app.tar.gz
           if-no-files-found: error
           retention-days: 90
@@ -996,7 +1109,7 @@ jobs:
       - name: Upload versioned PEGPU.app archive
         uses: actions/upload-artifact@v7
         with:
-          name: PEGPU-app-v${{ env.RELEASE_VERSION }}
+          name: PEGPU-app-${{ env.MACOS_ARTIFACT_ABI }}-v${{ env.RELEASE_VERSION }}
           path: ${{ runner.temp }}/pegpu-artifacts/app-archive/PEGPU-app.tar.gz
           if-no-files-found: error
           retention-days: 90
@@ -1004,23 +1117,22 @@ jobs:
       - name: Upload generated PEGPU notices and source
         uses: actions/upload-artifact@v7
         with:
-          name: PEGPU-legal-generated
+          name: PEGPU-legal-generated-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-artifacts/legal/generated
           if-no-files-found: error
           retention-days: 90
 
   machine-artifacts:
     name: Build/fetch PEGPU Machine and DKMS guest tools
-    runs-on: macos-26
+    runs-on: macos-14
     needs:
       - version
-      - machine-build
-    if: ${{ always() && needs.version.result == 'success' && ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && ((github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'app-run' || (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'download-run' || needs.machine-build.result == 'success') }}
+    if: ${{ always() && needs.version.result == 'success' && github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' && ((inputs.machine_mode || 'app-run') == 'app-run' || (inputs.machine_mode || 'app-run') == 'download-run') }}
     env:
       RELEASE_VERSION: ${{ needs.version.outputs.release_version }}
       BUILD_NUMBER: ${{ needs.version.outputs.build_number }}
       MACHINE_MODE: ${{ github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run' }}
-      MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || vars.PEGPU_MACHINE_APP_RUN_ID || '' }}
+      MACHINE_APP_RUN_ID: ${{ inputs.machine_app_run_id || vars.PEGPU_LEGACY_MACHINE_APP_RUN_ID || vars.PEGPU_MACHINE_APP_RUN_ID || '' }}
       MACHINE_RUN_ID: ${{ inputs.machine_run_id || '' }}
 
     steps:
@@ -1030,14 +1142,14 @@ jobs:
       - name: Validate Machine mode
         run: |
           case "${MACHINE_MODE}" in
-            app-run|download-run|trigger) ;;
+            app-run|download-run) ;;
             *)
-              echo "machine_mode must be app-run, download-run, or trigger" >&2
+              echo "machine_mode must be app-run or download-run in the legacy artifact branch" >&2
               exit 1
               ;;
           esac
 
-      - name: Resolve latest Machine artifact run
+      - name: Resolve fallback Machine artifact run
         if: ${{ env.MACHINE_MODE == 'app-run' && env.MACHINE_APP_RUN_ID == '' }}
         run: |
           pages="$RUNNER_TEMP/pegpu-actions-artifacts.json"
@@ -1045,7 +1157,7 @@ jobs:
           run_id="$(python3 scripts/resolve-artifact-run.py "$pages" PEGPU-machine-artifacts)"
           test -n "$run_id"
           echo "MACHINE_APP_RUN_ID=$run_id" >> "$GITHUB_ENV"
-          echo "Resolved Machine artifact from PEGPU run $run_id"
+          echo "Resolved fallback Machine artifact from PEGPU run $run_id. Pin PEGPU_LEGACY_MACHINE_APP_RUN_ID or machine_app_run_id for repeatable legacy builds."
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -1071,20 +1183,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Download Machine artifacts from reusable workflow
-        if: ${{ env.MACHINE_MODE == 'trigger' }}
-        uses: actions/download-artifact@v8
-        with:
-          pattern: PEGPU-Machine-*-build-output
-          path: ${{ runner.temp }}/pegpu-input/machine-reusable
-          merge-multiple: true
-
       - name: Normalize Machine artifacts
         run: |
           if [ "${MACHINE_MODE}" = "app-run" ]; then
             export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-app-run"
-          elif [ "${MACHINE_MODE}" = "trigger" ]; then
-            export PEGPU_MACHINE_ARTIFACT_DIR="$RUNNER_TEMP/pegpu-input/machine-reusable"
           fi
           scripts/fetch-machine-artifacts.sh "$RUNNER_TEMP/pegpu-artifacts/machine"
         env:
@@ -1128,33 +1230,9 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Upload versioned Machine artifacts
-        if: ${{ env.MACHINE_MODE == 'trigger' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: PEGPU-machine-artifacts-v${{ env.RELEASE_VERSION }}
-          path: ${{ runner.temp }}/pegpu-artifacts/machine
-          if-no-files-found: error
-          retention-days: 90
-
-  machine-build:
-    name: Build PEGPU Machine
-    needs:
-      - version
-    if: ${{ ((github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package') || startsWith(github.ref, 'refs/tags/')) && (github.event_name == 'workflow_dispatch' && (inputs.machine_mode || 'app-run') || 'app-run') == 'trigger' }}
-    uses: openresearchtools/PEGPU-machine/.github/workflows/build-nosip.yml@main
-    permissions:
-      contents: write
-    secrets: inherit
-    with:
-      release_version: ${{ needs.version.outputs.release_version }}
-      build_number: ${{ needs.version.outputs.build_number }}
-      publish_release: false
-      prerelease: ${{ inputs.prerelease || false }}
-
   package:
     name: Package installer
-    runs-on: macos-26
+    runs-on: macos-14
     needs:
       - version
       - build-app
@@ -1171,7 +1249,7 @@ jobs:
       - name: Download PEGPU.app
         uses: actions/download-artifact@v8
         with:
-          name: PEGPU-app
+          name: PEGPU-app-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-input/app-archive
 
       - name: Unpack PEGPU.app
@@ -1184,7 +1262,7 @@ jobs:
       - name: Download PEGPU legal payload
         uses: actions/download-artifact@v8
         with:
-          name: PEGPU-legal-generated
+          name: PEGPU-legal-generated-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-input/legal
 
       - name: Download Machine artifacts
@@ -1207,30 +1285,8 @@ jobs:
       - name: Build pkg
         run: |
           VERSION="${RELEASE_VERSION}"
-          case "${BUILD_MODE}" in
-            pre-release)
-              PACKAGE_CHANNEL="pre-release"
-              PKG_NAME="PEGPU-v${VERSION}.pkg"
-              ;;
-            full-release)
-              PACKAGE_CHANNEL="release"
-              PKG_NAME="PEGPU-v${VERSION}.pkg"
-              ;;
-            *)
-              if [ "${PUBLISH_RELEASE}" = "true" ]; then
-                if [ "${PRERELEASE_INPUT}" = "true" ]; then
-                  PACKAGE_CHANNEL="pre-release"
-                  PKG_NAME="PEGPU-v${VERSION}.pkg"
-                else
-                  PACKAGE_CHANNEL="release"
-                  PKG_NAME="PEGPU-v${VERSION}.pkg"
-                fi
-              else
-                PACKAGE_CHANNEL="artifact"
-                PKG_NAME="PEGPU-v${VERSION}.pkg"
-              fi
-              ;;
-          esac
+          PACKAGE_CHANNEL="artifact"
+          PKG_NAME="PEGPU-v${VERSION}-${MACOS_ARTIFACT_LABEL}.pkg"
           OUT="$RUNNER_TEMP/pegpu-artifacts/pkg/$PKG_NAME"
           mkdir -p "$(dirname "$OUT")" "$RUNNER_TEMP/pegpu-check"
           export PEGPU_MACHINE_APP="$RUNNER_TEMP/pegpu-input/machine/PEGPU Machine.app"
@@ -1264,11 +1320,6 @@ jobs:
             echo "installer customization screen must not expose SIP/Machine/DriverKit status rows" >&2
             exit 1
           fi
-        env:
-          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
-          PUBLISH_RELEASE: ${{ inputs.publish_release || 'false' }}
-          PRERELEASE_INPUT: ${{ inputs.prerelease || 'true' }}
-
       - name: Gather package assets
         run: |
           VERSION="${RELEASE_VERSION}"
@@ -1283,7 +1334,7 @@ jobs:
       - name: Upload package assets
         uses: actions/upload-artifact@v7
         with:
-          name: PEGPU-package-assets
+          name: PEGPU-package-assets-${{ env.MACOS_ARTIFACT_ABI }}
           path: ${{ runner.temp }}/pegpu-artifacts/release-assets
           if-no-files-found: error
           retention-days: 90
@@ -1291,195 +1342,7 @@ jobs:
       - name: Upload versioned package assets
         uses: actions/upload-artifact@v7
         with:
-          name: PEGPU-package-assets-v${{ env.RELEASE_VERSION }}
+          name: PEGPU-package-assets-${{ env.MACOS_ARTIFACT_ABI }}-v${{ env.RELEASE_VERSION }}
           path: ${{ runner.temp }}/pegpu-artifacts/release-assets
           if-no-files-found: error
           retention-days: 90
-
-      - name: Publish GitHub release
-        if: ${{ inputs.publish_release == true || inputs.mode == 'pre-release' || inputs.mode == 'full-release' || startsWith(github.ref, 'refs/tags/') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
-          PRERELEASE_INPUT: ${{ inputs.prerelease || 'true' }}
-          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
-        run: |
-          VERSION="${RELEASE_VERSION}"
-          case "${BUILD_MODE}" in
-            pre-release)
-              TAG="v${VERSION}"
-              TITLE="PEGPU ${VERSION} Pre-release"
-              PRERELEASE="true"
-              ;;
-            full-release)
-              TAG="v${VERSION}"
-              TITLE="PEGPU ${VERSION}"
-              PRERELEASE="false"
-              ;;
-            *)
-              if [ "$IS_TAG" = "true" ]; then
-                TAG="v${VERSION}"
-                TITLE="PEGPU ${VERSION}"
-                PRERELEASE="false"
-              elif [ "$PRERELEASE_INPUT" = "true" ]; then
-                TAG="v${VERSION}"
-                TITLE="PEGPU ${VERSION} Pre-release"
-                PRERELEASE="true"
-              else
-                TAG="v${VERSION}"
-                TITLE="PEGPU ${VERSION}"
-                PRERELEASE="false"
-              fi
-              ;;
-          esac
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .id)"
-            gh api \
-              --method PATCH \
-              "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
-              -f "name=${TITLE}" \
-              -F "prerelease=${PRERELEASE}" \
-              >/dev/null
-          else
-            args=(--title "$TITLE" --notes "PEGPU ${VERSION}")
-            if [ "$PRERELEASE" = "true" ]; then
-              args+=(--prerelease)
-            fi
-            gh release create "$TAG" --target "$GITHUB_SHA" "${args[@]}"
-          fi
-          pkg="$(find "$RUNNER_TEMP/pegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' -print -quit)"
-          test -n "$pkg"
-          gh release upload "$TAG" "$pkg" --clobber
-
-      - name: Update release update manifest
-        if: ${{ inputs.mode == 'pre-release' || inputs.mode == 'full-release' || startsWith(github.ref, 'refs/tags/') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
-          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
-        run: |
-          set -euo pipefail
-          VERSION="${RELEASE_VERSION}"
-          case "${BUILD_MODE}" in
-            pre-release)
-              CHANNEL="pre-release"
-              MANIFEST="releases/pre-releases-manifest.json"
-              TAG="v${VERSION}"
-              PRERELEASE="true"
-              ;;
-            full-release)
-              CHANNEL="stable"
-              MANIFEST="releases/releases-manifest.json"
-              TAG="v${VERSION}"
-              PRERELEASE="false"
-              ;;
-            *)
-              if [ "$IS_TAG" != "true" ]; then
-                echo "Artifact-only builds do not update release manifests."
-                exit 0
-              fi
-              CHANNEL="stable"
-              MANIFEST="releases/releases-manifest.json"
-              TAG="v${VERSION}"
-              PRERELEASE="false"
-              ;;
-          esac
-          pkg="$(find "$RUNNER_TEMP/pegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' -print -quit)"
-          test -n "$pkg"
-          PKG_NAME="$(basename "$pkg")"
-          PKG_SIZE="$(stat -f%z "$pkg" 2>/dev/null || stat -c%s "$pkg")"
-          PKG_SHA256="$(shasum -a 256 "$pkg" | awk '{print $1}')"
-          RELEASE_PAGE="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
-          PACKAGE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${PKG_NAME}"
-          PUBLISHED_AT="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .published_at)"
-          export CHANNEL TAG PRERELEASE PKG_NAME PKG_SIZE PKG_SHA256 RELEASE_PAGE PACKAGE_URL PUBLISHED_AT
-
-          git fetch origin main
-          git checkout main
-          git pull --ff-only origin main
-          mkdir -p releases
-          if [ ! -f "$MANIFEST" ]; then
-            printf '{"schemaVersion":1,"channel":"%s","updatedAt":"","latest":null,"items":[]}\n' "$CHANNEL" > "$MANIFEST"
-          fi
-          python3 - "$MANIFEST" <<'PY'
-          import json
-          import os
-          import sys
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          manifest_path = Path(sys.argv[1])
-          data = json.loads(manifest_path.read_text())
-          entry = {
-              "version": os.environ["RELEASE_VERSION"],
-              "build": os.environ["BUILD_NUMBER"],
-              "tag": os.environ["TAG"],
-              "name": os.environ["TAG"],
-              "prerelease": os.environ["PRERELEASE"].lower() == "true",
-              "publishedAt": os.environ.get("PUBLISHED_AT", ""),
-              "releasePageURL": os.environ["RELEASE_PAGE"],
-              "packageURL": os.environ["PACKAGE_URL"],
-              "packageName": os.environ["PKG_NAME"],
-              "packageSize": int(os.environ["PKG_SIZE"]),
-              "packageSHA256": os.environ["PKG_SHA256"],
-              "minimumMacOS": "14.0",
-          }
-          items = [item for item in data.get("items", []) if item.get("tag") != entry["tag"]]
-          items.insert(0, entry)
-          data = {
-              "schemaVersion": 1,
-              "channel": os.environ["CHANNEL"],
-              "updatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-              "latest": entry,
-              "items": items[:20],
-          }
-          manifest_path.write_text(json.dumps(data, indent=2) + "\n")
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- "$MANIFEST"; then
-            echo "Release manifest already current."
-          else
-            git add "$MANIFEST"
-            git commit -m "Update ${CHANNEL} release manifest for ${TAG}"
-            git push origin main
-          fi
-
-      - name: Update package build ledger
-        if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.build_scope || 'package') == 'package' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/') }}
-        env:
-          BUILD_MODE: ${{ inputs.mode || 'artifact-only' }}
-          DISPLAY_MODE: ${{ inputs.display_mode || 'app-run' }}
-          SCALING_MODE: ${{ inputs.scaling_mode || 'app-run' }}
-          MACHINE_MODE: ${{ inputs.machine_mode || 'app-run' }}
-        run: |
-          set -euo pipefail
-          VERSION="${RELEASE_VERSION}"
-          pkg="$(find "$RUNNER_TEMP/pegpu-artifacts/release-assets" -maxdepth 1 -type f -name 'PEGPU-v*.pkg' -print -quit)"
-          test -n "$pkg"
-          PKG_NAME="$(basename "$pkg")"
-          PKG_SIZE="$(stat -f%z "$pkg" 2>/dev/null || stat -c%s "$pkg")"
-          PKG_SHA256="$(shasum -a 256 "$pkg" | awk '{print $1}')"
-
-          git fetch origin main
-          git checkout main
-          git pull --ff-only origin main
-          python3 scripts/update-build-ledger.py \
-            --version "$VERSION" \
-            --mode "$BUILD_MODE" \
-            --package-name "$PKG_NAME" \
-            --package-size "$PKG_SIZE" \
-            --package-sha256 "$PKG_SHA256" \
-            --display-mode "$DISPLAY_MODE" \
-            --scaling-mode "$SCALING_MODE" \
-            --performance-mode build \
-            --machine-mode "$MACHINE_MODE"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- releases/builds-manifest.json; then
-            echo "Package build ledger already current."
-          else
-            git add releases/builds-manifest.json
-            git commit -m "Record PEGPU ${VERSION} package build [skip ci]"
-            git push origin main
-          fi

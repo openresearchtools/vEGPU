@@ -16,6 +16,8 @@ RESOURCES="$CONTENTS/Resources"
 FRAMEWORKS="$CONTENTS/Frameworks"
 BUNDLED_ROOT="$RESOURCES/PEGPURoot"
 DISPLAY_FRAMEWORKS="${PEGPU_DISPLAY_FRAMEWORKS_OUT:-$BUILD_ROOT/display-frameworks/macos-arm64}"
+DISPLAY_ARTIFACT_NAME="${PEGPU_DISPLAY_ARTIFACT_NAME:-PEGPU-display-frameworks-legacy-macos13_5-arm64}"
+MACOS_DEPLOYMENT_TARGET="${PEGPU_MACOS_DEPLOYMENT_TARGET:-${MACOSX_DEPLOYMENT_TARGET:-13.5}}"
 ANGLE_NOTICE_DIR="${PEGPU_ANGLE_NOTICE_DIR:-$ROOT/third_party/angle}"
 LEGAL_BUILD_DIR="${PEGPU_LEGAL_BUILD_DIR:-$BUILD_ROOT/legal/generated}"
 SCALING_PACKAGE_DIR="${PEGPU_SCALING_PACKAGE_DIR:-}"
@@ -49,7 +51,7 @@ for framework in "${ANGLE_REQUIRED_FRAMEWORKS[@]}"; do
 done
 if [ "${#missing_angle_frameworks[@]}" -gt 0 ]; then
   printf 'Missing app-side display framework(s): %s\n' "${missing_angle_frameworks[*]}" >&2
-  printf 'Build or download the PEGPU-display-frameworks-macos26-arm64 artifact and set PEGPU_DISPLAY_FRAMEWORKS_OUT.\n' >&2
+  printf 'Build or download the %s artifact and set PEGPU_DISPLAY_FRAMEWORKS_OUT.\n' "$DISPLAY_ARTIFACT_NAME" >&2
   exit 1
 fi
 for notice in SOURCE.md ANGLE.plist LICENSE; do
@@ -60,6 +62,7 @@ for notice in SOURCE.md ANGLE.plist LICENSE; do
 done
 
 mkdir -p "$APP_BUILD_DIR/tools/bin"
+export MACOSX_DEPLOYMENT_TARGET="$MACOS_DEPLOYMENT_TARGET"
 export PEGPU_BUILD_ROOT="$BUILD_ROOT"
 export PEGPU_DISPLAY_FRAMEWORKS_OUT="$DISPLAY_FRAMEWORKS"
 export PEGPU_UTM_PATCHED_WORKTREE="${PEGPU_UTM_PATCHED_WORKTREE:-$BUILD_ROOT/utm-patched}"
@@ -72,6 +75,7 @@ SWIFT_BUILD_DIR="$(cd "$SWIFT_BUILD_SCRATCH_PATH/$CONFIGURATION" && pwd -P)"
 (cd "$ROOT/ai/gost-local-proxy" && go build -o "$GOST_BIN" .)
 SDKROOT="$(xcrun --show-sdk-path)"
 "$(xcrun --find clang)" -isysroot "$SDKROOT" -O2 -Wall -Wextra \
+  -mmacosx-version-min="$MACOS_DEPLOYMENT_TARGET" \
   -framework AudioToolbox -framework CoreAudio \
   -o "$AUDIO_HOST_BIN" \
   "$ROOT/Helpers/AudioBridge/pegpu-audio-host.c"
@@ -264,7 +268,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <key>CFBundleVersion</key>
   <string>$BUILD_NUMBER</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>$MACOS_DEPLOYMENT_TARGET</string>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSMicrophoneUsageDescription</key>

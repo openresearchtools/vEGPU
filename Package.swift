@@ -15,7 +15,7 @@ let displayFrameworksPath = environment["PEGPU_DISPLAY_FRAMEWORKS_OUT"]
 let package = Package(
     name: "PEGPU-Swift",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v13)
     ],
     products: [
         .library(name: "PEGPUCore", targets: ["PEGPUCore"]),

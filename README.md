@@ -185,9 +185,16 @@ security tradeoff.
 
 ## Build
 
-GitHub Actions is the release build path. The workflow can build artifact-only
-packages, pre-releases, or releases while reusing cached display runtime,
-scaling helper, and Machine artifacts when their inputs have not changed.
+GitHub Actions is the release build path. In this branch the workflow builds
+artifact-only legacy packages while reusing cached display runtime, scaling
+helper, and Machine artifacts when their inputs have not changed.
+
+This branch is the legacy macOS 13.5 ARM artifact path. Its workflow is named
+`Build PEGPU Legacy macOS 13.5 Artifacts`, defaults to
+`display-runtime-only`, runs macOS jobs on the current Apple Silicon runner, and
+sets `MACOSX_DEPLOYMENT_TARGET=13.5`. It uploads workflow artifacts such as
+`PEGPU-display-frameworks-legacy-macos13_5-arm64` and never publishes GitHub
+releases or release manifests from this branch.
 
 The source repository stays clean: it does not store generated frameworks,
 Machine app binaries, runtime download caches, model files, or VM disk images.
