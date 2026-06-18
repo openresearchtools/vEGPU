@@ -49,7 +49,7 @@ struct ManageMachinesView: View {
                 selectedID = model.pendingMachineID
                 model.refreshMachineProfiles()
             }
-            .onChange(of: selectedID) { _, id in
+            .onChange(of: selectedID) { id in
                 guard let id, id != model.pendingMachineID else { return }
                 model.switchMachineProfile(id: id)
             }

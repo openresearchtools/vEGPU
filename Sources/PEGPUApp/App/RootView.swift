@@ -71,10 +71,10 @@ struct RootView: View {
             model.startPolling()
             model.startBackgroundServices()
         }
-        .onChange(of: selectedTab) { _, tab in
+        .onChange(of: selectedTab) { tab in
             model.setActiveTab(tab)
         }
-        .onChange(of: model.runtimeLaunchMode) { _, mode in
+        .onChange(of: model.runtimeLaunchMode) { mode in
             if mode != .gui, selectedTab == .section(.gui) {
                 selectedTab = .section(.runtime)
             }

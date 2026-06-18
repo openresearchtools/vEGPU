@@ -30,7 +30,7 @@ struct RuntimeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .background(NvidiaInstallSheetHost(model: model, drivers: screen.drivers))
-        .onChange(of: model.profileRevision) { _, _ in
+        .onChange(of: model.profileRevision) { _ in
             config = model.configStore.load()
         }
     }

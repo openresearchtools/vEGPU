@@ -38,15 +38,14 @@ struct RuntimeToolbarView: View {
         .padding(.vertical, 10)
         .background(AppTheme.windowBackground(colorScheme))
         .onAppear(perform: syncTextFields)
-        .onChange(of: config) { _, _ in syncTextFields() }
-        .onChange(of: config.launchMode) { _, mode in
+        .onChange(of: config) { _ in syncTextFields() }
+        .onChange(of: config.launchMode) { mode in
             model.runtimeLaunchMode = mode
         }
-        .onChange(of: config.guiRetina) { _, enabled in
+        .onChange(of: config.guiRetina) { enabled in
             model.guiRetina = enabled
         }
-        .onChange(of: model.pendingMachineID) { oldValue, newValue in
-            guard oldValue != newValue else { return }
+        .onChange(of: model.pendingMachineID) { newValue in
             model.switchMachineProfile(id: newValue)
         }
         .confirmationDialog(

@@ -98,12 +98,12 @@ struct CreateRoutingRouteView: View {
         }
         .padding(20)
         .frame(width: 500)
-        .onChange(of: direction) { _, value in
+        .onChange(of: direction) { value in
             if value == .macToVM {
                 exposeWebUI = false
             }
         }
-        .onChange(of: useUDP) { _, value in
+        .onChange(of: useUDP) { value in
             if value {
                 exposeWebUI = false
             }

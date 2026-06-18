@@ -574,7 +574,7 @@ final class SpiceSessionController: NSObject, ObservableObject, CSConnectionDele
 
     private func syncModifiers(_ flags: NSEvent.ModifierFlags, input: CSInput) {
         let desired = modifierScans(for: flags)
-        let currentlyPressed = Set(pressedKeys.filter(isModifierScan))
+        let currentlyPressed = Set(pressedKeys.filter { isModifierScan($0) })
         for scan in currentlyPressed.subtracting(desired) {
             input.send(.release, code: scan)
             pressedKeys.remove(scan)
