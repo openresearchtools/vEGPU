@@ -382,6 +382,7 @@ public final class MachineService: @unchecked Sendable {
         }
 
         progress.report(ProgressEvent(stage: "start", message: "Starting PEGPU runtime"))
+        try await ensureHostHypervisorAvailable()
         try await initMachine()
         try prepareHostRuntimeForStart()
         let config = configStore.effective()
@@ -538,6 +539,47 @@ public final class MachineService: @unchecked Sendable {
             let detail = firstLine(String(describing: error))
             progress.report(ProgressEvent(stage: "audio", message: "PipeWire RTP audio needs attention", detail: detail))
         }
+    }
+
+    private func ensureHostHypervisorAvailable() async throws {
+        guard ProcessInfo.processInfo.environment["PEGPU_ALLOW_HV_UNSUPPORTED_HOST"] != "1",
+              Self.hostHypervisorSupport() == false else {
+            return
+        }
+        let summary = await hostHardwareSummary()
+        let nestedHint = summary?.range(of: "m1n1 hypervisor", options: .caseInsensitive) != nil ||
+            summary?.range(of: "Virtual Apple", options: .caseInsensitive) != nil
+        let reason = nestedHint
+            ? "This macOS boot is already virtualized, so nested Hypervisor.framework is unavailable."
+            : "macOS reports that Hypervisor.framework is unavailable on this boot."
+        var message = """
+        Cannot start PEGPU Machine because kern.hv_support is 0. \(reason) PEGPU needs a bare-metal Apple Silicon macOS host for HVF and PCIe/eGPU passthrough.
+        """
+        if let summary, !summary.isEmpty {
+            message += "\n\nHost hardware:\n\(summary)"
+        }
+        throw RuntimeError.message(message)
+    }
+
+    private func hostHardwareSummary() async -> String? {
+        guard let result = try? await runner.run("/usr/sbin/system_profiler", ["SPHardwareDataType"], timeout: 8),
+              result.code == 0 else {
+            return nil
+        }
+        let prefixes = ["Model Name:", "Model Identifier:", "Chip:"]
+        let lines = result.stdout
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { line in prefixes.contains { line.hasPrefix($0) } }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    private static func hostHypervisorSupport() -> Bool? {
+        var value: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        let result = sysctlbyname("kern.hv_support", &value, &size, nil, 0)
+        guard result == 0 else { return nil }
+        return value != 0
     }
 
     private func downloadMachineDisk() async throws {
