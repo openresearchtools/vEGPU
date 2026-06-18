@@ -115,6 +115,7 @@ env:
   MACOS_ARTIFACT_ABI: legacy-macos13_5-arm64
   MACOS_ARTIFACT_LABEL: legacy-macos13.5-arm64
   MACOS_DEPLOYMENT_TARGET: "13.5"
+  MACOS_XCODE_MAJOR: "16"
 
 jobs:
   source-check:
@@ -739,6 +740,24 @@ jobs:
       - name: Check out PEGPU
         uses: actions/checkout@v6
 
+      - name: Select Swift 6 / Xcode 16 toolchain
+        run: |
+          xcode_app="$(find /Applications -maxdepth 1 -type d -name "Xcode_${MACOS_XCODE_MAJOR}*.app" -print | sort | tail -n 1)"
+          if [ -z "$xcode_app" ]; then
+            echo "Required Xcode ${MACOS_XCODE_MAJOR}.x toolchain is not installed on this runner." >&2
+            echo "Installed Xcode bundles:" >&2
+            find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort >&2
+            xcodebuild -version >&2 || true
+            swift --version >&2 || true
+            exit 1
+          fi
+          developer_dir="$xcode_app/Contents/Developer"
+          sudo xcode-select -s "$developer_dir"
+          echo "DEVELOPER_DIR=$developer_dir" >> "$GITHUB_ENV"
+          xcodebuild -version
+          swift --version
+          swift --version | grep -E 'Swift version 6\.'
+
       - name: Restore PEGPU.app artifact cache
         id: app-artifact-cache
         uses: actions/cache@v5
@@ -819,10 +838,10 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/pegpu-build/swiftpm-release
-          key: ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
+          key: ${{ env.MACOS_ARTIFACT_ABI }}-xcode${{ env.MACOS_XCODE_MAJOR }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**/*.swift') }}
           restore-keys: |
-            ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved') }}-
-            ${{ env.MACOS_ARTIFACT_ABI }}-swiftpm-release-v3-
+            ${{ env.MACOS_ARTIFACT_ABI }}-xcode${{ env.MACOS_XCODE_MAJOR }}-swiftpm-release-v3-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+            ${{ env.MACOS_ARTIFACT_ABI }}-xcode${{ env.MACOS_XCODE_MAJOR }}-swiftpm-release-v3-
 
       - name: Cache patched UTM package worktree
         if: steps.app-artifact-cache.outputs.cache-hit != 'true'
