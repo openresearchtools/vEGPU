@@ -1396,7 +1396,7 @@ final class NativeAppModel: ObservableObject {
         let nvidia = metrics["nvidia"] as? [String: Any] ?? [:]
         let nvidiaGpus = nvidia["gpus"] as? [NvidiaGpuMetric] ?? []
         let hostGpuWidgets = Self.hostGpuWidgets(host["gpus"], host: host)
-        let nvidiaGpuWidgets = nvidiaGpus.map(Self.nvidiaGpuWidget)
+        let nvidiaGpuWidgets = nvidiaGpus.map { Self.nvidiaGpuWidget($0) }
 
         let nextHost = MetricGroup(
             cpu: "CPU \(Self.formatPercent(host["cpuPercent"]))",
