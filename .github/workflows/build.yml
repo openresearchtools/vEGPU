@@ -359,19 +359,39 @@ jobs:
           import sys
 
           target_text = sys.argv[1]
-          target = tuple(int(part) for part in target_text.split("."))
 
           def version_tuple(text):
               parts = [int(part) for part in text.split(".")]
               return tuple(parts + [0] * (3 - len(parts)))
 
+          def deployment_versions(text):
+              versions = []
+              active = None
+              for raw_line in text.splitlines():
+                  line = raw_line.strip()
+                  if line == "cmd LC_BUILD_VERSION":
+                      active = "build"
+                      continue
+                  if line == "cmd LC_VERSION_MIN_MACOSX":
+                      active = "min"
+                      continue
+                  if line.startswith("cmd "):
+                      active = None
+                      continue
+                  if active == "build":
+                      match = re.match(r"minos\s+([0-9]+(?:\.[0-9]+){1,2})$", line)
+                  elif active == "min":
+                      match = re.match(r"version\s+([0-9]+(?:\.[0-9]+){1,2})$", line)
+                  else:
+                      match = None
+                  if match:
+                      versions.append(version_tuple(match.group(1)))
+              return versions
+
           bad = []
           for binary in sys.argv[2:]:
               text = subprocess.check_output(["otool", "-l", binary], text=True)
-              versions = [
-                  version_tuple(match.group(1))
-                  for match in re.finditer(r"\b(?:minos|version)\s+([0-9]+(?:\.[0-9]+){1,2})", text)
-              ]
+              versions = deployment_versions(text)
               if not versions:
                   bad.append(f"{binary}: missing min macOS load command")
                   continue
@@ -852,7 +872,6 @@ jobs:
           from pathlib import Path
 
           target_text = sys.argv[1]
-          target = tuple(int(part) for part in target_text.split("."))
           app = Path(sys.argv[2])
           mach_o_magics = {
               b"\xfe\xed\xfa\xce",
@@ -868,6 +887,30 @@ jobs:
               parts = [int(part) for part in text.split(".")]
               return tuple(parts + [0] * (3 - len(parts)))
 
+          def deployment_versions(text):
+              versions = []
+              active = None
+              for raw_line in text.splitlines():
+                  line = raw_line.strip()
+                  if line == "cmd LC_BUILD_VERSION":
+                      active = "build"
+                      continue
+                  if line == "cmd LC_VERSION_MIN_MACOSX":
+                      active = "min"
+                      continue
+                  if line.startswith("cmd "):
+                      active = None
+                      continue
+                  if active == "build":
+                      match = re.match(r"minos\s+([0-9]+(?:\.[0-9]+){1,2})$", line)
+                  elif active == "min":
+                      match = re.match(r"version\s+([0-9]+(?:\.[0-9]+){1,2})$", line)
+                  else:
+                      match = None
+                  if match:
+                      versions.append(version_tuple(match.group(1)))
+              return versions
+
           bad = []
           checked = 0
           for path in sorted(item for item in app.rglob("*") if item.is_file()):
@@ -879,10 +922,7 @@ jobs:
                   continue
               checked += 1
               text = subprocess.check_output(["otool", "-l", str(path)], text=True)
-              versions = [
-                  version_tuple(match.group(1))
-                  for match in re.finditer(r"\b(?:minos|version)\s+([0-9]+(?:\.[0-9]+){1,2})", text)
-              ]
+              versions = deployment_versions(text)
               if not versions:
                   bad.append(f"{path}: missing min macOS load command")
                   continue
