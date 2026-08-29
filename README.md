@@ -66,6 +66,63 @@ The combined installer may install both apps into `/Applications`, but the
 repositories, notices, source archives, and runtime responsibilities stay
 separate.
 
+## This Fork
+
+This fork tracks upstream PEGPU and adds field notes and fixes gathered while
+running a high-memory Blackwell workstation card (NVIDIA RTX PRO 6000, 96 GB)
+through PEGPU on an M3 Ultra. Changes here are practical patches and
+documentation, not a divergence in architecture.
+
+### Runtime root short-path patch
+
+macOS caps `AF_UNIX` socket paths at ~104 bytes, and PEGPU builds its QMP
+socket path from `~/Library/Application Support/PEGPU/HostRuntime/<36-char-uuid>/qmp.sock`
+(106 bytes). That makes QEMU fail to create the QMP socket. This fork documents
+a binary patch that shortens the app's runtime root to `~/p`, dropping the
+socket path to 74 bytes:
+
+- `Library/Application Support/PEGPU` → `p` at the runtime-root literal in the
+  `PEGPU.app` main binary, then ad-hoc re-sign the app.
+
+See the notes in `docs/KNOWN-ISSUES.md` for the socket-length symptom. A proper
+source fix is to shorten the runtime root path (e.g. `~/.pegpu`) upstream.
+
+### vmnet guest networking (static ARP)
+
+With `vmnet-shared`, the host bridge (`bridge100`) can fail to resolve the
+guest's MAC, so host→guest SSH never works even though the guest is up. The
+workaround used here is a static ARP entry:
+
+```sh
+sudo arp -s 172.29.253.100 de:ad:be:ef:10:01
+```
+
+The guest static IP (`172.29.253.100`) sits outside the vmnet-shared DHCP pool
+(`172.29.253.1–.99`), which is why the bridge treats it as unreachable.
+
+### QEMU entitlement notes
+
+Re-signing the bundled QEMU with `--entitlements` after the fact can be rejected
+by AMFI at runtime (`SIGKILL (Code Signature Invalid)`) or break HVF. The
+reliable state is QEMU signed with its original entitlements
+(`com.apple.security.hypervisor` + `com.apple.security.virtualization`) — do not
+add `com.apple.vm.networking` to a binary that was not provisioned for it.
+
+### NVIDIA driver on the guest
+
+The RTX PRO 6000 (`10de:2bb4`) is only in NVIDIA's supported list from
+`610.57.04` onward. The default PEGPU pin (`595.*`) installs a driver that does
+not list the card. This fork's notes cover switching the guest to
+`nvidia-open=610.57.04-1` (deb13/sbsa) by replacing the `pegpu-nvidia-pin`
+preferences file. The ARM `firmware-nvidia-gsp` package still only ships
+`ga10x`/`tu10x` blobs; see `docs/KNOWN-ISSUES.md`.
+
+### Blackwell GB202 DART panic
+
+Blackwell GB202 cards can hard-panic macOS (`SPTM VIOLATION_T8110_DART_INVALID_ERR_MASK`)
+during real NVIDIA BAR/DMA I/O. Full details, the blacklist workaround, and
+upstream tracking links are in [`docs/KNOWN-ISSUES.md`](docs/KNOWN-ISSUES.md).
+
 ## License And Source Boundary
 
 PEGPU.app's own application source code is distributed under the permissive
